@@ -432,6 +432,13 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_LABEL_TITLE = L10n.lang("bbs.ui.forms.editors.label.title");
     public static final IKey FORMS_EDITORS_MOB_TITLE = L10n.lang("bbs.ui.forms.editors.mob.title");
     public static final IKey FORMS_EDITORS_MODEL_ACTIONS = L10n.lang("bbs.ui.forms.editors.model.actions");
+    public static final IKey FORMS_EDITORS_MODEL_IK = L10n.lang("bbs.ui.forms.editors.model.ik");
+    public static final IKey FORMS_EDITORS_MODEL_IK_APPLY = L10n.lang("bbs.ui.forms.editors.model.ik.apply");
+    public static final IKey FORMS_EDITORS_MODEL_IK_BONES = L10n.lang("bbs.ui.forms.editors.model.ik.bones");
+    public static final IKey FORMS_EDITORS_MODEL_IK_LOCATOR = L10n.lang("bbs.ui.forms.editors.model.ik.locator");
+    public static final IKey FORMS_EDITORS_MODEL_IK_ROOT = L10n.lang("bbs.ui.forms.editors.model.ik.root");
+    public static final IKey FORMS_EDITORS_MODEL_IK_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.ik.save_error");
+    public static final IKey FORMS_EDITORS_MODEL_IK_SAVED = L10n.lang("bbs.ui.forms.editors.model.ik.saved");
     public static final IKey FORMS_EDITORS_MODEL_POSE = L10n.lang("bbs.ui.forms.editors.model.pose");
     public static final IKey FORMS_EDITORS_TRAIL_LENGTH = L10n.lang("bbs.ui.forms.editors.trail.length");
     public static final IKey FORMS_EDITORS_TRAIL_LOOP = L10n.lang("bbs.ui.forms.editors.trail.loop");
