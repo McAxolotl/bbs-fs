@@ -193,14 +193,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     private void load(List<String> bones)
     {
         this.ikData.clear();
-        MapType config = this.readConfig();
-
-        if (!config.has("ik", BaseType.TYPE_MAP))
-        {
-            return;
-        }
-
-        MapType ik = config.getMap("ik");
+        MapType ik = this.readIK();
         
         for (String bone : ik.keys())
         {
@@ -217,7 +210,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private void save()
     {
-        File file = this.getConfigFile();
+        File file = this.getIKFile();
 
         if (file == null)
         {
@@ -227,14 +220,12 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         file.getParentFile().mkdirs();
 
-        MapType config = this.readConfig();
         MapType ik = new MapType();
 
         for (Map.Entry<String, IKData> entry : this.ikData.entrySet())
         {
             IKData data = entry.getValue();
             
-            // Only save if it has meaningful data
             if (!data.locator.isEmpty() || !data.root.isEmpty())
             {
                 MapType boneData = new MapType();
@@ -244,9 +235,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             }
         }
 
-        config.put("ik", ik);
-
-        if (DataToString.writeSilently(file, config, true))
+        if (DataToString.writeSilently(file, ik, true))
         {
             this.getContext().notifySuccess(UIKeys.FORMS_EDITORS_MODEL_IK_SAVED);
         }
@@ -256,9 +245,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
-    private MapType readConfig()
+    private MapType readIK()
     {
-        File file = this.getConfigFile();
+        File file = this.getIKFile();
 
         if (file != null && file.exists())
         {
@@ -273,13 +262,13 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         return new MapType();
     }
 
-    private File getConfigFile()
+    private File getIKFile()
     {
         String model = this.form.model.get();
 
         if (model != null && !model.isEmpty())
         {
-            return BBSMod.getAssetsPath(ModelManager.MODELS_PREFIX + model + "/config.json");
+            return BBSMod.getAssetsPath(ModelManager.MODELS_PREFIX + model + "/ik.json");
         }
 
         return null;
