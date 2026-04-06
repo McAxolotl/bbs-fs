@@ -13,6 +13,7 @@ import mchorse.bbs_mod.cubic.animation.IAnimator;
 import mchorse.bbs_mod.cubic.animation.ProceduralAnimator;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
@@ -74,6 +75,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ModelInstance lastModel;
     private boolean ikAppliedThisRender;
     private boolean physicsAppliedThisRender;
+    private boolean constraintsAppliedThisRender;
 
     private IEntity entity = new StubEntity();
 
@@ -293,6 +295,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     {
         this.ikAppliedThisRender = false;
         this.physicsAppliedThisRender = false;
+        this.constraintsAppliedThisRender = false;
 
         if (!model.culling)
         {
@@ -319,6 +322,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         this.applyIKOnce(model);
         this.applyPhysicsOnce(target, model, transition, ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix()));
+        this.applyConstraintsOnce(model);
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
 
@@ -366,6 +370,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         this.physicsAppliedThisRender = true;
         ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
+    }
+
+    private void applyConstraintsOnce(ModelInstance model)
+    {
+        if (this.constraintsAppliedThisRender)
+        {
+            return;
+        }
+
+        this.constraintsAppliedThisRender = true;
+        ModelConstraintsRuntime.apply(model);
     }
 
     private void renderArmor(IEntity target, MatrixStack stack, ArmorType type, ArmorSlot armorSlot, Color color, int overlay, int light)

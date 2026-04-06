@@ -455,6 +455,16 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.physics.save_error");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVED = L10n.lang("bbs.ui.forms.editors.model.physics.saved");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN = L10n.lang("bbs.ui.forms.editors.model.physics.invalid_chain");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_TITLE = L10n.lang("bbs.ui.forms.editors.model.constraints.title");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_BONES = L10n.lang("bbs.ui.forms.editors.model.constraints.bones");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.constraints.settings");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_ENABLED = L10n.lang("bbs.ui.forms.editors.model.constraints.enabled");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_MIN = L10n.lang("bbs.ui.forms.editors.model.constraints.min");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_MAX = L10n.lang("bbs.ui.forms.editors.model.constraints.max");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_CLEAR = L10n.lang("bbs.ui.forms.editors.model.constraints.clear");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY = L10n.lang("bbs.ui.forms.editors.model.constraints.apply");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.constraints.save_error");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_SAVED = L10n.lang("bbs.ui.forms.editors.model.constraints.saved");
     public static final IKey FORMS_EDITORS_MODEL_POSE = L10n.lang("bbs.ui.forms.editors.model.pose");
     public static final IKey FORMS_EDITORS_TRAIL_LENGTH = L10n.lang("bbs.ui.forms.editors.trail.length");
     public static final IKey FORMS_EDITORS_TRAIL_LOOP = L10n.lang("bbs.ui.forms.editors.trail.loop");
