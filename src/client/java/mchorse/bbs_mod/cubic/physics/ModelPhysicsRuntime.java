@@ -1,11 +1,14 @@
 package mchorse.bbs_mod.cubic.physics;
 
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -81,13 +84,15 @@ public final class ModelPhysicsRuntime
             return;
         }
 
+        Map<String, ModelConstraintsConfig.BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance.id);
+
         Map<String, InstanceState> byModel = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
         InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
 
-        applyCompiled(entity.getAge(), transition, model, compiled.chains(), state, baseTransform);
+        applyCompiled(entity.getAge(), transition, model, compiled.chains(), constraints, state, baseTransform);
     }
 
-    private static void applyCompiled(int age, float transition, Model model, List<ModelPhysicsCache.CompiledChain> compiledChains, InstanceState state, Matrix4f baseTransform)
+    private static void applyCompiled(int age, float transition, Model model, List<ModelPhysicsCache.CompiledChain> compiledChains, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
     {
         Set<String> wanted = new HashSet<>();
         Set<String> chainIds = new HashSet<>();
@@ -116,11 +121,11 @@ public final class ModelPhysicsRuntime
 
         for (ModelPhysicsCache.CompiledChain chain : compiledChains)
         {
-            applyChain(age, transition, model, chain, frames, state);
+            applyChain(age, transition, model, chain, constraints, frames, state);
         }
     }
 
-    private static void applyChain(int age, float transition, Model model, ModelPhysicsCache.CompiledChain chain, Map<String, PivotFrame> frames, InstanceState instanceState)
+    private static void applyChain(int age, float transition, Model model, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState)
     {
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();
@@ -167,7 +172,7 @@ public final class ModelPhysicsRuntime
         Vector3f anchor = rootFrame.position();
         Quaternionf anchorRotation = rootFrame.worldRotation();
 
-        step(age, chain, anchor, anchorRotation, chainFrames, state);
+        step(age, model, ids, chain, constraints, anchor, anchorRotation, chainFrames, state);
         Vector3f[] positions = interpolate(state, transition);
         applyRenderAnchorFollow(state, positions, anchor, anchorRotation, transition);
         CubicRenderer.applyRotations(model, chainFrames.get(0).parentRotation(), ids, positions);
@@ -236,7 +241,7 @@ public final class ModelPhysicsRuntime
         }
     }
 
-    private static void step(int age, ModelPhysicsCache.CompiledChain chain, Vector3f anchorPosition, Quaternionf anchorRotation, List<PivotFrame> chainFrames, ChainState state)
+    private static void step(int age, Model model, List<String> ids, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -392,9 +397,131 @@ public final class ModelPhysicsRuntime
                     dir.mul((float) (lengths[i - 1] / Math.sqrt(lenSq)));
                     b.set(a).add(dir);
                 }
+
+                if (constraints != null && !constraints.isEmpty())
+                {
+                    applyAngleConstraints(model, ids, state.pos, lengths, constraints, chainFrames.get(0).parentRotation());
+                    state.pos[0].set(state.anchor);
+                }
             }
 
             state.lastAge++;
+        }
+    }
+
+    private static void applyAngleConstraints(Model model, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
+    {
+        int boneCount = ids.size();
+
+        if (boneCount == 0 || pos == null || pos.length < 2 || lengths == null || lengths.length < 1 || rootParentRotation == null)
+        {
+            return;
+        }
+
+        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
+
+        for (int i = 0; i < boneCount; i++)
+        {
+            String boneId = ids.get(i);
+            ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
+
+            ModelGroup bone = model.getGroup(boneId);
+            ModelGroup child = i + 1 < boneCount ? model.getGroup(ids.get(i + 1)) : null;
+
+            if (bone == null)
+            {
+                return;
+            }
+
+            Vector3f restDirLocal;
+
+            if (child != null)
+            {
+                restDirLocal = new Vector3f(child.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
+            }
+            else if (bone.children != null && !bone.children.isEmpty())
+            {
+                ModelGroup firstChild = bone.children.get(0);
+                restDirLocal = new Vector3f(firstChild.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
+            }
+            else
+            {
+                restDirLocal = new Vector3f(0F, -1F, 0F);
+            }
+
+            Vector3f desiredDirWorld = new Vector3f(pos[i + 1]).sub(pos[i]);
+
+            if (restDirLocal.lengthSquared() < EPS * EPS || desiredDirWorld.lengthSquared() < EPS * EPS)
+            {
+                continue;
+            }
+
+            restDirLocal.normalize();
+            desiredDirWorld.normalize();
+
+            Quaternionf invParent = new Quaternionf(parentWorld).invert();
+            Vector3f desiredDirLocal = new Vector3f(desiredDirWorld);
+            invParent.transform(desiredDirLocal);
+
+            if (desiredDirLocal.lengthSquared() < EPS * EPS)
+            {
+                continue;
+            }
+
+            desiredDirLocal.normalize();
+
+            Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
+            Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
+
+            Quaternionf applied = localRot;
+
+            if (c != null && c.enabled())
+            {
+                float minX = c.minX();
+                float minY = c.minY();
+                float minZ = c.minZ();
+                float maxX = c.maxX();
+                float maxY = c.maxY();
+                float maxZ = c.maxZ();
+
+                if (minX > maxX)
+                {
+                    float t = minX;
+                    minX = maxX;
+                    maxX = t;
+                }
+
+                if (minY > maxY)
+                {
+                    float t = minY;
+                    minY = maxY;
+                    maxY = t;
+                }
+
+                if (minZ > maxZ)
+                {
+                    float t = minZ;
+                    minZ = maxZ;
+                    maxZ = t;
+                }
+
+                eulerDeg.x = eulerDeg.x < minX ? minX : Math.min(eulerDeg.x, maxX);
+                eulerDeg.y = eulerDeg.y < minY ? minY : Math.min(eulerDeg.y, maxY);
+                eulerDeg.z = eulerDeg.z < minZ ? minZ : Math.min(eulerDeg.z, maxZ);
+
+                applied = Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z);
+                Vector3f dirLocal = new Vector3f(restDirLocal);
+                applied.transform(dirLocal);
+                parentWorld.transform(dirLocal);
+
+                if (dirLocal.lengthSquared() >= EPS * EPS)
+                {
+                    dirLocal.normalize().mul(lengths[i]);
+                    pos[i + 1].set(pos[i]).add(dirLocal);
+                }
+            }
+
+            parentWorld.mul(applied);
         }
     }
 

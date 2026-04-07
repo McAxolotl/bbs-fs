@@ -8,6 +8,7 @@ import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.utils.MathUtils;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Map;
 
 public final class ModelConstraintsRuntime
@@ -41,6 +42,23 @@ public final class ModelConstraintsRuntime
         }
 
         applyToModel(model, compiled.bones());
+    }
+
+    public static Map<String, ModelConstraintsConfig.BoneConstraint> getBones(String modelId)
+    {
+        if (modelId == null || modelId.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+
+        ModelConstraintsCache.Compiled compiled = ModelConstraintsCache.get(modelId);
+
+        if (compiled == null || compiled.bones() == null || compiled.bones().isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+
+        return compiled.bones();
     }
 
     private static void applyToModel(Model model, Map<String, ModelConstraintsConfig.BoneConstraint> bones)
@@ -98,4 +116,3 @@ public final class ModelConstraintsRuntime
         return modelId == null ? null : BBSMod.getAssetsPath(ModelManager.MODELS_PREFIX + modelId + "/constraints.json");
     }
 }
-
