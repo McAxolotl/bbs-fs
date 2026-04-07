@@ -540,6 +540,7 @@
 	"bbs.ui.film.replay.context.add": "Добавить тут запись",
 	"bbs.ui.film.replay.context.animation_to_keyframes": "Анимация в ключевые кадры позы...",
 	"bbs.ui.film.replay.context.poses_to_limbs": "Позы в кости",
+	"bbs.ui.film.replay.context.clear_ik": "Очистить IK дорожки",
 	"bbs.ui.film.replay.context.move_here": "Переместить запись сюда",
 	"bbs.ui.film.replay.filter_sheets": "Отфильтровать треки...",
 	"bbs.ui.film.replay.filter_sheets-title": "Треки ключевых кадров",

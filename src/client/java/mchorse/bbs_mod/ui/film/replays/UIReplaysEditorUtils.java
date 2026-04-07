@@ -4,6 +4,7 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -128,6 +129,41 @@ public class UIReplaysEditorUtils
             {
                 depthBySheetId.put(boneKey, getBoneDepth(iModel, bone));
             }
+        }
+    }
+
+    public static void addIKTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        List<String> controllers = ModelIKRuntime.getControllers(model);
+
+        if (controllers.isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        int color = Colors.MAGENTA;
+
+        for (String controller : controllers)
+        {
+            if (controller == null || controller.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toIKTargetKey(path, controller);
+
+            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
+            String title = path.isEmpty() ? "IK/" + controller : path + "/IK/" + controller;
+
+            out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(Icons.LIMB));
         }
     }
 
@@ -503,20 +539,41 @@ public class UIReplaysEditorUtils
                 int index = limbChannel.insert(tick, copy);
                 Keyframe<PoseTransform> limbKf = limbChannel.get(index);
 
-                limbKf.getInterpolation().copy(keyframe.getInterpolation());
-                limbKf.setShape(keyframe.getShape());
-                limbKf.setColor(keyframe.getColor() != null ? keyframe.getColor().copy() : null);
-                limbKf.setDuration(keyframe.getDuration());
-                limbKf.lx = keyframe.lx;
-                limbKf.ly = keyframe.ly;
-                limbKf.rx = keyframe.rx;
-                limbKf.ry = keyframe.ry;
-                limbKf.lx_m = keyframe.lx_m != null ? new ArrayList<>(keyframe.lx_m) : null;
-                limbKf.ly_m = keyframe.ly_m != null ? new ArrayList<>(keyframe.ly_m) : null;
-                limbKf.rx_m = keyframe.rx_m != null ? new ArrayList<>(keyframe.rx_m) : null;
-                limbKf.ry_m = keyframe.ry_m != null ? new ArrayList<>(keyframe.ry_m) : null;
+                limbKf.copyOverExtra(keyframe);
             }
         }
+    }
+
+    public static void clearIKTracks(Replay replay, ModelForm modelForm)
+    {
+        if (replay == null || modelForm == null)
+        {
+            return;
+        }
+
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        List<String> controllers = ModelIKRuntime.getControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        BaseValue.edit(replay.properties, (props) ->
+        {
+            for (String controller : controllers)
+            {
+                String id = PerLimbService.toIKTargetKey(path, controller);
+                KeyframeChannel channel = props.properties.get(id);
+
+                if (channel != null)
+                {
+                    channel.removeAll();
+                }
+            }
+        });
     }
 
     /* Offer bone hierarchy options */

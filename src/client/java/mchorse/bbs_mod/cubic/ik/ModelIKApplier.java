@@ -24,7 +24,7 @@ final class ModelIKApplier
     {
     }
 
-    public static void apply(Model model, List<ModelIKCache.CompiledChain> chains)
+    public static void apply(Model model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
@@ -49,11 +49,11 @@ final class ModelIKApplier
 
         for (ModelIKCache.CompiledChain chain : chains)
         {
-            applyChain(model, chain, frames);
+            applyChain(model, chain, frames, controllerTargets);
         }
     }
 
-    private static void applyChain(Model model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames)
+    private static void applyChain(Model model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets)
     {
         PivotFrame controllerFrame = frames.get(chain.controller());
 
@@ -83,7 +83,9 @@ final class ModelIKApplier
             }
         }
 
-        List<Vector3f> solved = FabrikSolver.solve(currentPositions, new Vector3f(controllerFrame.position()), MAX_ITERATIONS, TOLERANCE);
+        Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.controller());
+        Vector3f target = override != null ? new Vector3f(override) : new Vector3f(controllerFrame.position());
+        List<Vector3f> solved = FabrikSolver.solve(currentPositions, target, MAX_ITERATIONS, TOLERANCE);
         if (rootParentRotation == null)
         {
             return;

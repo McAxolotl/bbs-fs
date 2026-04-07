@@ -24,6 +24,14 @@ public class FormUtils
 
     private static final List<String> path = new ArrayList<>();
 
+    public static boolean isPoseProperty(String name)
+    {
+        return name.startsWith("transform")
+            || name.startsWith("pose")
+            || name.startsWith("pose_overlay")
+            || name.startsWith("shape_keys");
+    }
+
     public static Form fromData(BaseType data)
     {
         if (data instanceof MapType map)

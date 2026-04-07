@@ -52,11 +52,13 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Vector3f;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -320,8 +322,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
 
-        this.applyIKOnce(model);
-        this.applyPhysicsOnce(target, model, transition, ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix()));
+        Matrix4f baseTransform = ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix());
+
+        this.applyIKOnce(model, baseTransform);
+        this.applyPhysicsOnce(target, model, transition, baseTransform);
         this.applyConstraintsOnce(model);
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
@@ -350,7 +354,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model)
+    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform)
     {
         if (this.ikAppliedThisRender)
         {
@@ -358,7 +362,37 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.ikAppliedThisRender = true;
-        ModelIKRuntime.apply(model);
+        if (baseTransform == null || this.form == null || this.form.ikTargetOverrides.isEmpty())
+        {
+            ModelIKRuntime.apply(model);
+            return;
+        }
+
+        Matrix4f inv = new Matrix4f(baseTransform).invert();
+        Map<String, Vector3f> local = new HashMap<>(this.form.ikTargetOverrides.size() * 2);
+
+        for (Map.Entry<String, Vector3f> entry : this.form.ikTargetOverrides.entrySet())
+        {
+            String controller = entry.getKey();
+            Vector3f worldPos = entry.getValue();
+
+            if (controller == null || controller.isEmpty() || worldPos == null)
+            {
+                continue;
+            }
+
+            Vector3f pos = new Vector3f(worldPos);
+            inv.transformPosition(pos);
+            local.put(controller, pos);
+        }
+
+        if (local.isEmpty())
+        {
+            ModelIKRuntime.apply(model);
+            return;
+        }
+
+        ModelIKRuntime.apply(model, local);
     }
 
     private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)

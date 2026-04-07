@@ -12,9 +12,12 @@ import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ModelForm extends Form
 {
@@ -28,6 +31,7 @@ public class ModelForm extends Form
     public final ValueBoolean boneTracks = new ValueBoolean("bone_tracks", true);
 
     public final List<ValuePose> additionalOverlays = new ArrayList<>();
+    public final transient Map<String, Vector3f> ikTargetOverrides = new HashMap<>();
 
     public ModelForm()
     {
