@@ -10,10 +10,12 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,6 +30,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public UIToggle enabled;
     public UIButton locator;
     public UIButton root;
+    public UITrackpad poleX;
+    public UITrackpad poleY;
+    public UITrackpad poleZ;
     public UIButton clear;
     public UIButton apply;
 
@@ -40,11 +45,16 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         public String locator = "";
         public String root = "";
         public boolean enabled = true;
+        public float poleX;
+        public float poleY;
+        public float poleZ;
     }
 
     public UIModelIKFormPanel(UIForm editor)
     {
         super(editor);
+
+        IKey raw = IKey.constant("%s (%s)");
 
         this.bones = new UIStringList((l) ->
         {
@@ -89,6 +99,46 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             });
         });
 
+        this.poleX = new UITrackpad((v) ->
+        {
+            if (this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.poleX = v.floatValue();
+        });
+        this.poleX.block().onlyNumbers();
+        this.poleX.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_X));
+        this.poleX.textbox.setColor(Colors.RED);
+        this.poleY = new UITrackpad((v) ->
+        {
+            if (this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.poleY = v.floatValue();
+        });
+        this.poleY.block().onlyNumbers();
+        this.poleY.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Y));
+        this.poleY.textbox.setColor(Colors.GREEN);
+        this.poleZ = new UITrackpad((v) ->
+        {
+            if (this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.poleZ = v.floatValue();
+        });
+        this.poleZ.block().onlyNumbers();
+        this.poleZ.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Z));
+        this.poleZ.textbox.setColor(Colors.BLUE);
+
         this.clear = new UIButton(UIKeys.FORMS_EDITORS_MODEL_IK_CLEAR, (b) ->
         {
             if (this.selectedBone.isEmpty())
@@ -109,6 +159,8 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.enabled,
             this.locator,
             this.root,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE).marginTop(UIConstants.SECTION_GAP),
+            UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.poleX, this.poleY, this.poleZ),
             UI.row(this.clear, this.apply).marginTop(UIConstants.SECTION_GAP)
         );
     }
@@ -152,6 +204,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.enabled.setEnabled(enabled);
         this.locator.setEnabled(enabled);
         this.root.setEnabled(enabled);
+        this.poleX.setEnabled(enabled);
+        this.poleY.setEnabled(enabled);
+        this.poleZ.setEnabled(enabled);
         this.clear.setEnabled(enabled);
         this.apply.setEnabled(enabled);
     }
@@ -209,10 +264,16 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         this.locator.label = UIKeys.FORMS_EDITORS_MODEL_IK_LOCATOR.format(this.formatBone(locatorLabel));
         this.root.label = UIKeys.FORMS_EDITORS_MODEL_IK_ROOT.format(this.formatBone(rootLabel));
+        this.poleX.setValue(data == null ? 0F : data.poleX);
+        this.poleY.setValue(data == null ? 0F : data.poleY);
+        this.poleZ.setValue(data == null ? 0F : data.poleZ);
         this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
         this.enabled.setValue(active);
         this.locator.setEnabled(canEdit);
         this.root.setEnabled(canEdit);
+        this.poleX.setEnabled(canEdit);
+        this.poleY.setEnabled(canEdit);
+        this.poleZ.setEnabled(canEdit);
         this.clear.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty() && data != null);
         this.apply.setEnabled(this.bones.isEnabled() && this.modelId != null && !this.modelId.isEmpty());
     }
@@ -249,6 +310,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.locator = chain.locator();
             data.root = chain.root();
             data.enabled = chain.enabled();
+            data.poleX = chain.poleX();
+            data.poleY = chain.poleY();
+            data.poleZ = chain.poleZ();
             this.ikData.put(chain.controller(), data);
         }
     }
@@ -278,7 +342,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 continue;
             }
 
-            out.add(new ModelIKConfig.Chain(controller, data.locator, data.root, data.enabled));
+            out.add(new ModelIKConfig.Chain(controller, data.locator, data.root, data.enabled, data.poleX, data.poleY, data.poleZ, ModelIKConfig.PoleSpace.ROOT));
         }
 
         if (ModelIKIO.write(this.modelId, out.isEmpty() ? null : new ModelIKConfig(out)))

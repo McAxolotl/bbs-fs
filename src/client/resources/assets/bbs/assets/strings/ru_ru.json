@@ -707,6 +707,7 @@
 	"bbs.ui.forms.editors.model.ik.enabled": "Включено",
 	"bbs.ui.forms.editors.model.ik.locator": "Локатор: %s",
 	"bbs.ui.forms.editors.model.ik.root": "Корневая кость: %s",
+	"bbs.ui.forms.editors.model.ik.pole": "Pole-вектор",
 	"bbs.ui.forms.editors.model.ik.clear": "Очистить",
 	"bbs.ui.forms.editors.model.ik.save_error": "Не удалось сохранить конфиг IK",
 	"bbs.ui.forms.editors.model.ik.saved": "Конфиг IK сохранён",

@@ -57,13 +57,17 @@ public final class ModelIKIO
             String locator = entry.getString("locator");
             String root = entry.getString("root");
             boolean enabled = entry.getBool("enabled", true);
+            float poleX = (float) entry.getDouble("pole_x", 0D);
+            float poleY = (float) entry.getDouble("pole_y", 0D);
+            float poleZ = (float) entry.getDouble("pole_z", 0D);
+            ModelIKConfig.PoleSpace poleSpace = parsePoleSpace(entry.getString("pole_space", "root"));
 
             if (locator.isEmpty() || root.isEmpty())
             {
                 continue;
             }
 
-            chains.add(new ModelIKConfig.Chain(controller, locator, root, enabled));
+            chains.add(new ModelIKConfig.Chain(controller, locator, root, enabled, poleX, poleY, poleZ, poleSpace));
         }
 
         return chains.isEmpty() ? null : new ModelIKConfig(chains);
@@ -103,11 +107,48 @@ public final class ModelIKIO
                 boneData.putString("locator", locator);
                 boneData.putString("root", root);
                 boneData.putBool("enabled", chain.enabled());
+                if (chain.poleX() != 0F) boneData.putDouble("pole_x", chain.poleX());
+                if (chain.poleY() != 0F) boneData.putDouble("pole_y", chain.poleY());
+                if (chain.poleZ() != 0F) boneData.putDouble("pole_z", chain.poleZ());
+                if (chain.poleSpace() != null && chain.poleSpace() != ModelIKConfig.PoleSpace.ROOT)
+                {
+                    boneData.putString("pole_space", poleSpaceToString(chain.poleSpace()));
+                }
                 ik.put(chain.controller(), boneData);
             }
         }
 
         return DataToString.writeSilently(file, ik, true);
+    }
+
+    private static ModelIKConfig.PoleSpace parsePoleSpace(String value)
+    {
+        if (value == null || value.isEmpty())
+        {
+            return ModelIKConfig.PoleSpace.ROOT;
+        }
+
+        if ("world".equalsIgnoreCase(value))
+        {
+            return ModelIKConfig.PoleSpace.WORLD;
+        }
+
+        if ("controller".equalsIgnoreCase(value))
+        {
+            return ModelIKConfig.PoleSpace.CONTROLLER;
+        }
+
+        return ModelIKConfig.PoleSpace.ROOT;
+    }
+
+    private static String poleSpaceToString(ModelIKConfig.PoleSpace value)
+    {
+        if (value == null)
+        {
+            return "root";
+        }
+
+        return value == ModelIKConfig.PoleSpace.WORLD ? "world" : (value == ModelIKConfig.PoleSpace.CONTROLLER ? "controller" : "root");
     }
 
     private static MapType readMap(File file)

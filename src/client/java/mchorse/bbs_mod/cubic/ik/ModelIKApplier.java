@@ -1,10 +1,8 @@
 package mchorse.bbs_mod.cubic.ik;
 
 import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
-import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -24,7 +22,7 @@ final class ModelIKApplier
     {
     }
 
-    public static void apply(Model model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets)
+    public static void apply(Model model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> prevNormals, float hysteresisRad, float singularityRad)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
@@ -49,11 +47,11 @@ final class ModelIKApplier
 
         for (ModelIKCache.CompiledChain chain : chains)
         {
-            applyChain(model, chain, frames, controllerTargets);
+            applyChain(model, chain, frames, controllerTargets, prevNormals, hysteresisRad, singularityRad);
         }
     }
 
-    private static void applyChain(Model model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets)
+    private static void applyChain(Model model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> prevNormals, float hysteresisRad, float singularityRad)
     {
         PivotFrame controllerFrame = frames.get(chain.controller());
 
@@ -84,14 +82,53 @@ final class ModelIKApplier
         }
 
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.controller());
-        Vector3f target = override != null ? new Vector3f(override) : new Vector3f(controllerFrame.position());
-        List<Vector3f> solved = FabrikSolver.solve(currentPositions, target, MAX_ITERATIONS, TOLERANCE);
+        Vector3f controllerPos = override != null ? new Vector3f(override) : new Vector3f(controllerFrame.position());
+        Vector3f target = controllerPos;
+
+        Vector3f pole = null;
+        if (chain.poleX() != 0F || chain.poleY() != 0F || chain.poleZ() != 0F)
+        {
+            pole = new Vector3f(chain.poleX(), chain.poleY(), chain.poleZ()).mul(1F / 16F);
+            if (chain.poleSpace() == ModelIKConfig.PoleSpace.CONTROLLER)
+            {
+                Quaternionf controllerRotation = new Quaternionf(controllerFrame.worldRotation());
+                controllerRotation.transform(pole);
+            }
+            else if (chain.poleSpace() == ModelIKConfig.PoleSpace.ROOT)
+            {
+                if (rootParentRotation != null)
+                {
+                    Quaternionf rootSpace = new Quaternionf(rootParentRotation);
+                    rootSpace.transform(pole);
+                }
+            }
+            pole.add(controllerPos);
+        }
+
+        Vector3f prevNormal = prevNormals == null ? null : prevNormals.get(chain.controller());
+        List<Vector3f> solved = FabrikSolver.solve(currentPositions, target, pole, prevNormal, hysteresisRad, singularityRad, MAX_ITERATIONS, TOLERANCE);
         if (rootParentRotation == null)
         {
             return;
         }
 
-        Vector3f[] solvedArray = solved.toArray(new Vector3f[0]);
+        Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
         CubicRenderer.applyRotations(model, rootParentRotation, chainIds, solvedArray);
+
+        if (prevNormals != null && solved.size() >= 3)
+        {
+            Vector3f a = solved.get(0);
+            Vector3f b = solved.get(1);
+            Vector3f c = solved.get(2);
+            Vector3f ba = new Vector3f(b).sub(a);
+            Vector3f cb = new Vector3f(c).sub(b);
+            Vector3f n = ba.cross(cb);
+            if (n.lengthSquared() > 1.0e-8f)
+            {
+                n.normalize();
+                Vector3f store = prevNormals.computeIfAbsent(chain.controller(), (k) -> new Vector3f());
+                store.set(n);
+            }
+        }
     }
 }

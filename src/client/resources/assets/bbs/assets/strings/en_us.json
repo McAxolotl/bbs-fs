@@ -708,6 +708,7 @@
 	"bbs.ui.forms.editors.model.ik.enabled": "Enabled",
 	"bbs.ui.forms.editors.model.ik.locator": "Locator: %s",
 	"bbs.ui.forms.editors.model.ik.root": "Root bone: %s",
+	"bbs.ui.forms.editors.model.ik.pole": "Pole vector",
 	"bbs.ui.forms.editors.model.ik.clear": "Clear",
 	"bbs.ui.forms.editors.model.ik.save_error": "Failed to save IK config",
 	"bbs.ui.forms.editors.model.ik.saved": "IK config saved",

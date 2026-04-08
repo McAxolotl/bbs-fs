@@ -15,7 +15,7 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String controller, String locator, String root, List<String> chainRootToEffector)
+    public record CompiledChain(String controller, String locator, String root, float poleX, float poleY, float poleZ, ModelIKConfig.PoleSpace poleSpace, List<String> chainRootToEffector)
     {
     }
 
@@ -101,7 +101,7 @@ final class ModelIKCache
                 continue;
             }
 
-            out.add(new CompiledChain(chain.controller(), chain.locator(), chain.root(), chainIds));
+            out.add(new CompiledChain(chain.controller(), chain.locator(), chain.root(), chain.poleX(), chain.poleY(), chain.poleZ(), chain.poleSpace(), chainIds));
         }
 
         return out;

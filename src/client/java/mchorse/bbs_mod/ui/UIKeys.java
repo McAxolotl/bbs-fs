@@ -440,6 +440,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_ENABLED = L10n.lang("bbs.ui.forms.editors.model.ik.enabled");
     public static final IKey FORMS_EDITORS_MODEL_IK_LOCATOR = L10n.lang("bbs.ui.forms.editors.model.ik.locator");
     public static final IKey FORMS_EDITORS_MODEL_IK_ROOT = L10n.lang("bbs.ui.forms.editors.model.ik.root");
+    public static final IKey FORMS_EDITORS_MODEL_IK_POLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole");
     public static final IKey FORMS_EDITORS_MODEL_IK_CLEAR = L10n.lang("bbs.ui.forms.editors.model.ik.clear");
     public static final IKey FORMS_EDITORS_MODEL_IK_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.ik.save_error");
     public static final IKey FORMS_EDITORS_MODEL_IK_SAVED = L10n.lang("bbs.ui.forms.editors.model.ik.saved");
