@@ -59,6 +59,7 @@ public final class ModelPhysicsIO
 
             MapType entry = bones.getMap(root);
             String end = entry.getString("end");
+            String targetBone = entry.getString("target_bone", "");
 
             if (root == null || root.isEmpty() || end == null || end.isEmpty())
             {
@@ -74,7 +75,7 @@ public final class ModelPhysicsIO
                 iterations = 1;
             }
 
-            out.put(root, new ModelPhysicsConfig.Bone(end, gravity, damping, iterations));
+            out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, iterations));
         }
 
         return out.isEmpty() ? null : new ModelPhysicsConfig(out);
@@ -108,6 +109,12 @@ public final class ModelPhysicsIO
 
                 MapType map = new MapType();
                 map.putString("end", bone.end());
+
+                if (bone.targetBone() != null && !bone.targetBone().isEmpty())
+                {
+                    map.putString("target_bone", bone.targetBone());
+                }
+
                 map.putFloat("gravity", bone.gravity());
                 map.putFloat("damping", bone.damping());
                 map.putInt("iterations", Math.max(1, bone.iterations()));

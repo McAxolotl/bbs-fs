@@ -6,11 +6,15 @@ public class PerLimbService
 {
     public static final String POSE_BONES = "pose.bones.";
     public static final String IK_TARGETS = "ik_targets";
+    public static final String PHYSICS_TARGETS = "physics_targets";
 
     public static record PoseBonePath(String formPath, String bone)
     {}
 
     public static record IKTargetPath(String formPath, String controller)
+    {}
+
+    public static record PhysicsTargetPath(String formPath, String rootBone)
     {}
 
     public static boolean isPoseBoneChannel(String id)
@@ -21,6 +25,11 @@ public class PerLimbService
     public static boolean isIKTargetChannel(String id)
     {
         return id != null && id.contains(IK_TARGETS);
+    }
+
+    public static boolean isPhysicsTargetChannel(String id)
+    {
+        return id != null && id.contains(PHYSICS_TARGETS);
     }
 
     public static PoseBonePath parsePoseBonePath(String id)
@@ -96,5 +105,45 @@ public class PerLimbService
         }
 
         return formPath + FormUtils.PATH_SEPARATOR + IK_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+    }
+
+    public static PhysicsTargetPath parsePhysicsTargetPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(PHYSICS_TARGETS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String rootBone = id.substring(index + PHYSICS_TARGETS.length());
+        if (rootBone.startsWith(FormUtils.PATH_SEPARATOR))
+        {
+            rootBone = rootBone.substring(FormUtils.PATH_SEPARATOR.length());
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return new PhysicsTargetPath(formPath, rootBone);
+    }
+
+    public static String toPhysicsTargetKey(String formPath, String rootBone)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
     }
 }

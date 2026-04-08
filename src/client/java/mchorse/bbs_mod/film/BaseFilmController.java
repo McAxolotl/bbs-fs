@@ -599,7 +599,7 @@ public abstract class BaseFilmController
             /* Apply property */
             Form form1 = entity.getForm();
             replay.properties.applyProperties(form1, tick + delta);
-            this.applyIKTargetOverrides(replay, form1, tick + delta, delta);
+            this.applyTargetOverrides(replay, form1, tick + delta, delta);
 
             Map<String, Integer> actors = this.getActors();
 
@@ -615,7 +615,7 @@ public abstract class BaseFilmController
                     {
                         Form form = actor.getForm();
                         replay.properties.applyProperties(form, tick + delta);
-                        this.applyIKTargetOverrides(replay, form, tick + delta, delta);
+                        this.applyTargetOverrides(replay, form, tick + delta, delta);
                     }
                     else if (anEntity instanceof PlayerEntity player)
                     {
@@ -625,7 +625,7 @@ public abstract class BaseFilmController
                         {
                             Form form = morph.getForm();
                             replay.properties.applyProperties(form, tick + delta);
-                            this.applyIKTargetOverrides(replay, form, tick + delta, delta);
+                            this.applyTargetOverrides(replay, form, tick + delta, delta);
                         }
 
                         float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
@@ -646,14 +646,19 @@ public abstract class BaseFilmController
         }
     }
 
-    private void applyIKTargetOverrides(Replay replay, Form root, float tick, float transition)
+    public void update(Replay replay, Form root, float tick, float transition)
+    {
+        this.applyTargetOverrides(replay, root, tick, transition);
+    }
+
+    private void applyTargetOverrides(Replay replay, Form root, float tick, float transition)
     {
         if (replay == null || root == null)
         {
             return;
         }
 
-        clearIKTargetOverrides(root);
+        this.clearTargetOverrides(root);
 
         if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
         {
@@ -674,57 +679,74 @@ public abstract class BaseFilmController
                 continue;
             }
 
-            PerLimbService.IKTargetPath path = PerLimbService.parseIKTargetPath(id);
+            PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
 
-            if (path == null)
+            if (ikPath != null)
             {
+                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, true);
                 continue;
             }
 
-            String formPath = path.formPath();
-            String controller = path.controller();
-            Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+            PerLimbService.PhysicsTargetPath physicsPath = PerLimbService.parsePhysicsTargetPath(id);
 
-            if (!(form instanceof ModelForm modelForm))
+            if (physicsPath != null)
             {
-                continue;
+                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, false);
             }
-
-            KeyframeSegment<?> segment = channel.find(tick);
-
-            if (segment == null)
-            {
-                continue;
-            }
-
-            Object v = segment.createInterpolated();
-
-            if (!(v instanceof Anchor anchor))
-            {
-                continue;
-            }
-
-            IEntity targetEntity = this.entities.get(anchor.replay);
-
-            if (targetEntity == null)
-            {
-                continue;
-            }
-
-            Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
-            Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
-            Vector3f position = resolved.getTranslation(TEMP_VECTOR);
-
-            Vector3f out = modelForm.ikTargetOverrides.computeIfAbsent(controller, (k) -> new Vector3f());
-            out.set(position);
         }
     }
 
-    private static void clearIKTargetOverrides(Form form)
+    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, boolean isIK)
+    {
+        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (form instanceof ModelForm modelForm)
+        {
+            Vector3f position = resolveTargetPosition(channel, tick, transition);
+
+            if (position != null)
+            {
+                Map<String, Vector3f> overrides = isIK ? modelForm.ikTargetOverrides : modelForm.physicsTargetOverrides;
+                overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
+            }
+        }
+    }
+
+    private Vector3f resolveTargetPosition(KeyframeChannel<?> channel, float tick, float transition)
+    {
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return null;
+        }
+
+        Object v = segment.createInterpolated();
+
+        if (!(v instanceof Anchor anchor))
+        {
+            return null;
+        }
+
+        IEntity targetEntity = this.entities.get(anchor.replay);
+
+        if (targetEntity == null)
+        {
+            return null;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+
+        return resolved.getTranslation(TEMP_VECTOR);
+    }
+
+    private void clearTargetOverrides(Form form)
     {
         if (form instanceof ModelForm modelForm)
         {
             modelForm.ikTargetOverrides.clear();
+            modelForm.physicsTargetOverrides.clear();
         }
 
         for (BodyPart part : form.parts.getAllTyped())
@@ -733,7 +755,7 @@ public abstract class BaseFilmController
 
             if (child != null)
             {
-                clearIKTargetOverrides(child);
+                this.clearTargetOverrides(child);
             }
         }
     }

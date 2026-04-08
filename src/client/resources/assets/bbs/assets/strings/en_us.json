@@ -715,6 +715,7 @@
 	"bbs.ui.forms.editors.model.physics.chains": "Bones",
 	"bbs.ui.forms.editors.model.physics.settings": "Settings",
 	"bbs.ui.forms.editors.model.physics.enabled": "Enabled",
+	"bbs.ui.forms.editors.model.physics.target": "Target: %s",
 	"bbs.ui.forms.editors.model.physics.end": "End: %s",
 	"bbs.ui.forms.editors.model.physics.gravity": "Gravity",
 	"bbs.ui.forms.editors.model.physics.damping": "Damping",

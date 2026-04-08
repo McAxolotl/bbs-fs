@@ -70,6 +70,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 {
     private static Matrix4f uiMatrix = new Matrix4f();
 
+    public ModelForm getForm()
+    {
+        return this.form;
+    }
+
     private MatrixCache bones = new MatrixCache();
 
     private ActionsConfig lastConfigs;
@@ -403,6 +408,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.physicsAppliedThisRender = true;
+        model.lastBaseTransform = baseTransform;
+        model.form = this.form;
         ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
     }
 

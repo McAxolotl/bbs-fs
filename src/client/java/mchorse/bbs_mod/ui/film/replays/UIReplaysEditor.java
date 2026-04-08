@@ -144,6 +144,7 @@ public class UIReplaysEditor extends UIElement {
 
         COLORS.put("visible", Colors.WHITE & Colors.RGB);
         COLORS.put("pose", Colors.RED);
+        COLORS.put("physics_targets", Colors.MAGENTA);
         COLORS.put("transform_overlay", 0xaaff00);
         COLORS.put("color", Colors.INACTIVE);
         COLORS.put("shape_keys", Colors.PINK);
@@ -179,6 +180,7 @@ public class UIReplaysEditor extends UIElement {
         ICONS.put("frequency", Icons.STOPWATCH);
         ICONS.put("count", Icons.BUCKET);
         ICONS.put("settings", Icons.GEAR);
+        ICONS.put("physics_targets", Icons.TIME);
     }
 
     public static Icon getIcon(String key) {
@@ -708,6 +710,10 @@ public class UIReplaysEditor extends UIElement {
                 List<UIKeyframeSheet> ikSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addIKTargetSheets(modelForm, this.replay.properties, ikSheets);
                 orderedFormSheets.addAll(ikSheets);
+
+                List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
+                UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
+                orderedFormSheets.addAll(physicsSheets);
             }
 
             if (!tabsEnabled || this.category == ReplayCategory.POSE) {

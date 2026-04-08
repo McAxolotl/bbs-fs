@@ -1,10 +1,13 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -134,6 +137,11 @@ public class UIReplaysEditorUtils
 
     public static void addIKTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
+        addIKTargetSheets(modelForm, properties, out, null);
+    }
+
+    public static void addIKTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
+    {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
 
         if (model == null)
@@ -142,14 +150,7 @@ public class UIReplaysEditorUtils
         }
 
         List<String> controllers = ModelIKRuntime.getControllers(model);
-
-        if (controllers.isEmpty())
-        {
-            return;
-        }
-
         String path = FormUtils.getPath(modelForm);
-        int color = Colors.MAGENTA;
 
         for (String controller : controllers)
         {
@@ -159,12 +160,45 @@ public class UIReplaysEditorUtils
             }
 
             String id = PerLimbService.toIKTargetKey(path, controller);
-
-            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
             String title = path.isEmpty() ? "IK/" + controller : path + "/IK/" + controller;
 
-            out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(Icons.LIMB));
+            addTargetSheet(out, properties, id, title, Colors.CYAN, Icons.LIMB);
         }
+    }
+
+    public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        ModelPhysicsConfig physics = ModelPhysicsIO.read(model.id);
+
+        if (physics == null || physics.bones() == null)
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+
+        for (Map.Entry<String, ModelPhysicsConfig.Bone> entry : physics.bones().entrySet())
+        {
+            String rootBone = entry.getKey();
+            String id = PerLimbService.toPhysicsTargetKey(path, rootBone);
+            String title = path.isEmpty() ? "Physics/" + rootBone : path + "/Physics/" + rootBone;
+
+            addTargetSheet(out, properties, id, title, Colors.MAGENTA, Icons.TIME);
+        }
+    }
+
+    private static void addTargetSheet(List<UIKeyframeSheet> out, FormProperties properties, String id, String title, int color, Icon icon)
+    {
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(icon));
     }
 
     private static int getBoneDepth(IModel model, String bone)

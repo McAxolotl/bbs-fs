@@ -15,16 +15,18 @@ final class ModelPhysicsCache
     {
         private final String id;
         private final String attach;
+        private final String targetBone;
         private final List<String> chainRootToEnd;
         private final float[] restLengths;
         private final float gravity;
         private final float damping;
         private final int iterations;
 
-        public CompiledChain(String id, String attach, List<String> chainRootToEnd, float[] restLengths, float gravity, float damping, int iterations)
+        public CompiledChain(String id, String attach, String targetBone, List<String> chainRootToEnd, float[] restLengths, float gravity, float damping, int iterations)
         {
             this.id = id;
             this.attach = attach;
+            this.targetBone = targetBone;
             this.chainRootToEnd = chainRootToEnd;
             this.restLengths = restLengths;
             this.gravity = gravity;
@@ -40,6 +42,11 @@ final class ModelPhysicsCache
         public String attach()
         {
             return this.attach;
+        }
+
+        public String targetBone()
+        {
+            return this.targetBone;
         }
 
         public List<String> chainRootToEnd()
@@ -165,7 +172,7 @@ final class ModelPhysicsCache
             String attach = rootId;
 
             String id = rootId + ":" + endId;
-            out.add(new CompiledChain(id, attach, ids, lengths, chain.gravity(), chain.damping(), chain.iterations()));
+            out.add(new CompiledChain(id, attach, chain.targetBone(), ids, lengths, chain.gravity(), chain.damping(), chain.iterations()));
         }
 
         return out;

@@ -447,6 +447,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_CHAINS = L10n.lang("bbs.ui.forms.editors.model.physics.chains");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.physics.settings");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_ENABLED = L10n.lang("bbs.ui.forms.editors.model.physics.enabled");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_TARGET = L10n.lang("bbs.ui.forms.editors.model.physics.target");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_END = L10n.lang("bbs.ui.forms.editors.model.physics.end");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_GRAVITY = L10n.lang("bbs.ui.forms.editors.model.physics.gravity");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_DAMPING = L10n.lang("bbs.ui.forms.editors.model.physics.damping");

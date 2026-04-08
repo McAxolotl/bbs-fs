@@ -31,6 +31,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     private static final int DEFAULT_ITERATIONS = 4;
 
     public UIButton end;
+    public UIButton targetBone;
     public UIStringList bones;
     public UIToggle enabled;
     public UITrackpad gravity;
@@ -48,6 +49,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     private static class BoneData
     {
         public String end = "";
+        public String targetBone = "";
         public float gravity = DEFAULT_GRAVITY;
         public float damping = DEFAULT_DAMPING;
         public int iterations = DEFAULT_ITERATIONS;
@@ -140,6 +142,35 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             });
         });
 
+        this.targetBone = new UIButton(IKey.EMPTY, (b) ->
+        {
+            BoneData d = this.getSelectedData();
+
+            if (d == null)
+            {
+                return;
+            }
+
+            this.getContext().replaceContextMenu((menu) ->
+            {
+                menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, d.targetBone.isEmpty(), () ->
+                {
+                    d.targetBone = "";
+                    this.updateFields();
+                });
+
+                for (String bone : this.availableBones)
+                {
+                    boolean selected = bone.equals(d.targetBone);
+                    menu.action(Icons.LIMB, IKey.constant(bone), selected, () ->
+                    {
+                        d.targetBone = bone;
+                        this.updateFields();
+                    });
+                }
+            });
+        });
+
         this.clear = new UIButton(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CLEAR, (b) ->
         {
             if (this.selectedBone.isEmpty())
@@ -159,6 +190,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
             this.enabled,
             this.end,
+            this.targetBone,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY),
             this.gravity,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DAMPING),
@@ -211,6 +243,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
         this.end.setEnabled(enabled);
+        this.targetBone.setEnabled(enabled);
         this.gravity.setEnabled(enabled);
         this.damping.setEnabled(enabled);
         this.iterations.setEnabled(enabled);
@@ -250,6 +283,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.enabled.setValue(d != null);
 
         this.end.setEnabled(active);
+        this.targetBone.setEnabled(active);
         this.gravity.setEnabled(active);
         this.damping.setEnabled(active);
         this.iterations.setEnabled(active);
@@ -259,6 +293,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         if (d == null)
         {
             this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format("-");
+            this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format("-");
             this.gravity.setValue(DEFAULT_GRAVITY);
             this.damping.setValue(DEFAULT_DAMPING);
             this.iterations.setValue(DEFAULT_ITERATIONS);
@@ -266,6 +301,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         else
         {
             this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format(d.end == null || d.end.isEmpty() ? "-" : d.end);
+            this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format(d.targetBone == null || d.targetBone.isEmpty() ? "-" : d.targetBone);
             this.gravity.setValue(d.gravity);
             this.damping.setValue(d.damping);
             this.iterations.setValue(d.iterations);
@@ -318,6 +354,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
             BoneData d = new BoneData();
             d.end = bone.end();
+            d.targetBone = bone.targetBone() == null ? "" : bone.targetBone();
             d.gravity = bone.gravity();
             d.damping = bone.damping();
             d.iterations = bone.iterations();
@@ -357,12 +394,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             String root = entry.getKey();
             BoneData d = entry.getValue();
 
-            if (d == null || root == null || root.isEmpty() || d.end == null || d.end.isEmpty())
-            {
-                continue;
-            }
-
-            bones.put(root, new ModelPhysicsConfig.Bone(d.end, d.gravity, d.damping, Math.max(1, d.iterations)));
+            bones.put(root, new ModelPhysicsConfig.Bone(d.end, d.targetBone, d.gravity, d.damping, d.iterations));
         }
 
         if (ModelPhysicsIO.write(this.modelId, new ModelPhysicsConfig(bones)))

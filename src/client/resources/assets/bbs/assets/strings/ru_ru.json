@@ -714,6 +714,7 @@
 	"bbs.ui.forms.editors.model.physics.chains": "Кости",
 	"bbs.ui.forms.editors.model.physics.settings": "Настройки",
 	"bbs.ui.forms.editors.model.physics.enabled": "Включено",
+	"bbs.ui.forms.editors.model.physics.target": "Таргет: %s",
 	"bbs.ui.forms.editors.model.physics.end": "Конец: %s",
 	"bbs.ui.forms.editors.model.physics.gravity": "Гравитация",
 	"bbs.ui.forms.editors.model.physics.damping": "Затухание",
