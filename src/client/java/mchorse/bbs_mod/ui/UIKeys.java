@@ -484,6 +484,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_CONTEXT_RESET = L10n.lang("bbs.ui.forms.editors.model.constraints.context.reset");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_CONTEXT_SAVE = L10n.lang("bbs.ui.forms.editors.model.constraints.context.save");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_CONTEXT_NAME = L10n.lang("bbs.ui.forms.editors.model.constraints.context.name");
+    public static final IKey FORMS_EDITORS_MODEL_ADDITIVE_COLOR = L10n.lang("bbs.ui.forms.editors.model.additive_color");
     public static final IKey FORMS_EDITORS_MODEL_POSE = L10n.lang("bbs.ui.forms.editors.model.pose");
     public static final IKey FORMS_EDITORS_TRAIL_LENGTH = L10n.lang("bbs.ui.forms.editors.trail.length");
     public static final IKey FORMS_EDITORS_TRAIL_LOOP = L10n.lang("bbs.ui.forms.editors.trail.loop");

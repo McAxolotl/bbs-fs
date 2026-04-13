@@ -769,6 +769,7 @@
 	"bbs.ui.forms.editors.model.constraints.context.reset": "Сбросить конфиг ограничители",
 	"bbs.ui.forms.editors.model.constraints.context.save": "Сохранить конфиг ограничители",
 	"bbs.ui.forms.editors.model.constraints.context.name": "Имя...",
+	"bbs.ui.forms.editors.model.additive_color": "Аддитивный цвет",
 	"bbs.ui.forms.editors.model.pose": "Поза",
 	"bbs.ui.forms.editors.trail.length": "Длинна",
 	"bbs.ui.forms.editors.trail.loop": "Зацикливание",
