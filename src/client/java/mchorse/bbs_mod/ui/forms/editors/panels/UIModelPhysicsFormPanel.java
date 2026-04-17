@@ -47,14 +47,12 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad iterations;
     public UIToggle collisions;
     public UITrackpad radius;
-    public UIButton clear;
-    public UIButton apply;
 
     private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
-    private String modelId = "";
     private final Map<String, BoneData> data = new HashMap<>();
     private ModelInstance modelInstance;
+    private boolean syncingUI;
 
     private static class BoneData
     {
@@ -87,7 +85,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ENABLED, (b) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
@@ -107,15 +105,22 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             }
 
             this.updateFields();
+            this.commitChanges();
         });
 
         this.gravity = new UITrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.gravity = v.floatValue();
+                this.commitChanges();
             }
         });
         this.gravity.onlyNumbers().values(0.1D, 0.01D, 0.5D).increment(0.01D).limit(0D, 10D);
@@ -123,11 +128,17 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.weight = new UITrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.weight = v.floatValue();
+                this.commitChanges();
             }
         });
         this.weight.onlyNumbers().values(0.1D, 0.01D, 0.25D).increment(0.01D).limit(0D, 1D);
@@ -135,49 +146,79 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.relativeGravity = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY, (b) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.relativeGravity = b.getValue();
+                this.commitChanges();
             }
         });
 
         this.relativeGravityRotateX = axisTrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.relativeGravityRotateX = v.floatValue();
+                this.commitChanges();
             }
         }, Colors.RED, axis.format(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION, UIKeys.GENERAL_X));
         this.relativeGravityRotateY = axisTrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.relativeGravityRotateY = v.floatValue();
+                this.commitChanges();
             }
         }, Colors.GREEN, axis.format(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION, UIKeys.GENERAL_Y));
         this.relativeGravityRotateZ = axisTrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.relativeGravityRotateZ = v.floatValue();
+                this.commitChanges();
             }
         }, Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION, UIKeys.GENERAL_Z));
 
         this.damping = new UITrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.damping = v.floatValue();
+                this.commitChanges();
             }
         });
         this.damping.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
@@ -185,11 +226,17 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.iterations = new UITrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.iterations = v.intValue();
+                this.commitChanges();
             }
         });
         this.iterations.onlyNumbers().integer().values(1D).increment(1D).limit(1D, 20D, true);
@@ -197,21 +244,33 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.collisions = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS, (b) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.collisions = b.getValue();
+                this.commitChanges();
             }
         });
 
         this.radius = new UITrackpad((v) ->
         {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
             BoneData d = this.getSelectedData();
 
             if (d != null)
             {
                 d.radius = v.floatValue();
+                this.commitChanges();
             }
         });
         this.radius.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
@@ -230,6 +289,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             {
                 d.end = bone;
                 this.updateFields();
+                this.commitChanges();
             });
         });
 
@@ -248,6 +308,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 {
                     d.targetBone = "";
                     this.updateFields();
+                    this.commitChanges();
                 });
 
                 for (String bone : this.availableBones)
@@ -257,23 +318,11 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                     {
                         d.targetBone = bone;
                         this.updateFields();
+                        this.commitChanges();
                     });
                 }
             });
         });
-
-        this.clear = new UIButton(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CLEAR, (b) ->
-        {
-            if (this.selectedBone.isEmpty())
-            {
-                return;
-            }
-
-            this.data.remove(this.selectedBone);
-            this.updateFields();
-        });
-
-        this.apply = new UIButton(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_APPLY, (b) -> this.save());
 
         this.options.add(
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CHAINS),
@@ -282,10 +331,10 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.enabled,
             this.end,
             this.targetBone,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY),
-            this.gravity,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WEIGHT),
             this.weight,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY),
+            this.gravity,
             this.relativeGravity,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION),
             UI.row(this.relativeGravityRotateX, this.relativeGravityRotateY, this.relativeGravityRotateZ),
@@ -295,8 +344,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.iterations,
             this.collisions.marginTop(UIConstants.SECTION_GAP),
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS),
-            this.radius,
-            UI.row(this.clear, this.apply).marginTop(UIConstants.SECTION_GAP)
+            this.radius
         );
     }
 
@@ -307,7 +355,6 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         ModelInstance model = ModelFormRenderer.getModel(form);
         this.modelInstance = model;
-        this.modelId = form.model.get();
 
         if (model == null || model.model == null)
         {
@@ -353,8 +400,6 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.iterations.setEnabled(enabled);
         this.collisions.setEnabled(enabled);
         this.radius.setEnabled(enabled);
-        this.clear.setEnabled(enabled);
-        this.apply.setEnabled(enabled);
     }
 
     private BoneData getSelectedData()
@@ -400,38 +445,45 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.iterations.setEnabled(active);
         this.collisions.setEnabled(active);
         this.radius.setEnabled(active);
-        this.clear.setEnabled(panelEnabled && boneSelected && d != null);
-        this.apply.setEnabled(panelEnabled && this.form != null);
 
-        if (d == null)
+        this.syncingUI = true;
+
+        try
         {
-            this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format("-");
-            this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format("-");
-            this.gravity.setValue(DEFAULT_GRAVITY);
-            this.weight.setValue(DEFAULT_WEIGHT);
-            this.relativeGravity.setValue(false);
-            this.relativeGravityRotateX.setValue(0);
-            this.relativeGravityRotateY.setValue(0);
-            this.relativeGravityRotateZ.setValue(0);
-            this.damping.setValue(DEFAULT_DAMPING);
-            this.iterations.setValue(DEFAULT_ITERATIONS);
-            this.collisions.setValue(false);
-            this.radius.setValue(DEFAULT_RADIUS);
+            if (d == null)
+            {
+                this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format("-");
+                this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format("-");
+                this.gravity.setValue(DEFAULT_GRAVITY);
+                this.weight.setValue(DEFAULT_WEIGHT);
+                this.relativeGravity.setValue(false);
+                this.relativeGravityRotateX.setValue(0);
+                this.relativeGravityRotateY.setValue(0);
+                this.relativeGravityRotateZ.setValue(0);
+                this.damping.setValue(DEFAULT_DAMPING);
+                this.iterations.setValue(DEFAULT_ITERATIONS);
+                this.collisions.setValue(false);
+                this.radius.setValue(DEFAULT_RADIUS);
+            }
+            else
+            {
+                this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format(d.end == null || d.end.isEmpty() ? "-" : d.end);
+                this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format(d.targetBone == null || d.targetBone.isEmpty() ? "-" : d.targetBone);
+                this.gravity.setValue(d.gravity);
+                this.weight.setValue(d.weight);
+                this.relativeGravity.setValue(d.relativeGravity);
+                this.relativeGravityRotateX.setValue(d.relativeGravityRotateX);
+                this.relativeGravityRotateY.setValue(d.relativeGravityRotateY);
+                this.relativeGravityRotateZ.setValue(d.relativeGravityRotateZ);
+                this.damping.setValue(d.damping);
+                this.iterations.setValue(d.iterations);
+                this.collisions.setValue(d.collisions);
+                this.radius.setValue(d.radius);
+            }
         }
-        else
+        finally
         {
-            this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format(d.end == null || d.end.isEmpty() ? "-" : d.end);
-            this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format(d.targetBone == null || d.targetBone.isEmpty() ? "-" : d.targetBone);
-            this.gravity.setValue(d.gravity);
-            this.weight.setValue(d.weight);
-            this.relativeGravity.setValue(d.relativeGravity);
-            this.relativeGravityRotateX.setValue(d.relativeGravityRotateX);
-            this.relativeGravityRotateY.setValue(d.relativeGravityRotateY);
-            this.relativeGravityRotateZ.setValue(d.relativeGravityRotateZ);
-            this.damping.setValue(d.damping);
-            this.iterations.setValue(d.iterations);
-            this.collisions.setValue(d.collisions);
-            this.radius.setValue(d.radius);
+            this.syncingUI = false;
         }
     }
 
@@ -500,11 +552,20 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
-    private void save()
+    private void commitChanges()
+    {
+        this.save(false);
+    }
+
+    private void save(boolean notify)
     {
         if (this.form == null)
         {
-            this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR);
+            if (notify)
+            {
+                this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR);
+            }
+
             return;
         }
 
@@ -520,7 +581,11 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
             if (!this.isValidChain(root, d.end))
             {
-                this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN.format(root, d.end));
+                if (notify)
+                {
+                    this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN.format(root, d.end));
+                }
+
                 return;
             }
         }
@@ -537,7 +602,11 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         ModelPhysicsConfig config = new ModelPhysicsConfig(bones);
         this.form.physics.set(ModelPhysicsIO.toData(config));
-        this.getContext().notifySuccess(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SAVED);
+
+        if (notify)
+        {
+            this.getContext().notifySuccess(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SAVED);
+        }
     }
 
     private boolean isValidChain(String rootId, String endId)

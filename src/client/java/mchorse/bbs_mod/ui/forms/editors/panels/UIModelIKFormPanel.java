@@ -36,11 +36,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad poleX;
     public UITrackpad poleY;
     public UITrackpad poleZ;
-    public UIButton clear;
-    public UIButton apply;
 
     private String selectedBone = "";
     private Map<String, IKData> ikData = new HashMap<>();
+    private boolean syncingUI;
 
     private static class IKData
     {
@@ -68,7 +67,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_ENABLED, (b) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
@@ -76,6 +75,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             IKData data = this.getOrCreateData(this.selectedBone);
             data.enabled = b.getValue();
             this.updateLabels();
+            this.commitChanges();
         });
 
         this.locator = new UIButton(IKey.EMPTY, (b) ->
@@ -87,6 +87,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             {
                 data.locator = bone;
                 this.updateLabels();
+                this.commitChanges();
             });
         });
 
@@ -99,87 +100,78 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             {
                 data.root = bone;
                 this.updateLabels();
+                this.commitChanges();
             });
         });
 
         this.weight = new UITrackpad((v) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
 
             IKData data = this.getOrCreateData(this.selectedBone);
             data.weight = v.floatValue();
+            this.commitChanges();
         });
         this.weight.onlyNumbers().values(0.1D, 0.01D, 0.25D).increment(0.01D).limit(0D, 1D);
         this.weight.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT);
 
         this.poleX = new UITrackpad((v) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
 
             IKData data = this.getOrCreateData(this.selectedBone);
             data.poleX = v.floatValue();
+            this.commitChanges();
         });
         this.poleX.block().onlyNumbers();
         this.poleX.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_X));
         this.poleX.textbox.setColor(Colors.RED);
         this.poleY = new UITrackpad((v) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
 
             IKData data = this.getOrCreateData(this.selectedBone);
             data.poleY = v.floatValue();
+            this.commitChanges();
         });
         this.poleY.block().onlyNumbers();
         this.poleY.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Y));
         this.poleY.textbox.setColor(Colors.GREEN);
         this.poleZ = new UITrackpad((v) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
 
             IKData data = this.getOrCreateData(this.selectedBone);
             data.poleZ = v.floatValue();
+            this.commitChanges();
         });
         this.poleZ.block().onlyNumbers();
         this.poleZ.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Z));
         this.poleZ.textbox.setColor(Colors.BLUE);
-
-        this.clear = new UIButton(UIKeys.FORMS_EDITORS_MODEL_IK_CLEAR, (b) ->
-        {
-            if (this.selectedBone.isEmpty())
-            {
-                return;
-            }
-
-            this.ikData.remove(this.selectedBone);
-            this.updateLabels();
-        });
-
-        this.apply = new UIButton(UIKeys.FORMS_EDITORS_MODEL_IK_APPLY, (b) -> this.save());
 
         this.options.add(
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_BONES),
             this.bones,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
             this.enabled,
-            this.locator,
             this.root,
+            this.locator,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT),
             this.weight,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE).marginTop(UIConstants.SECTION_GAP),
-            UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.poleX, this.poleY, this.poleZ),
-            UI.row(this.clear, this.apply).marginTop(UIConstants.SECTION_GAP)
+            UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.poleX, this.poleY, this.poleZ)
         );
     }
 
@@ -224,8 +216,6 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.poleX.setEnabled(enabled);
         this.poleY.setEnabled(enabled);
         this.poleZ.setEnabled(enabled);
-        this.clear.setEnabled(enabled);
-        this.apply.setEnabled(enabled);
     }
 
     @Override
@@ -267,7 +257,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private void updateLabels()
     {
-        if (this.locator == null || this.root == null || this.enabled == null)
+        if (this.locator == null || this.root == null || this.enabled == null || this.weight == null)
         {
             return;
         }
@@ -279,22 +269,30 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         boolean active = data != null && data.enabled;
         boolean canEdit = !this.selectedBone.isEmpty() && this.bones.isEnabled() && active;
 
-        this.locator.label = UIKeys.FORMS_EDITORS_MODEL_IK_LOCATOR.format(this.formatBone(locatorLabel));
-        this.root.label = UIKeys.FORMS_EDITORS_MODEL_IK_ROOT.format(this.formatBone(rootLabel));
-        this.weight.setValue(data == null ? DEFAULT_WEIGHT : data.weight);
-        this.poleX.setValue(data == null ? 0F : data.poleX);
-        this.poleY.setValue(data == null ? 0F : data.poleY);
-        this.poleZ.setValue(data == null ? 0F : data.poleZ);
-        this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
-        this.enabled.setValue(active);
+        this.syncingUI = true;
+
+        try
+        {
+            this.locator.label = UIKeys.FORMS_EDITORS_MODEL_IK_LOCATOR.format(this.formatBone(locatorLabel));
+            this.root.label = UIKeys.FORMS_EDITORS_MODEL_IK_ROOT.format(this.formatBone(rootLabel));
+            this.weight.setValue(data == null ? DEFAULT_WEIGHT : data.weight);
+            this.poleX.setValue(data == null ? 0F : data.poleX);
+            this.poleY.setValue(data == null ? 0F : data.poleY);
+            this.poleZ.setValue(data == null ? 0F : data.poleZ);
+            this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
+            this.enabled.setValue(active);
+        }
+        finally
+        {
+            this.syncingUI = false;
+        }
+
         this.locator.setEnabled(canEdit);
         this.root.setEnabled(canEdit);
         this.weight.setEnabled(canEdit);
         this.poleX.setEnabled(canEdit);
         this.poleY.setEnabled(canEdit);
         this.poleZ.setEnabled(canEdit);
-        this.clear.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty() && data != null);
-        this.apply.setEnabled(this.bones.isEnabled() && this.form != null);
     }
 
     private IKData getOrCreateData(String bone)
@@ -341,11 +339,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
-    private void save()
+    private void commitChanges()
     {
         if (this.form == null)
         {
-            this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_IK_SAVE_ERROR);
             return;
         }
 
@@ -371,6 +368,5 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         ModelIKConfig config = out.isEmpty() ? null : new ModelIKConfig(out);
         this.form.ik.set(config == null ? null : ModelIKIO.toData(config));
-        this.getContext().notifySuccess(UIKeys.FORMS_EDITORS_MODEL_IK_SAVED);
     }
 }

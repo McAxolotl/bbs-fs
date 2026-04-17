@@ -9,7 +9,6 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -37,12 +36,10 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad maxX;
     public UITrackpad maxY;
     public UITrackpad maxZ;
-    public UIButton clear;
-    public UIButton apply;
 
     private String selectedBone = "";
-    private String modelId = "";
     private final Map<String, ModelConstraintsConfig.BoneConstraint> data = new HashMap<>();
+    private boolean syncingUI;
 
     public UIModelConstraintsFormPanel(UIForm editor)
     {
@@ -59,7 +56,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_ENABLED, (b) ->
         {
-            if (this.selectedBone.isEmpty())
+            if (this.syncingUI || this.selectedBone.isEmpty())
             {
                 return;
             }
@@ -74,6 +71,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
             }
 
             this.updateFieldsEnabled();
+            this.commitChanges();
         });
 
         this.minX = axisTrackpad((v) -> this.onFieldChanged(), Colors.RED, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MIN, UIKeys.GENERAL_X));
@@ -83,31 +81,18 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         this.maxY = axisTrackpad((v) -> this.onFieldChanged(), Colors.GREEN, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Y));
         this.maxZ = axisTrackpad((v) -> this.onFieldChanged(), Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Z));
 
-        this.clear = new UIButton(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_CLEAR, (b) ->
-        {
-            if (this.selectedBone.isEmpty())
-            {
-                return;
-            }
-
-            this.data.remove(this.selectedBone);
-            this.enabled.setValue(false);
-            this.setDefaults();
-            this.updateFieldsEnabled();
-        });
-
-        this.apply = new UIButton(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY, (b) -> this.save());
-
         this.options.add(
             UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_BONES),
             this.bones,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
             this.enabled,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MIN),
-            UI.row(this.minX, this.minY, this.minZ),
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX),
-            UI.row(this.maxX, this.maxY, this.maxZ),
-            UI.row(this.clear, this.apply).marginTop(UIConstants.SECTION_GAP)
+            UI.label(IKey.constant("%s / %s").format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MIN, UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX)).marginTop(UIConstants.SECTION_GAP),
+            UI.label(UIKeys.GENERAL_X),
+            UI.row(this.minX, this.maxX),
+            UI.label(UIKeys.GENERAL_Y),
+            UI.row(this.minY, this.maxY),
+            UI.label(UIKeys.GENERAL_Z),
+            UI.row(this.minZ, this.maxZ)
         );
     }
 
@@ -126,7 +111,6 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
 
         ModelInstance model = ModelFormRenderer.getModel(form);
 
-        this.modelId = form.model.get();
         this.data.clear();
         this.selectedBone = "";
 
@@ -201,28 +185,39 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
     {
         if (this.selectedBone.isEmpty())
         {
+            this.syncingUI = true;
             this.enabled.setValue(false);
             this.setDefaults();
+            this.syncingUI = false;
             this.updateFieldsEnabled();
             return;
         }
 
         ModelConstraintsConfig.BoneConstraint c = this.data.get(this.selectedBone);
 
-        if (c == null || !c.enabled())
+        this.syncingUI = true;
+
+        try
         {
-            this.enabled.setValue(false);
-            this.setDefaults();
+            if (c == null || !c.enabled())
+            {
+                this.enabled.setValue(false);
+                this.setDefaults();
+            }
+            else
+            {
+                this.enabled.setValue(true);
+                this.minX.setValue(c.minX());
+                this.minY.setValue(c.minY());
+                this.minZ.setValue(c.minZ());
+                this.maxX.setValue(c.maxX());
+                this.maxY.setValue(c.maxY());
+                this.maxZ.setValue(c.maxZ());
+            }
         }
-        else
+        finally
         {
-            this.enabled.setValue(true);
-            this.minX.setValue(c.minX());
-            this.minY.setValue(c.minY());
-            this.minZ.setValue(c.minZ());
-            this.maxX.setValue(c.maxX());
-            this.maxY.setValue(c.maxY());
-            this.maxZ.setValue(c.maxZ());
+            this.syncingUI = false;
         }
 
         this.updateFieldsEnabled();
@@ -238,8 +233,6 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         this.maxX.setEnabled(active);
         this.maxY.setEnabled(active);
         this.maxZ.setEnabled(active);
-        this.clear.setEnabled(panelEnabled && !this.selectedBone.isEmpty());
-        this.apply.setEnabled(panelEnabled && this.form != null);
     }
 
     private void setDefaults()
@@ -254,12 +247,13 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
 
     private void onFieldChanged()
     {
-        if (!this.enabled.getValue() || this.selectedBone.isEmpty())
+        if (this.syncingUI || !this.enabled.getValue() || this.selectedBone.isEmpty())
         {
             return;
         }
 
         this.data.put(this.selectedBone, this.readFromFields(true));
+        this.commitChanges();
     }
 
     private ModelConstraintsConfig.BoneConstraint readFromFields(boolean enabled)
@@ -275,24 +269,20 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         );
     }
 
-    private void save()
+    private void commitChanges()
     {
         if (this.form == null)
         {
-            this.getContext().notifyError(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SAVE_ERROR);
             return;
         }
 
         this.form.constraints.set(ModelConstraintsIO.toData(new ModelConstraintsConfig(this.data)));
-        this.getContext().notifySuccess(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SAVED);
     }
 
     private void setElementsEnabled(boolean enabled)
     {
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
-        this.clear.setEnabled(enabled);
-        this.apply.setEnabled(enabled);
         this.minX.setEnabled(enabled);
         this.minY.setEnabled(enabled);
         this.minZ.setEnabled(enabled);
