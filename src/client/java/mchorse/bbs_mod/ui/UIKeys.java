@@ -445,6 +445,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_ENABLED = L10n.lang("bbs.ui.forms.editors.model.ik.enabled");
     public static final IKey FORMS_EDITORS_MODEL_IK_LOCATOR = L10n.lang("bbs.ui.forms.editors.model.ik.locator");
     public static final IKey FORMS_EDITORS_MODEL_IK_ROOT = L10n.lang("bbs.ui.forms.editors.model.ik.root");
+    public static final IKey FORMS_EDITORS_MODEL_IK_WEIGHT = L10n.lang("bbs.ui.forms.editors.model.ik.weight");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole");
     public static final IKey FORMS_EDITORS_MODEL_IK_CLEAR = L10n.lang("bbs.ui.forms.editors.model.ik.clear");
     public static final IKey FORMS_EDITORS_MODEL_IK_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.ik.save_error");
@@ -456,6 +457,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_TARGET = L10n.lang("bbs.ui.forms.editors.model.physics.target");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_END = L10n.lang("bbs.ui.forms.editors.model.physics.end");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_GRAVITY = L10n.lang("bbs.ui.forms.editors.model.physics.gravity");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WEIGHT = L10n.lang("bbs.ui.forms.editors.model.physics.weight");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY = L10n.lang("bbs.ui.forms.editors.model.physics.relative_gravity");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION = L10n.lang("bbs.ui.forms.editors.model.physics.relative_gravity_rotation");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_DAMPING = L10n.lang("bbs.ui.forms.editors.model.physics.damping");

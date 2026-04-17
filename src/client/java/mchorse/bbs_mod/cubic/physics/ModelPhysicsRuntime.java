@@ -7,6 +7,7 @@ import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
+import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.joml.Matrices;
@@ -164,6 +165,13 @@ public final class ModelPhysicsRuntime
 
     private static void applyChain(World world, int age, float transition, Model model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState)
     {
+        float weight = chain.weight();
+
+        if (weight <= 0F)
+        {
+            return;
+        }
+
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();
         int pointCount = pivotCount + 1;
@@ -250,7 +258,7 @@ public final class ModelPhysicsRuntime
         Vector3f[] positions = interpolate(state, transition);
         applyRenderAnchorFollow(state, positions, anchor, anchorRotation, target, transition);
         applyRenderSmoothing(state, positions, transition, chain.collisions());
-        CubicRenderer.applyRotations(model, chainFrames.get(0).parentRotation(), ids, positions);
+        ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);
     }
 
     private static Vector3f[] interpolate(ChainState state, float transition)

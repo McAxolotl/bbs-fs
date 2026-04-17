@@ -3,6 +3,7 @@ package mchorse.bbs_mod.cubic.ik;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
+import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -53,6 +54,13 @@ final class ModelIKApplier
 
     private static void applyChain(Model model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> prevNormals, float hysteresisRad, float singularityRad)
     {
+        float weight = chain.weight();
+
+        if (weight <= 0F)
+        {
+            return;
+        }
+
         PivotFrame controllerFrame = frames.get(chain.controller());
 
         if (controllerFrame == null)
@@ -113,7 +121,7 @@ final class ModelIKApplier
         }
 
         Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
-        CubicRenderer.applyRotations(model, rootParentRotation, chainIds, solvedArray);
+        ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
 
         if (prevNormals != null && solved.size() >= 3)
         {

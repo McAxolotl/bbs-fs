@@ -20,6 +20,7 @@ public final class ModelPhysicsIO
     private static final String KEY_RELATIVE_GRAVITY_ROTATE_Z = "relative_gravity_rotate_z";
     private static final String KEY_COLLISIONS = "collisions";
     private static final String KEY_RADIUS = "radius";
+    private static final String KEY_WEIGHT = "weight";
 
     private static final float DEFAULT_GRAVITY = 1F;
     private static final float DEFAULT_DAMPING = 0.15F;
@@ -30,6 +31,7 @@ public final class ModelPhysicsIO
     private static final float DEFAULT_RELATIVE_GRAVITY_ROTATE_Z = 0F;
     private static final boolean DEFAULT_COLLISIONS = false;
     private static final float DEFAULT_RADIUS = 0.1F;
+    private static final float DEFAULT_WEIGHT = ModelPhysicsConfig.DEFAULT_WEIGHT;
 
     private ModelPhysicsIO()
     {
@@ -70,18 +72,9 @@ public final class ModelPhysicsIO
             float relativeGravityRotateZ = entry.getFloat(KEY_RELATIVE_GRAVITY_ROTATE_Z, DEFAULT_RELATIVE_GRAVITY_ROTATE_Z);
             boolean collisions = entry.getBool(KEY_COLLISIONS, DEFAULT_COLLISIONS);
             float radius = entry.getFloat(KEY_RADIUS, DEFAULT_RADIUS);
+            float weight = entry.getFloat(KEY_WEIGHT, DEFAULT_WEIGHT);
 
-            if (iterations < 1)
-            {
-                iterations = 1;
-            }
-
-            if (radius < 0F)
-            {
-                radius = 0F;
-            }
-
-            out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, iterations, relativeGravity, relativeGravityRotateX, relativeGravityRotateY, relativeGravityRotateZ, collisions, radius));
+            out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, iterations, relativeGravity, relativeGravityRotateX, relativeGravityRotateY, relativeGravityRotateZ, collisions, radius, weight));
         }
 
         return out.isEmpty() ? null : new ModelPhysicsConfig(out);
@@ -114,7 +107,7 @@ public final class ModelPhysicsIO
 
                 map.putFloat(KEY_GRAVITY, bone.gravity());
                 map.putFloat(KEY_DAMPING, bone.damping());
-                map.putInt(KEY_ITERATIONS, Math.max(1, bone.iterations()));
+                map.putInt(KEY_ITERATIONS, bone.iterations());
 
                 if (bone.relativeGravity())
                 {
@@ -144,6 +137,11 @@ public final class ModelPhysicsIO
                 if (bone.radius() != DEFAULT_RADIUS)
                 {
                     map.putFloat(KEY_RADIUS, bone.radius());
+                }
+
+                if (bone.weight() != DEFAULT_WEIGHT)
+                {
+                    map.putFloat(KEY_WEIGHT, bone.weight());
                 }
 
                 bones.put(rootId, map);

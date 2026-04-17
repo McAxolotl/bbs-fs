@@ -28,6 +28,7 @@ final class ModelPhysicsCache
         private final Quaternionf gravityRotation;
         private final boolean collisions;
         private final float radius;
+        private final float weight;
 
         public CompiledChain(String id, String attach, String targetBone, List<String> chainRootToEnd, float[] restLengths, ModelPhysicsConfig.Bone bone)
         {
@@ -46,6 +47,7 @@ final class ModelPhysicsCache
                 : new Quaternionf();
             this.collisions = bone.collisions();
             this.radius = bone.radius();
+            this.weight = bone.weight();
         }
 
         public String id()
@@ -115,6 +117,11 @@ final class ModelPhysicsCache
         {
             return this.radius;
         }
+
+        public float weight()
+        {
+            return this.weight;
+        }
     }
 
     public record Compiled(List<CompiledChain> chains)
@@ -176,6 +183,11 @@ final class ModelPhysicsCache
             ModelPhysicsConfig.Bone chain = config.bones().get(rootId);
 
             if (chain == null)
+            {
+                continue;
+            }
+
+            if (chain.weight() <= 0F)
             {
                 continue;
             }

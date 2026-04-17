@@ -25,11 +25,14 @@ import java.util.Map;
 
 public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 {
+    private static final float DEFAULT_WEIGHT = ModelIKConfig.DEFAULT_WEIGHT;
+
     public UIStringList bones;
 
     public UIToggle enabled;
     public UIButton locator;
     public UIButton root;
+    public UITrackpad weight;
     public UITrackpad poleX;
     public UITrackpad poleY;
     public UITrackpad poleZ;
@@ -38,13 +41,13 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private String selectedBone = "";
     private Map<String, IKData> ikData = new HashMap<>();
-    private String modelId = "";
 
     private static class IKData
     {
         public String locator = "";
         public String root = "";
         public boolean enabled = true;
+        public float weight = DEFAULT_WEIGHT;
         public float poleX;
         public float poleY;
         public float poleZ;
@@ -98,6 +101,19 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 this.updateLabels();
             });
         });
+
+        this.weight = new UITrackpad((v) ->
+        {
+            if (this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.weight = v.floatValue();
+        });
+        this.weight.onlyNumbers().values(0.1D, 0.01D, 0.25D).increment(0.01D).limit(0D, 1D);
+        this.weight.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT);
 
         this.poleX = new UITrackpad((v) ->
         {
@@ -159,6 +175,8 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.enabled,
             this.locator,
             this.root,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT),
+            this.weight,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE).marginTop(UIConstants.SECTION_GAP),
             UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.poleX, this.poleY, this.poleZ),
             UI.row(this.clear, this.apply).marginTop(UIConstants.SECTION_GAP)
@@ -171,7 +189,6 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         super.startEdit(form);
 
         ModelInstance model = ModelFormRenderer.getModel(form);
-        this.modelId = form.model.get();
 
         if (model == null || model.model == null)
         {
@@ -179,7 +196,6 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.bones.deselect();
             this.selectedBone = "";
             this.ikData.clear();
-            this.modelId = "";
 
             this.setElementsEnabled(false);
         }
@@ -191,7 +207,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.bones.setList(bones);
             this.setElementsEnabled(true);
 
-            this.load(bones);
+            this.load();
         }
 
         this.updateLabels();
@@ -204,6 +220,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.enabled.setEnabled(enabled);
         this.locator.setEnabled(enabled);
         this.root.setEnabled(enabled);
+        this.weight.setEnabled(enabled);
         this.poleX.setEnabled(enabled);
         this.poleY.setEnabled(enabled);
         this.poleZ.setEnabled(enabled);
@@ -264,6 +281,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         this.locator.label = UIKeys.FORMS_EDITORS_MODEL_IK_LOCATOR.format(this.formatBone(locatorLabel));
         this.root.label = UIKeys.FORMS_EDITORS_MODEL_IK_ROOT.format(this.formatBone(rootLabel));
+        this.weight.setValue(data == null ? DEFAULT_WEIGHT : data.weight);
         this.poleX.setValue(data == null ? 0F : data.poleX);
         this.poleY.setValue(data == null ? 0F : data.poleY);
         this.poleZ.setValue(data == null ? 0F : data.poleZ);
@@ -271,6 +289,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.enabled.setValue(active);
         this.locator.setEnabled(canEdit);
         this.root.setEnabled(canEdit);
+        this.weight.setEnabled(canEdit);
         this.poleX.setEnabled(canEdit);
         this.poleY.setEnabled(canEdit);
         this.poleZ.setEnabled(canEdit);
@@ -288,7 +307,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         return bone == null || bone.isEmpty() ? "-" : bone;
     }
 
-    private void load(List<String> bones)
+    private void load()
     {
         this.ikData.clear();
 
@@ -314,6 +333,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.locator = chain.locator();
             data.root = chain.root();
             data.enabled = chain.enabled();
+            data.weight = chain.weight();
             data.poleX = chain.poleX();
             data.poleY = chain.poleY();
             data.poleZ = chain.poleZ();
@@ -346,7 +366,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 continue;
             }
 
-            out.add(new ModelIKConfig.Chain(controller, data.locator, data.root, data.enabled, data.poleX, data.poleY, data.poleZ, ModelIKConfig.PoleSpace.ROOT));
+            out.add(new ModelIKConfig.Chain(controller, data.locator, data.root, data.enabled, data.poleX, data.poleY, data.poleZ, ModelIKConfig.PoleSpace.ROOT, data.weight));
         }
 
         ModelIKConfig config = out.isEmpty() ? null : new ModelIKConfig(out);

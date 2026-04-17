@@ -14,7 +14,7 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String controller, String locator, String root, float poleX, float poleY, float poleZ, ModelIKConfig.PoleSpace poleSpace, List<String> chainRootToEffector)
+    public record CompiledChain(String controller, String locator, String root, float poleX, float poleY, float poleZ, ModelIKConfig.PoleSpace poleSpace, float weight, List<String> chainRootToEffector)
     {
     }
 
@@ -77,6 +77,11 @@ final class ModelIKCache
                 continue;
             }
 
+            if (chain.weight() <= 0F)
+            {
+                continue;
+            }
+
             ModelGroup controller = model.getGroup(chain.controller());
             ModelGroup effector = model.getGroup(chain.locator());
             ModelGroup root = model.getGroup(chain.root());
@@ -93,7 +98,7 @@ final class ModelIKCache
                 continue;
             }
 
-            out.add(new CompiledChain(chain.controller(), chain.locator(), chain.root(), chain.poleX(), chain.poleY(), chain.poleZ(), chain.poleSpace(), chainIds));
+            out.add(new CompiledChain(chain.controller(), chain.locator(), chain.root(), chain.poleX(), chain.poleY(), chain.poleZ(), chain.poleSpace(), chain.weight(), chainIds));
         }
 
         return out;
