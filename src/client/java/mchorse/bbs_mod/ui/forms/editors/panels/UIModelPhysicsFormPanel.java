@@ -123,7 +123,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 this.commitChanges();
             }
         });
-        this.gravity.onlyNumbers().values(0.1D, 0.01D, 0.5D).increment(0.01D).limit(0D, 10D);
+        this.gravity.onlyNumbers().values(0.1D, 0.01D, 0.5D).increment(0.25D).limit(0D, 10D);
         this.gravity.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY);
 
         this.weight = new UITrackpad((v) ->
