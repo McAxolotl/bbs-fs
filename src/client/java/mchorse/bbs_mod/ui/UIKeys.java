@@ -473,6 +473,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_BONES = L10n.lang("bbs.ui.forms.editors.model.constraints.bones");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.constraints.settings");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_ENABLED = L10n.lang("bbs.ui.forms.editors.model.constraints.enabled");
+    public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY_TO_CHILDREN = L10n.lang("bbs.ui.forms.editors.model.constraints.apply_to_children");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_MIN = L10n.lang("bbs.ui.forms.editors.model.constraints.min");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_MAX = L10n.lang("bbs.ui.forms.editors.model.constraints.max");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_CLEAR = L10n.lang("bbs.ui.forms.editors.model.constraints.clear");

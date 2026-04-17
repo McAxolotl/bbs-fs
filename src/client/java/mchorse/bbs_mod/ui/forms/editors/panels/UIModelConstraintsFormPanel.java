@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.data.model.Model;
+import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsIO;
 import mchorse.bbs_mod.data.types.MapType;
@@ -9,6 +11,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -36,9 +39,12 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad maxX;
     public UITrackpad maxY;
     public UITrackpad maxZ;
+    public UIButton applyToChildren;
 
+    private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
     private final Map<String, ModelConstraintsConfig.BoneConstraint> data = new HashMap<>();
+    private ModelInstance modelInstance;
     private boolean syncingUI;
 
     public UIModelConstraintsFormPanel(UIForm editor)
@@ -80,6 +86,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         this.maxX = axisTrackpad((v) -> this.onFieldChanged(), Colors.RED, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_X));
         this.maxY = axisTrackpad((v) -> this.onFieldChanged(), Colors.GREEN, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Y));
         this.maxZ = axisTrackpad((v) -> this.onFieldChanged(), Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Z));
+        this.applyToChildren = new UIButton(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY_TO_CHILDREN, (b) -> this.applySelectedToChildren());
 
         this.options.add(
             UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_BONES),
@@ -92,7 +99,8 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
             UI.label(UIKeys.GENERAL_Y),
             UI.row(this.minY, this.maxY),
             UI.label(UIKeys.GENERAL_Z),
-            UI.row(this.minZ, this.maxZ)
+            UI.row(this.minZ, this.maxZ),
+            this.applyToChildren.marginTop(UIConstants.SECTION_GAP)
         );
     }
 
@@ -110,12 +118,14 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         super.startEdit(form);
 
         ModelInstance model = ModelFormRenderer.getModel(form);
+        this.modelInstance = model;
 
         this.data.clear();
         this.selectedBone = "";
 
         if (model == null || model.model == null)
         {
+            this.availableBones = Collections.emptyList();
             this.bones.setList(Collections.emptyList());
             this.bones.deselect();
             this.setElementsEnabled(false);
@@ -127,6 +137,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
         bones.removeIf(model.disabledBones::contains);
+        this.availableBones = bones;
 
         this.bones.setList(bones);
         this.setElementsEnabled(true);
@@ -227,6 +238,9 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
     {
         boolean panelEnabled = this.bones.isEnabled();
         boolean active = panelEnabled && this.enabled.getValue() && !this.selectedBone.isEmpty();
+        boolean hasChildren = active && !this.getDescendantBones(this.selectedBone).isEmpty();
+
+        this.applyToChildren.setEnabled(hasChildren);
         this.minX.setEnabled(active);
         this.minY.setEnabled(active);
         this.minZ.setEnabled(active);
@@ -269,6 +283,75 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         );
     }
 
+    private void applySelectedToChildren()
+    {
+        if (this.syncingUI || this.selectedBone.isEmpty() || !this.enabled.getValue())
+        {
+            return;
+        }
+
+        List<String> descendants = this.getDescendantBones(this.selectedBone);
+
+        if (descendants.isEmpty())
+        {
+            return;
+        }
+
+        ModelConstraintsConfig.BoneConstraint constraint = this.readFromFields(true);
+
+        for (String child : descendants)
+        {
+            this.data.put(child, constraint);
+        }
+
+        this.commitChanges();
+    }
+
+    private List<String> getDescendantBones(String bone)
+    {
+        if (bone == null || bone.isEmpty() || this.modelInstance == null || !(this.modelInstance.model instanceof Model model))
+        {
+            return Collections.emptyList();
+        }
+
+        ModelGroup root = model.getGroup(bone);
+
+        if (root == null || root.children == null || root.children.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        List<String> descendants = new ArrayList<>();
+
+        this.collectDescendants(root, descendants);
+
+        if (!this.availableBones.isEmpty())
+        {
+            descendants.removeIf((id) -> !this.availableBones.contains(id));
+        }
+
+        return descendants;
+    }
+
+    private void collectDescendants(ModelGroup parent, List<String> out)
+    {
+        if (parent.children == null || parent.children.isEmpty())
+        {
+            return;
+        }
+
+        for (ModelGroup child : parent.children)
+        {
+            if (child == null)
+            {
+                continue;
+            }
+
+            out.add(child.id);
+            this.collectDescendants(child, out);
+        }
+    }
+
     private void commitChanges()
     {
         if (this.form == null)
@@ -283,6 +366,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
     {
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
+        this.applyToChildren.setEnabled(enabled);
         this.minX.setEnabled(enabled);
         this.minY.setEnabled(enabled);
         this.minZ.setEnabled(enabled);

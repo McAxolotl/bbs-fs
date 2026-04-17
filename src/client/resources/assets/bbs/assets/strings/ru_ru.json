@@ -740,6 +740,7 @@
 	"bbs.ui.forms.editors.model.constraints.bones": "Кости",
 	"bbs.ui.forms.editors.model.constraints.settings": "Параметры ограничений",
 	"bbs.ui.forms.editors.model.constraints.enabled": "Включить угловые ограничения",
+	"bbs.ui.forms.editors.model.constraints.apply_to_children": "Применить к дочерним костям",
 	"bbs.ui.forms.editors.model.constraints.min": "Мин. угол",
 	"bbs.ui.forms.editors.model.constraints.max": "Макс. угол",
 	"bbs.ui.forms.editors.model.constraints.clear": "Очистить",

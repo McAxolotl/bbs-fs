@@ -741,6 +741,7 @@
 	"bbs.ui.forms.editors.model.constraints.bones": "Bones",
 	"bbs.ui.forms.editors.model.constraints.settings": "Limit settings",
 	"bbs.ui.forms.editors.model.constraints.enabled": "Enable angle limits",
+	"bbs.ui.forms.editors.model.constraints.apply_to_children": "Apply to child bones",
 	"bbs.ui.forms.editors.model.constraints.min": "Min angle",
 	"bbs.ui.forms.editors.model.constraints.max": "Max angle",
 	"bbs.ui.forms.editors.model.constraints.clear": "Clear",
