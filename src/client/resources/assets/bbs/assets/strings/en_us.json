@@ -11,6 +11,8 @@
 	"bbs.config.appearance.fov-comment": "This option controls FOV for camera in world menu and animation panel",
 	"bbs.config.appearance.freeze_models": "Freeze models",
 	"bbs.config.appearance.freeze_models-comment": "When enabled, models in form picker won't follow the mouse",
+	"bbs.config.appearance.morphing_focus_search": "Focus search on open morphing",
+	"bbs.config.appearance.morphing_focus_search-comment": "When enabled, the form search field is focused automatically when you open the morphing menu",
 	"bbs.config.appearance.gizmos": "Gizmos",
 	"bbs.config.appearance.gizmos-comment": "Whether grab-able axes elements for translation, scale and rotation are enabled",
 	"bbs.config.appearance.transform_local_default": "Local transformation by default",

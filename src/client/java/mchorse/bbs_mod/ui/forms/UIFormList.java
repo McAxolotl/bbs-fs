@@ -84,7 +84,7 @@ public class UIFormList extends UIElement
 
         this.add(this.forms, this.bar);
 
-        this.search.keys().register(Keys.FORMS_FOCUS, this::focusSearch);
+        this.search.keys().register(Keys.FORMS_FOCUS, this::focusSearchInput);
 
         this.markContainer();
         this.setupForms(BBSModClient.getFormCategories());
@@ -110,9 +110,14 @@ public class UIFormList extends UIElement
         });
     }
 
-    private void focusSearch()
+    public void focusSearchInput()
     {
-        this.search.clickItself();
+        UIContext context = this.getContext();
+
+        if (context != null)
+        {
+            this.search.clickItself(context);
+        }
     }
 
     public void setupForms(FormCategories forms)

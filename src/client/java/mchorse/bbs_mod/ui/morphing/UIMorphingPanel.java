@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.morphing;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.IMorphProvider;
 import mchorse.bbs_mod.morphing.Morph;
@@ -86,6 +87,11 @@ public class UIMorphingPanel extends UIDashboardPanel
 
         BBSModClient.getCameraController().add(this.controller);
         MinecraftClient.getInstance().options.setPerspective(Perspective.THIRD_PERSON_BACK);
+
+        if (BBSSettings.morphingFocusSearch.get())
+        {
+            MinecraftClient.getInstance().execute(() -> this.palette.list.focusSearchInput());
+        }
     }
 
     @Override
