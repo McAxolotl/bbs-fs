@@ -107,27 +107,11 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         context.batcher.box(x, y - h / 2, x + w, y - h / 2 + h, Colors.A100);
         context.batcher.box(x + 1, y - h / 2 + 1, x + w - 1, y - h / 2 + h - 1, Colors.A100 | (this.value ? color : (this.hover ? 0x3a3a3a : 0x444444)));
 
-        if (this.value)
-        {
-            context.batcher.gradientHBox(x + 1, y - h / 2 + 1, x + w / 2, y - h / 2 + h - 1, Colors.setA(Colors.WHITE, 0.33F), Colors.setA(Colors.WHITE, 0F));
-        }
-        else
-        {
-            context.batcher.gradientHBox(x + w / 2, y - h / 2 + 1, x + w - 1, y - h / 2 + h - 1, 0, Colors.A50);
-        }
-
-        if (!this.isEnabled())
-        {
-            context.batcher.box(x, y - h / 2, x + w, y - h / 2 + h, Colors.A50);
-        }
-
         x += this.value ? w - 2 : 2;
 
         /* Draw toggle switch */
-        context.batcher.box(x - 4, y - 8, x + 4, y + 8, Colors.A100);
-        context.batcher.box(x - 3, y - 7, x + 3, y + 7, Colors.WHITE);
-        context.batcher.box(x - 2, y - 6, x + 3, y + 7, Colors.GRAY);
-        context.batcher.box(x - 2, y - 6, x + 2, y + 6, Colors.LIGHTER_GRAY);
+        context.batcher.box(x - 5, y - 6, x + 5, y + 6, Colors.A100);
+        context.batcher.box(x - 4, y - 5, x + 4, y + 5, Colors.LIGHTER_GRAY);
 
         if (!this.isEnabled())
         {

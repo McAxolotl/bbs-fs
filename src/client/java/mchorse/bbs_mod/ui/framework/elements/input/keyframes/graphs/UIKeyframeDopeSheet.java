@@ -18,6 +18,7 @@ import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -726,30 +727,21 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
      */
     protected void renderGrid(UIContext context)
     {
-        /* Draw horizontal grid */
         Area area = this.keyframes.graphArea;
         int mult = this.keyframes.getXAxis().getMult();
-        int hx = this.keyframes.getDuration() / mult;
         int ht = (int) this.keyframes.fromGraphX(area.x);
+        int duration = this.keyframes.getDuration();
 
-        context.batcher.clip(area, context);
-
-        for (int j = Math.max(ht / mult, 0); j <= hx; j++)
-        {
-            int x = this.keyframes.toGraphX(j * mult);
-
-            if (x >= area.ex())
-            {
-                break;
-            }
-
-            String label = TimeUtils.formatTime(j * mult);
-
-            context.batcher.box(x, area.y, x + 1, area.ey(), Colors.setA(Colors.WHITE, 0.25F));
-            context.batcher.text(label, x + 4, area.y + 4);
-        }
-
-        context.batcher.unclip(context);
+        TimelineRulerRenderer.render(
+            context,
+            area,
+            mult,
+            Math.max(ht, 0),
+            duration,
+            duration,
+            this.keyframes::toGraphX,
+            TimeUtils::formatTime
+        );
 
         /* Render where the keyframe will be duplicated or added */
         if (!area.isInside(context))
@@ -900,12 +892,39 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.updateScrollSize();
 
         Area area = this.keyframes.graphArea;
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
 
-        context.batcher.clip(area, context);
+        context.batcher.clip(area.x, rulerBottom, area.ex(), area.ey(), context);
         this.renderElements(context, builder, matrix, area, this.elements, 0, this.getDopeSheetY());
+        this.renderOutOfRangeShading(context, builder, matrix, area);
         context.batcher.unclip(context);
+    }
+
+    private void renderOutOfRangeShading(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area)
+    {
+        int timelineBottom = TimelineRulerRenderer.getTimelineBottom(area);
+        int contentY = Math.min(area.ey(), timelineBottom + 1);
+
+        if (contentY >= area.ey())
+        {
+            return;
+        }
+
+        int startX = this.keyframes.toGraphX(0);
+        int endX = this.keyframes.toGraphX(this.keyframes.getDuration());
+        int shadeColor = Colors.A50;
+
+        if (startX > area.x)
+        {
+            context.batcher.box(area.x, contentY, Math.min(startX, area.ex()), area.ey(), shadeColor);
+        }
+
+        if (endX < area.ex())
+        {
+            context.batcher.box(Math.max(endX, area.x), contentY, area.ex(), area.ey(), shadeColor);
+        }
     }
 
     private void renderLabels(UIContext context, BufferBuilder builder, Matrix4f matrix, List<UIKeyframeElement> elements, int offset, int y)
@@ -1039,6 +1058,23 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return y;
     }
 
+    private int getTrackGap()
+    {
+        return Math.max(1, (int) Math.round(this.trackHeight * 0.06D));
+    }
+
+    private int getTrackBodyY(int y)
+    {
+        return y + this.getTrackGap();
+    }
+
+    private int getTrackBodyHeight()
+    {
+        int gap = this.getTrackGap();
+
+        return Math.max(2, (int) this.trackHeight - gap * 2);
+    }
+
     private void renderGroup(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeGroup group, int offset, int y)
     {
         if (y + this.trackHeight < area.y || y > area.ey())
@@ -1047,13 +1083,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
 
         boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
-        int my = y + (int) this.trackHeight / 2;
-        int cc = Colors.setA(group.color, hover ? 1F : 0.45F);
+        int by = this.getTrackBodyY(y);
+        int bh = this.getTrackBodyHeight();
+        int bg = Colors.setA(BBSSettings.darkMode.get() ? Colors.DARKER_GRAY : group.color, hover ? 0.25F : 0.2F);
 
-        /* Render track bars (horizontal lines) */
+        /* Render track background block */
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
 
-        context.batcher.fillRect(builder, matrix, area.x, my - 1, area.w, 2, cc, cc, cc, cc);
+        context.batcher.fillRect(builder, matrix, area.x, by, area.w, bh, bg, bg, bg, bg);
 
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
@@ -1076,30 +1113,34 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
         int my = y + (int) this.trackHeight / 2;
+        int by = this.getTrackBodyY(y);
+        int bh = this.getTrackBodyHeight();
         int trackColor = BBSSettings.darkMode.get() ? Colors.DARKER_GRAY : sheet.color;
-        int cc = Colors.setA(trackColor, hover ? 1F : 0.45F);
+        int row = 0;
+        Integer sheetY = this.sheetYCache.get(sheet);
+
+        if (sheetY != null)
+        {
+            row = sheetY / Math.max(1, (int) this.trackHeight);
+        }
+
+        float baseAlpha = row % 2 == 0 ? 0.2F : 0.25F;
+        float hoverAlpha = row % 2 == 0 ? 0.25F : 0.3F;
+        int bg = Colors.setA(trackColor, hover ? hoverAlpha : baseAlpha);
 
         int trackWidth = BBSSettings.editorTrackWidth.get();
 
-        /* Render track bars (horizontal lines) */
+        /* Render track background block */
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
 
-        context.batcher.fillRect(builder, matrix, area.x, my - trackWidth / 2, area.w, trackWidth, cc, cc, cc, cc);
-
-        if (sheet.separator)
-        {
-            int c = Colors.setA(trackColor, 0F);
-
-            /* Render separator */
-            context.batcher.fillRect(builder, matrix, area.x, y, area.w, (int) this.trackHeight, c | Colors.A25, c | Colors.A25, c, c);
-        }
+        context.batcher.fillRect(builder, matrix, area.x, by, area.w, bh, bg, bg, bg, bg);
 
         /* Render bars indicating same values */
         for (int j = 1; j < keyframes.size(); j++)
         {
             Keyframe previous = (Keyframe) keyframes.get(j - 1);
             Keyframe frame = (Keyframe) keyframes.get(j);
-            int c = Colors.YELLOW | Colors.A25;
+            int c = Colors.setA(sheet.color, 0.3F);
             int xx = this.keyframes.toGraphX(previous.getTick());
             int xxx = this.keyframes.toGraphX(frame.getTick());
 
@@ -1112,7 +1153,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             if (Math.abs(xxx - xx) < 5)
             {
-                c = Colors.YELLOW | Colors.A50;
+                c = Colors.setA(sheet.color, 0.5F);
 
                 context.batcher.fillRect(builder, matrix, xx - 2, my + trackWidth / 2 + 4, xxx - xx + 4, 2, c, c, c, c);
             }

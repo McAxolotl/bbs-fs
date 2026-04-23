@@ -12,6 +12,9 @@ import mchorse.bbs_mod.cubic.animation.Animator;
 import mchorse.bbs_mod.cubic.animation.IAnimator;
 import mchorse.bbs_mod.cubic.animation.ProceduralAnimator;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
@@ -49,11 +52,13 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Vector3f;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -65,11 +70,20 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 {
     private static Matrix4f uiMatrix = new Matrix4f();
 
+    public ModelForm getForm()
+    {
+        return this.form;
+    }
+
     private MatrixCache bones = new MatrixCache();
 
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
+    private boolean ikAppliedThisRender;
+    private boolean physicsAppliedThisRender;
+    private boolean constraintsAppliedThisRender;
+    private final Map<String, Float> poseFixByBone = new HashMap<>();
 
     private IEntity entity = new StubEntity();
 
@@ -267,7 +281,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 ? GameRenderer::getRenderTypeEntityTranslucentCullProgram
                 : BBSShaders::getModel;
 
-            this.renderModel(this.entity, mainShader, stack, model, LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, color, true, null, context.getTransition());
+            this.renderModel(this.entity, mainShader, stack, model, LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, color, true, null, context.getTransition(), null);
 
             /* Render body parts */
             stack.push();
@@ -285,8 +299,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void renderModel(IEntity target, Supplier<ShaderProgram> program, MatrixStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition)
+    private void renderModel(IEntity target, Supplier<ShaderProgram> program, MatrixStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, MatrixStack world)
     {
+        this.ikAppliedThisRender = false;
+        this.physicsAppliedThisRender = false;
+        this.constraintsAppliedThisRender = false;
+
         if (!model.culling)
         {
             RenderSystem.disableCull();
@@ -309,6 +327,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
             newStack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
+
+        Matrix4f baseTransform = ui ? null : new Matrix4f((world != null ? world : stack).peek().getPositionMatrix());
+
+        this.collectPoseFixByBone();
+        this.applyIKOnce(model, baseTransform);
+        this.applyPhysicsOnce(target, model, transition, baseTransform);
+        this.applyConstraintsOnce(model);
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
 
@@ -334,6 +359,107 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 this.renderArmor(target, stack, entry.getKey(), entry.getValue(), color, overlay, light);
             }
         }
+    }
+
+    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform)
+    {
+        if (this.ikAppliedThisRender)
+        {
+            return;
+        }
+
+        this.ikAppliedThisRender = true;
+        model.form = this.form;
+        if (baseTransform == null || this.form == null || this.form.ikTargetOverrides.isEmpty())
+        {
+            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
+            return;
+        }
+
+        Matrix4f inv = new Matrix4f(baseTransform).invert();
+        Map<String, Vector3f> local = new HashMap<>(this.form.ikTargetOverrides.size() * 2);
+
+        for (Map.Entry<String, Vector3f> entry : this.form.ikTargetOverrides.entrySet())
+        {
+            String controller = entry.getKey();
+            Vector3f worldPos = entry.getValue();
+
+            if (controller == null || controller.isEmpty() || worldPos == null)
+            {
+                continue;
+            }
+
+            Vector3f pos = new Vector3f(worldPos);
+            inv.transformPosition(pos);
+            local.put(controller, pos);
+        }
+
+        if (local.isEmpty())
+        {
+            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
+            return;
+        }
+
+        ModelIKRuntime.apply(model, local, this.poseFixByBone);
+    }
+
+    private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
+    {
+        if (this.physicsAppliedThisRender)
+        {
+            return;
+        }
+
+        this.physicsAppliedThisRender = true;
+        model.lastBaseTransform = baseTransform;
+        model.form = this.form;
+        ModelPhysicsRuntime.apply(target, model, transition, baseTransform, this.poseFixByBone);
+    }
+
+    private void collectPoseFixByBone()
+    {
+        this.poseFixByBone.clear();
+
+        if (this.form == null)
+        {
+            return;
+        }
+
+        Pose pose = this.getPose();
+
+        if (pose == null || pose.transforms.isEmpty())
+        {
+            return;
+        }
+
+        for (Map.Entry<String, PoseTransform> entry : pose.transforms.entrySet())
+        {
+            String bone = entry.getKey();
+            PoseTransform transform = entry.getValue();
+
+            if (bone == null || bone.isEmpty() || transform == null)
+            {
+                continue;
+            }
+
+            float fix = MathUtils.clamp(transform.fix, 0F, 1F);
+
+            if (fix > 0F)
+            {
+                this.poseFixByBone.put(bone, fix);
+            }
+        }
+    }
+
+    private void applyConstraintsOnce(ModelInstance model)
+    {
+        if (this.constraintsAppliedThisRender)
+        {
+            return;
+        }
+
+        this.constraintsAppliedThisRender = true;
+        ModelConstraintsRuntime.apply(model);
     }
 
     private void renderArmor(IEntity target, MatrixStack stack, ArmorType type, ArmorSlot armorSlot, Color color, int overlay, int light)
@@ -469,7 +595,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             RenderSystem.enableDepthTest();
             RenderSystem.enableBlend();
 
-            this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, color, false, null, 0F);
+            this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, color, false, null, 0F, null);
 
             for (ModelGroup group : model.getModel().getAllGroups())
             {
@@ -504,6 +630,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             model.model.applyPose(this.getPose());
 
             context.stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+            if (context.world != null)
+            {
+                context.world.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+            }
 
             BBSModClient.getTextures().bindTexture(texture);
 
@@ -512,7 +642,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 : BBSShaders::getModel;
             Supplier<ShaderProgram> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
 
-            this.renderModel(context.entity, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition());
+            this.renderModel(context.entity, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world);
         }
     }
 
@@ -539,29 +669,53 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     public void renderBodyParts(FormRenderingContext context)
     {
         context.stack.push();
+        if (context.world != null)
+        {
+            context.world.push();
+        }
 
         for (BodyPart part : this.form.parts.getAllTyped())
         {
             Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
 
             context.stack.push();
+            if (context.world != null)
+            {
+                context.world.push();
+            }
 
             if (matrix != null)
             {
                 MatrixStackUtils.multiply(context.stack, matrix);
+                if (context.world != null)
+                {
+                    MatrixStackUtils.multiply(context.world, matrix);
+                }
             }
             else
             {
                 context.stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+                if (context.world != null)
+                {
+                    context.world.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+                }
             }
 
             this.renderBodyPart(part, context);
 
             context.stack.pop();
+            if (context.world != null)
+            {
+                context.world.pop();
+            }
         }
 
         this.bones.clear();
         context.stack.pop();
+        if (context.world != null)
+        {
+            context.world.pop();
+        }
     }
 
     @Override

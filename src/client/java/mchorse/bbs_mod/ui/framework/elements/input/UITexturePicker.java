@@ -457,15 +457,14 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
                 this.selectCurrent(l);
                 this.displayCurrent(l);
             });
-            this.pixelEditor.fillTexture(this.current);
-
-            UIIcon close = new UIIcon(Icons.CLOSE, (b) -> this.togglePixelEditor());
-
-            this.pixelEditor.savebar.add(close);
             this.pixelEditor.full(this);
-            this.pixelEditor.resize();
 
+            /* Attach and resize the painter before populating it so the inner editor
+             * host has a valid area when the first document is created. Otherwise the
+             * canvas renders blank until the editor is reopened. */
             this.add(this.pixelEditor);
+            this.pixelEditor.resize();
+            this.pixelEditor.fillTexture(this.current);
         }
         else
         {

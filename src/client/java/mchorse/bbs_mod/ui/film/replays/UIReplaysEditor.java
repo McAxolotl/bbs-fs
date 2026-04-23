@@ -17,6 +17,7 @@ import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -130,66 +131,37 @@ public class UIReplaysEditor extends UIElement {
     }
 
     static {
-        COLORS.put("x", Colors.RED);
-        COLORS.put("y", Colors.GREEN);
-        COLORS.put("z", Colors.BLUE);
-        COLORS.put("vX", Colors.RED);
-        COLORS.put("vY", Colors.GREEN);
-        COLORS.put("vZ", Colors.BLUE);
-        COLORS.put("yaw", Colors.YELLOW);
-        COLORS.put("pitch", Colors.CYAN);
-        COLORS.put("bodyYaw", Colors.MAGENTA);
+        setupColors();
+        setupIcons();
+    }
 
-        COLORS.put("stick_lx", Colors.RED);
-        COLORS.put("stick_ly", Colors.GREEN);
-        COLORS.put("stick_rx", Colors.RED);
-        COLORS.put("stick_ry", Colors.GREEN);
-        COLORS.put("trigger_l", Colors.RED);
-        COLORS.put("trigger_r", Colors.GREEN);
-        COLORS.put("extra1_x", Colors.RED);
-        COLORS.put("extra1_y", Colors.GREEN);
-        COLORS.put("extra2_x", Colors.RED);
-        COLORS.put("extra2_y", Colors.GREEN);
+    private static void setupColors() {
+        putColors(Colors.RED, "x", "vX", "stick_lx", "stick_rx", "extra1_x", "extra2_x", "user1", "user5", "frequency", "offset_x");
+        putColors(Colors.GREEN, "y", "vY", "stick_ly", "stick_ry", "trigger_l", "trigger_r", "extra1_y", "extra2_y", "user3", "count", "offset_y", "transform");
+        putColors(Colors.BLUE, "z", "vZ", "user4", "offset_z");
+        putColors(Colors.YELLOW, "yaw", "lighting");
+        putColors(Colors.CYAN, "pitch");
+        putColors(Colors.MAGENTA, "bodyYaw", "actions", "settings");
+        putColors(Colors.ORANGE, "pose_overlay", "item_main_hand", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "user2", "user6");
 
         COLORS.put("visible", Colors.WHITE & Colors.RGB);
         COLORS.put("pose", Colors.RED);
-        COLORS.put("pose_overlay", Colors.ORANGE);
-        COLORS.put("transform", Colors.GREEN);
+        COLORS.put("physics_targets", Colors.MAGENTA);
         COLORS.put("transform_overlay", 0xaaff00);
         COLORS.put("color", Colors.INACTIVE);
-        COLORS.put("lighting", Colors.YELLOW);
         COLORS.put("shape_keys", Colors.PINK);
-        COLORS.put("actions", Colors.MAGENTA);
+    }
 
-        COLORS.put("item_main_hand", Colors.ORANGE);
-        COLORS.put("item_off_hand", Colors.ORANGE);
-        COLORS.put("item_head", Colors.ORANGE);
-        COLORS.put("item_chest", Colors.ORANGE);
-        COLORS.put("item_legs", Colors.ORANGE);
-        COLORS.put("item_feet", Colors.ORANGE);
+    private static void putColors(int color, String... keys) {
+        for (String key : keys) COLORS.put(key, color);
+    }
 
-        COLORS.put("user1", Colors.RED);
-        COLORS.put("user2", Colors.ORANGE);
-        COLORS.put("user3", Colors.GREEN);
-        COLORS.put("user4", Colors.BLUE);
-        COLORS.put("user5", Colors.RED);
-        COLORS.put("user6", Colors.ORANGE);
-
-        COLORS.put("frequency", Colors.RED);
-        COLORS.put("count", Colors.GREEN);
-
-        COLORS.put("settings", Colors.MAGENTA);
-        COLORS.put("offset_x", Colors.RED);
-        COLORS.put("offset_y", Colors.GREEN);
-        COLORS.put("offset_z", Colors.BLUE);
-
+    private static void setupIcons() {
         ICONS.put("x", Icons.X);
         ICONS.put("y", Icons.Y);
         ICONS.put("z", Icons.Z);
-
         ICONS.put("pitch", Icons.VERTICAL);
         ICONS.put("headYaw", Icons.HORIZONTAL);
-
         ICONS.put("visible", Icons.VISIBLE);
         ICONS.put("texture", Icons.MATERIAL);
         ICONS.put("pose", Icons.POSE);
@@ -199,21 +171,18 @@ public class UIReplaysEditor extends UIElement {
         ICONS.put("actions", Icons.CONVERT);
         ICONS.put("shape_keys", Icons.HEART_ALT);
         ICONS.put("text", Icons.FONT);
-
         ICONS.put("stick_lx", Icons.LEFT_STICK);
         ICONS.put("stick_rx", Icons.RIGHT_STICK);
         ICONS.put("trigger_l", Icons.TRIGGER);
         ICONS.put("extra1_x", Icons.CURVES);
         ICONS.put("extra2_x", Icons.CURVES);
         ICONS.put("item_main_hand", Icons.LIMB);
-
         ICONS.put("user1", Icons.PARTICLE);
-
         ICONS.put("paused", Icons.TIME);
         ICONS.put("frequency", Icons.STOPWATCH);
         ICONS.put("count", Icons.BUCKET);
-
         ICONS.put("settings", Icons.GEAR);
+        ICONS.put("physics_targets", Icons.TIME);
     }
 
     public static Icon getIcon(String key) {
@@ -460,60 +429,8 @@ public class UIReplaysEditor extends UIElement {
         Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
         boolean tabsEnabled = BBSSettings.editorReplayTabs.get();
 
-        if (!tabsEnabled || this.category == ReplayCategory.PLAYER) {
-            for (String key : ReplayKeyframes.CURATED_CHANNELS) {
-                BaseValue value = this.replay.keyframes.get(key);
-                KeyframeChannel channel = (KeyframeChannel) value;
-
-                sheets.add(
-                        new UIKeyframeSheet(getColor(key), false, channel, null).icon(ICONS.get(key))
-                );
-            }
-        }
-
-        /* Form properties */
-        Form lastForm = null;
-        List<UIKeyframeSheet> formSheets = new ArrayList<>();
-
-        for (String key : FormUtils.collectPropertyPaths(this.replay.form.get())) {
-            KeyframeChannel property = this.replay.properties.getOrCreate(this.replay.form.get(), key);
-            String name = StringUtils.fileName(key);
-            boolean isPose
-                    = name.startsWith("transform")
-                    || name.startsWith("pose")
-                    || name.startsWith("pose_overlay")
-                    || name.startsWith("shape_keys");
-
-            if (property != null
-                    && (!tabsEnabled
-                    || (this.category == ReplayCategory.MODEL && !isPose)
-                    || (this.category == ReplayCategory.POSE && isPose))) {
-                BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
-                Form form
-                        = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
-
-                if (form != lastForm) {
-                    if (lastForm != null) {
-                        this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
-                    }
-
-                    lastForm = form;
-                }
-
-                UIKeyframeSheet sheet = new UIKeyframeSheet(
-                        getColor(key),
-                        false,
-                        property,
-                        formProperty
-                );
-
-                formSheets.add(sheet.icon(getIcon(key)));
-            }
-        }
-
-        if (lastForm != null) {
-            this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
-        }
+        this.collectCuratedSheets(sheets, tabsEnabled);
+        this.collectFormPropertySheets(sheets, tabsEnabled, poseTabs, poseTabDepths);
 
         this.keys.clear();
 
@@ -534,7 +451,7 @@ public class UIReplaysEditor extends UIElement {
             return false;
         });
 
-        lastForm = null;
+        Form lastForm = null;
 
         for (UIKeyframeSheet sheet : sheets) {
             Form form = sheet.property == null ? null : FormUtils.getForm(sheet.property);
@@ -649,6 +566,14 @@ public class UIReplaysEditor extends UIElement {
                             this.updateChannelsList();
                         });
                     }
+
+                    List<String> controllers = ModelIKRuntime.getControllers(ModelFormRenderer.getModel(modelForm));
+                    if (!controllers.isEmpty()) {
+                        menu.action(Icons.CLOSE, UIKeys.FILM_REPLAY_CONTEXT_CLEAR_IK, () -> {
+                            UIReplaysEditorUtils.clearIKTracks(this.replay, modelForm);
+                            this.updateChannelsList();
+                        });
+                    }
                 }
 
                 if (this.keyframeEditor.view.getGraph() instanceof UIKeyframeDopeSheet) {
@@ -702,6 +627,64 @@ public class UIReplaysEditor extends UIElement {
         }
     }
 
+    private void collectCuratedSheets(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
+        if (!tabsEnabled || this.category == ReplayCategory.PLAYER) {
+            for (String key : ReplayKeyframes.CURATED_CHANNELS) {
+                BaseValue value = this.replay.keyframes.get(key);
+                KeyframeChannel channel = (KeyframeChannel) value;
+
+                sheets.add(
+                        new UIKeyframeSheet(getColor(key), false, channel, null).icon(ICONS.get(key))
+                );
+            }
+        }
+    }
+
+    private void collectFormPropertySheets(
+            List<UIKeyframeSheet> sheets,
+            boolean tabsEnabled,
+            Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
+            Map<UIKeyframeSheet, Integer> poseTabDepths
+    ) {
+        Form lastForm = null;
+        List<UIKeyframeSheet> formSheets = new ArrayList<>();
+
+        for (String key : FormUtils.collectPropertyPaths(this.replay.form.get())) {
+            KeyframeChannel property = this.replay.properties.getOrCreate(this.replay.form.get(), key);
+            String name = StringUtils.fileName(key);
+            boolean isPose = FormUtils.isPoseProperty(name);
+
+            if (property != null
+                    && (!tabsEnabled
+                    || (this.category == ReplayCategory.MODEL && !isPose)
+                    || (this.category == ReplayCategory.POSE && isPose))) {
+                BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
+                Form form = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
+
+                if (form != lastForm) {
+                    if (lastForm != null) {
+                        this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+                    }
+
+                    lastForm = form;
+                }
+
+                UIKeyframeSheet sheet = new UIKeyframeSheet(
+                        getColor(key),
+                        false,
+                        property,
+                        formProperty
+                );
+
+                formSheets.add(sheet.icon(getIcon(key)));
+            }
+        }
+
+        if (lastForm != null) {
+            this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+        }
+    }
+
     private void flushForm(
             List<UIKeyframeSheet> sheets,
             List<UIKeyframeSheet> formSheets,
@@ -726,36 +709,40 @@ public class UIReplaysEditor extends UIElement {
         List<UIKeyframeSheet> orderedFormSheets = new ArrayList<>(formSheets);
         formSheets.clear();
 
-        if ((!tabsEnabled || this.category == ReplayCategory.POSE)
-                && form instanceof ModelForm modelForm) {
-            List<UIKeyframeSheet> boneSheets = new ArrayList<>();
-            Map<String, Integer> depthBySheetId = new HashMap<>();
-            UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.replay.properties, boneSheets, depthBySheetId);
+        if (form instanceof ModelForm modelForm) {
+            if (!tabsEnabled || this.category == ReplayCategory.MODEL) {
+                List<UIKeyframeSheet> ikSheets = new ArrayList<>();
+                UIReplaysEditorUtils.addIKTargetSheets(modelForm, this.replay.properties, ikSheets);
+                orderedFormSheets.addAll(ikSheets);
 
-            for (UIKeyframeSheet boneSheet : boneSheets)
-            {
-                Integer depth = depthBySheetId.get(boneSheet.id);
-                poseTabDepths.put(boneSheet, depth == null ? 0 : depth);
+                List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
+                UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
+                orderedFormSheets.addAll(physicsSheets);
             }
 
-            if (poseSheet != null && !boneSheets.isEmpty())
-            {
-                poseTabs.put(poseSheet, boneSheets);
+            if (!tabsEnabled || this.category == ReplayCategory.POSE) {
+                List<UIKeyframeSheet> boneSheets = new ArrayList<>();
+                Map<String, Integer> depthBySheetId = new HashMap<>();
+                UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.replay.properties, boneSheets, depthBySheetId);
 
-                int poseIndex = orderedFormSheets.indexOf(poseSheet);
-
-                if (poseIndex >= 0)
-                {
-                    orderedFormSheets.addAll(poseIndex + 1, boneSheets);
+                for (UIKeyframeSheet boneSheet : boneSheets) {
+                    Integer depth = depthBySheetId.get(boneSheet.id);
+                    poseTabDepths.put(boneSheet, depth == null ? 0 : depth);
                 }
-                else
-                {
+
+                if (poseSheet != null && !boneSheets.isEmpty()) {
+                    poseTabs.put(poseSheet, boneSheets);
+
+                    int poseIndex = orderedFormSheets.indexOf(poseSheet);
+
+                    if (poseIndex >= 0) {
+                        orderedFormSheets.addAll(poseIndex + 1, boneSheets);
+                    } else {
+                        orderedFormSheets.addAll(boneSheets);
+                    }
+                } else {
                     orderedFormSheets.addAll(boneSheets);
                 }
-            }
-            else
-            {
-                orderedFormSheets.addAll(boneSheets);
             }
         }
 

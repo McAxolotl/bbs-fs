@@ -26,6 +26,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class UIPixelsEditor extends UICanvasEditor
@@ -46,6 +47,9 @@ public class UIPixelsEditor extends UICanvasEditor
 
     private Supplier<Float> backgroundSupplier = () -> 0.7F;
     private Supplier<Color> colorSupplier = Color::white;
+    private Consumer<Color> pickColorConsumer = (c) -> {};
+
+    private Supplier<TexturePaintTool> toolSupplier = () -> TexturePaintTool.BRUSH;
 
     public UIPixelsEditor()
     {
@@ -74,9 +78,21 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    protected Color getActiveDrawColor()
+    {
+        return this.colorSupplier.get();
+    }
+
     public UIPixelsEditor backgroundSupplier(Supplier<Float> supplier)
     {
         this.backgroundSupplier = supplier;
+
+        return this;
+    }
+
+    public UIPixelsEditor pickColorConsumer(Consumer<Color> consumer)
+    {
+        this.pickColorConsumer = consumer != null ? consumer : (c) -> {};
 
         return this;
     }
@@ -96,6 +112,34 @@ public class UIPixelsEditor extends UICanvasEditor
         this.brushSize = MathUtils.clamp(size, 1, 256);
 
         return this;
+    }
+
+    public UIPixelsEditor toolSupplier(Supplier<TexturePaintTool> supplier)
+    {
+        this.toolSupplier = supplier != null ? supplier : () -> TexturePaintTool.BRUSH;
+
+        return this;
+    }
+
+    protected TexturePaintTool getActivePaintTool()
+    {
+        TexturePaintTool tool = this.toolSupplier.get();
+
+        return tool == null ? TexturePaintTool.BRUSH : tool;
+    }
+
+    /**
+     * Invoked for the flood-fill tool on LMB down. Default does nothing;
+     * {@link UITextureEditor} performs {@link UITextureEditor#fillColor}.
+     */
+    protected void onFillAt(Vector2i pixel)
+    {}
+
+    private boolean isStrokePaintTool()
+    {
+        TexturePaintTool t = this.getActivePaintTool();
+
+        return t == TexturePaintTool.BRUSH || t == TexturePaintTool.ERASER;
     }
 
     private void paint(int x, int y)
@@ -218,7 +262,7 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     protected boolean isMouseButtonAllowed(int mouseButton)
     {
-        return super.isMouseButtonAllowed(mouseButton) || mouseButton == 1;
+        return super.isMouseButtonAllowed(mouseButton);
     }
 
     @Override
@@ -226,10 +270,39 @@ public class UIPixelsEditor extends UICanvasEditor
     {
         super.startDragging(context);
 
-        if (this.editing && (this.mouse == 0 || this.mouse == 1) && this.pixelsUndo == null)
+        if (!this.editing || this.mouse != 0 || this.pixelsUndo != null)
+        {
+            return;
+        }
+
+        TexturePaintTool tool = this.getActivePaintTool();
+
+        if (tool == TexturePaintTool.FILL)
+        {
+            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+
+            this.onFillAt(pixel);
+
+            return;
+        }
+
+        if (tool == TexturePaintTool.PIPETTE)
+        {
+            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+            Color color = this.pixels.getColor(pixel.x, pixel.y);
+
+            if (color != null)
+            {
+                this.pickColorConsumer.accept(color);
+            }
+
+            return;
+        }
+
+        if (this.isStrokePaintTool())
         {
             this.pixelsUndo = new PixelsUndo();
-            this.drawColor = this.mouse == 1 ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
+            this.drawColor = tool == TexturePaintTool.ERASER ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
 
             Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
@@ -289,20 +362,23 @@ public class UIPixelsEditor extends UICanvasEditor
 
         context.batcher.fullTexturedBox(texture, area.x, area.y, area.w, area.h);
 
-        /* Draw current pixel */
-        int pixelX = (int) Math.floor(this.scaleX.from(context.mouseX));
-        int pixelY = (int) Math.floor(this.scaleY.from(context.mouseY));
+        /* Draw brush preview for stroke tools */
+        if (this.isStrokePaintTool())
+        {
+            int pixelX = (int) Math.floor(this.scaleX.from(context.mouseX));
+            int pixelY = (int) Math.floor(this.scaleY.from(context.mouseY));
 
-        int left = (this.brushSize - 1) / 2;
-        int right = this.brushSize / 2;
+            int left = (this.brushSize - 1) / 2;
+            int right = this.brushSize / 2;
 
-        context.batcher.outline(
-            (int) Math.round(this.scaleX.to(pixelX - left)), (int) Math.round(this.scaleY.to(pixelY - left)),
-            (int) Math.round(this.scaleX.to(pixelX + right + 1)), (int) Math.round(this.scaleY.to(pixelY + right + 1)),
-            Colors.A50
-        );
+            context.batcher.outline(
+                (int) Math.round(this.scaleX.to(pixelX - left)), (int) Math.round(this.scaleY.to(pixelY - left)),
+                (int) Math.round(this.scaleX.to(pixelX + right + 1)), (int) Math.round(this.scaleY.to(pixelY + right + 1)),
+                Colors.A50
+            );
+        }
 
-        if (this.editing && this.dragging && (this.lastX != context.mouseX || this.lastY != context.mouseY) && (this.mouse == 0 || this.mouse == 1))
+        if (this.editing && this.dragging && (this.lastX != context.mouseX || this.lastY != context.mouseY) && this.mouse == 0 && this.isStrokePaintTool())
         {
             Vector2i last = this.getHoverPixel(this.lastX, this.lastY);
             Vector2i current = this.getHoverPixel(context.mouseX, context.mouseY);
@@ -343,11 +419,5 @@ public class UIPixelsEditor extends UICanvasEditor
     protected void renderForeground(UIContext context)
     {
         super.renderForeground(context);
-
-        if (this.editing)
-        {
-            context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.y + 10, Colors.A50);
-            context.batcher.gradientVBox(this.area.x, this.area.y + 10, this.area.ex(), this.area.y + 30, Colors.A50, 0);
-        }
     }
 }

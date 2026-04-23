@@ -33,6 +33,7 @@ import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -1710,6 +1711,7 @@ public class UIClips extends UIElement
         Area area = this.area;
         int h = this.getLayerHeight();
         int leftEdge = this.toGraphX(0);
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
 
         if (leftEdge > this.area.x)
         {
@@ -1717,7 +1719,7 @@ public class UIClips extends UIElement
         }
 
         area.render(batcher, Colors.A50);
-        batcher.clip(this.vertical.area, context);
+        batcher.clip(this.vertical.area.x, rulerBottom, this.vertical.area.ex(), this.vertical.area.ey(), context);
 
         for (int i = 0; i < this.layers; i++)
         {
@@ -1735,7 +1737,7 @@ public class UIClips extends UIElement
         this.renderTickMarkers(context, area.y, area.h);
 
         batcher.unclip(context);
-        batcher.clip(this.vertical.area, context);
+        batcher.clip(this.vertical.area.x, rulerBottom, this.vertical.area.ex(), this.vertical.area.ey(), context);
 
         List<Clip> clips = this.clips.get();
 
@@ -1848,22 +1850,18 @@ public class UIClips extends UIElement
         int mult = this.scale.getMult() * 2;
         int start = (int) this.scale.getMinValue();
         int end = (int) this.scale.getMaxValue();
-        int max = Integer.MAX_VALUE;
+        int duration = this.clips.calculateDuration();
 
-        start -= start % mult;
-        end -= end % mult;
-
-        start = MathUtils.clamp(start, 0, max);
-        end = MathUtils.clamp(end, mult, max);
-
-        for (int j = start; j <= end; j += mult)
-        {
-            int xx = this.toGraphX(j);
-            String value = TimeUtils.formatTime(j);
-
-            context.batcher.box(xx, y, xx + 1, y + h, Colors.setA(Colors.WHITE, 0.2F));
-            context.batcher.textShadow(value, xx + 3, this.area.y + 4, Colors.WHITE);
-        }
+        TimelineRulerRenderer.render(
+            context,
+            this.area,
+            mult,
+            start,
+            end,
+            duration,
+            this::toGraphX,
+            TimeUtils::formatTime
+        );
     }
 
     /**

@@ -20,6 +20,7 @@ import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
@@ -77,6 +78,9 @@ public class ModelInstance implements IModelInstance
     public ArmorSlot fpOffhand;
 
     private Map<ModelGroup, ModelVAO> vaos = new HashMap<>();
+
+    public transient Matrix4f lastBaseTransform;
+    public transient Form form;
 
     public ModelInstance(String id, IModel model, Animations animations, Link texture)
     {

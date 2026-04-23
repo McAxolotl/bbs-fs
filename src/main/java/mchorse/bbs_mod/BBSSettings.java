@@ -23,6 +23,7 @@ public class BBSSettings {
 	public static ValueColors favoriteColors;
 	public static ValueColors recentColors;
 	public static ValueStringKeys disabledSheets;
+	public static ValueStringKeys disabledMorphFormCategories;
 	public static ValueLanguage language;
 	public static ValueInt primaryColor;
 	public static ValueBoolean enableTrackpadIncrements;
@@ -33,6 +34,7 @@ public class BBSSettings {
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
 	public static ValueBoolean freezeModels;
+	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
 	public static ValueBoolean uniformScale;
@@ -195,6 +197,7 @@ public class BBSSettings {
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		freezeModels = builder.getBoolean("freeze_models", false);
+		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
 		axesScale = builder.getFloat("axes_scale", 1F, 0F, 2F);
 		axesThickness = builder.getFloat("axes_thickness", 1F, 0.25F, 3F);
 		uniformScale = builder.getBoolean("uniform_scale", false);
@@ -210,6 +213,8 @@ public class BBSSettings {
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");
+		builder.register(disabledMorphFormCategories);
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 
 		builder.category("tutorials");
