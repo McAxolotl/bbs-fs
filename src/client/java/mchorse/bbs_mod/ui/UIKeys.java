@@ -976,6 +976,9 @@ public class UIKeys
     public static final IKey TEXTURES_KEYS_UNDO = L10n.lang("bbs.ui.textures.keys.undo");
     public static final IKey TEXTURES_KEYS_BRUSH_DEC = L10n.lang("bbs.ui.textures.keys.brush_dec");
     public static final IKey TEXTURES_KEYS_BRUSH_INC = L10n.lang("bbs.ui.textures.keys.brush_inc");
+    public static final IKey TEXTURES_KEYS_TOOL_BRUSH = L10n.lang("bbs.ui.textures.keys.tool_brush");
+    public static final IKey TEXTURES_KEYS_TOOL_ERASER = L10n.lang("bbs.ui.textures.keys.tool_eraser");
+    public static final IKey TEXTURES_KEYS_TOOL_FILL = L10n.lang("bbs.ui.textures.keys.tool_fill");
     public static final IKey TEXTURES_LINEAR = L10n.lang("bbs.ui.textures.linear");
     public static final IKey TEXTURES_MIPMAP = L10n.lang("bbs.ui.textures.mipmap");
     public static final IKey TEXTURES_RESIZE = L10n.lang("bbs.ui.textures.resize");
@@ -984,7 +987,14 @@ public class UIKeys
     public static final IKey TEXTURES_SAVE = L10n.lang("bbs.ui.textures.save");
     public static final IKey TEXTURES_SAVE_WRONG_PATH = L10n.lang("bbs.ui.textures.save_wrong_path");
     public static final IKey TEXTURES_TOOLTIP = L10n.lang("bbs.ui.textures.tooltip");
+    public static final IKey TEXTURES_TOOLS_BRUSH = L10n.lang("bbs.ui.textures.tools.brush");
+    public static final IKey TEXTURES_TOOLS_ERASER = L10n.lang("bbs.ui.textures.tools.eraser");
+    public static final IKey TEXTURES_TOOLS_FILL = L10n.lang("bbs.ui.textures.tools.fill");
+    public static final IKey TEXTURES_TOOLS_PIPETTE = L10n.lang("bbs.ui.textures.tools.pipette");
+    public static final IKey TEXTURES_TOOLS_PIPETTE_HINT = L10n.lang("bbs.ui.textures.tools.pipette_hint");
     public static final IKey TEXTURES_BRUSH_SIZE = L10n.lang("bbs.ui.textures.brush_size");
+    public static final IKey TEXTURES_COLOR_PRIMARY = L10n.lang("bbs.ui.textures.color.primary");
+    public static final IKey TEXTURES_COLOR_SECONDARY = L10n.lang("bbs.ui.textures.color.secondary");
     public static final IKey TEXTURES_VIEWER_BRIGHTNESS = L10n.lang("bbs.ui.textures.viewer.brightness");
     public static final IKey TEXTURES_VIEWER_CONTEXT_COPY_HEX = L10n.lang("bbs.ui.textures.viewer.context.copy_hex");
     public static final IKey TEXTURE_EDITOR_AUTO_SIZE = L10n.lang("bbs.ui.texture.editor.auto_size");
