@@ -91,6 +91,7 @@ public class UITexturePainter extends UIElement
 
     public UIColor primary;
     public UIColor secondary;
+    private UIElement colorPickersRow;
 
     public UIIcon saveIcon;
     public UIIcon resizeIcon;
@@ -213,6 +214,8 @@ public class UITexturePainter extends UIElement
         this.secondary = new UIColor((c) -> {}).noLabel();
         this.secondary.direction(Direction.LEFT).h(UIConstants.CONTROL_HEIGHT);
         this.secondary.setColor(Colors.WHITE);
+        this.colorPickersRow = UI.row(UIConstants.MARGIN, this.primary, this.secondary);
+        this.colorPickersRow.row().preferred(0).height(UIConstants.CONTROL_HEIGHT);
 
         this.brushSize = new UITrackpad((v) -> this.setBrushSize(v.intValue()));
         this.brushSize.integer().limit(1, MAX_BRUSH_SIZE, true).setValue(1);
@@ -221,8 +224,7 @@ public class UITexturePainter extends UIElement
         this.fillToolHint = new UILabel(UIKeys.TEXTURES_KEYS_FILL, Colors.LIGHTEST_GRAY);
 
         this.options.add(
-            UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.primary,
-            UI.label(UIKeys.TEXTURES_COLOR_SECONDARY), this.secondary,
+            UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.colorPickersRow,
             this.brushSizeLabel, this.brushSize, this.fillToolHint);
     }
 
