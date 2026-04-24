@@ -50,6 +50,7 @@ public class UIPixelsEditor extends UICanvasEditor
     private Consumer<Color> pickColorConsumer = (c) -> {};
 
     private Supplier<TexturePaintTool> toolSupplier = () -> TexturePaintTool.BRUSH;
+    private Supplier<TextureStrokeShape> strokeShapeSupplier = () -> TextureStrokeShape.SQUARE;
 
     public UIPixelsEditor()
     {
@@ -109,7 +110,7 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public UIPixelsEditor setBrushSize(int size)
     {
-        this.brushSize = MathUtils.clamp(size, 1, 256);
+        this.brushSize = MathUtils.clamp(size, 1, 1024);
 
         return this;
     }
@@ -121,11 +122,25 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public UIPixelsEditor strokeShapeSupplier(Supplier<TextureStrokeShape> supplier)
+    {
+        this.strokeShapeSupplier = supplier != null ? supplier : () -> TextureStrokeShape.SQUARE;
+
+        return this;
+    }
+
     protected TexturePaintTool getActivePaintTool()
     {
         TexturePaintTool tool = this.toolSupplier.get();
 
         return tool == null ? TexturePaintTool.BRUSH : tool;
+    }
+
+    protected TextureStrokeShape getActiveStrokeShape()
+    {
+        TextureStrokeShape shape = this.strokeShapeSupplier.get();
+
+        return shape == null ? TextureStrokeShape.SQUARE : shape;
     }
 
     /**
@@ -146,13 +161,97 @@ public class UIPixelsEditor extends UICanvasEditor
     {
         int left = (this.brushSize - 1) / 2;
         int right = this.brushSize / 2;
+        TextureStrokeShape shape = this.getActiveStrokeShape();
 
         for (int dx = -left; dx <= right; dx++)
         {
             for (int dy = -left; dy <= right; dy++)
             {
-                this.pixelsUndo.setColor(this.pixels, x + dx, y + dy, this.drawColor);
+                if (shape == TextureStrokeShape.SQUARE || this.isCircleMaskCell(dx, dy, left))
+                {
+                    this.pixelsUndo.setColor(this.pixels, x + dx, y + dy, this.drawColor);
+                }
             }
+        }
+    }
+
+    private boolean isCircleMaskCell(int dx, int dy, int left)
+    {
+        int size = this.brushSize;
+        double center = (size - 1) / 2D;
+        double radius = size / 2D;
+        double x = dx + left - center;
+        double y = dy + left - center;
+
+        return x * x + y * y <= radius * radius;
+    }
+
+    private void renderStrokePreview(UIContext context, int pixelX, int pixelY)
+    {
+        int left = (this.brushSize - 1) / 2;
+        int right = this.brushSize / 2;
+
+        if (this.getActiveStrokeShape() == TextureStrokeShape.SQUARE)
+        {
+            context.batcher.outline(
+                (int) Math.round(this.scaleX.to(pixelX - left)), (int) Math.round(this.scaleY.to(pixelY - left)),
+                (int) Math.round(this.scaleX.to(pixelX + right + 1)), (int) Math.round(this.scaleY.to(pixelY + right + 1)),
+                Colors.A50
+            );
+
+            return;
+        }
+
+        double minX = this.scaleX.to(pixelX - left);
+        double minY = this.scaleY.to(pixelY - left);
+        double maxX = this.scaleX.to(pixelX + right + 1);
+        double maxY = this.scaleY.to(pixelY + right + 1);
+
+        this.renderSmoothCirclePreview(context, minX, minY, maxX, maxY);
+    }
+
+    private void renderSmoothCirclePreview(UIContext context, double minX, double minY, double maxX, double maxY)
+    {
+        double cx = (minX + maxX) / 2D;
+        double cy = (minY + maxY) / 2D;
+        double rx = Math.abs(maxX - minX) / 2D;
+        double ry = Math.abs(maxY - minY) / 2D;
+        int segments = MathUtils.clamp((int) Math.ceil(Math.max(rx, ry) * 6D), 24, 256);
+
+        int px = (int) Math.round(cx + rx);
+        int py = (int) Math.round(cy);
+
+        for (int i = 1; i <= segments; i++)
+        {
+            double angle = Math.PI * 2D * i / segments;
+            int x = (int) Math.round(cx + Math.cos(angle) * rx);
+            int y = (int) Math.round(cy + Math.sin(angle) * ry);
+
+            this.renderPixelLine(context, px, py, x, y);
+
+            px = x;
+            py = y;
+        }
+    }
+
+    private void renderPixelLine(UIContext context, int x0, int y0, int x1, int y1)
+    {
+        int dx = x1 - x0;
+        int dy = y1 - y0;
+        int steps = Math.max(Math.abs(dx), Math.abs(dy));
+
+        if (steps <= 0)
+        {
+            context.batcher.box(x0, y0, x0 + 1, y0 + 1, Colors.A50);
+            return;
+        }
+
+        for (int i = 0; i <= steps; i++)
+        {
+            int x = (int) Math.round(x0 + dx * (i / (double) steps));
+            int y = (int) Math.round(y0 + dy * (i / (double) steps));
+
+            context.batcher.box(x, y, x + 1, y + 1, Colors.A50);
         }
     }
 
@@ -367,15 +466,7 @@ public class UIPixelsEditor extends UICanvasEditor
         {
             int pixelX = (int) Math.floor(this.scaleX.from(context.mouseX));
             int pixelY = (int) Math.floor(this.scaleY.from(context.mouseY));
-
-            int left = (this.brushSize - 1) / 2;
-            int right = this.brushSize / 2;
-
-            context.batcher.outline(
-                (int) Math.round(this.scaleX.to(pixelX - left)), (int) Math.round(this.scaleY.to(pixelY - left)),
-                (int) Math.round(this.scaleX.to(pixelX + right + 1)), (int) Math.round(this.scaleY.to(pixelY + right + 1)),
-                Colors.A50
-            );
+            this.renderStrokePreview(context, pixelX, pixelY);
         }
 
         if (this.editing && this.dragging && (this.lastX != context.mouseX || this.lastY != context.mouseY) && this.mouse == 0 && this.isStrokePaintTool())

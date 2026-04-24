@@ -13,6 +13,7 @@ import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -70,7 +71,7 @@ public class UITexturePainter extends UIElement
     private static final int TOOL_SEPARATOR_GAP = 9;
     private static final float DEFAULT_OPTIONS_WIDTH = 0.22F;
     private static final int MIN_OPTIONS_WIDTH = 140;
-    private static final int MAX_BRUSH_SIZE = 64;
+    private static final int MAX_BRUSH_SIZE = 1024;
 
     public static final class Document
     {
@@ -98,6 +99,7 @@ public class UITexturePainter extends UIElement
     public UIIcon extractIcon;
 
     private TexturePaintTool activeTool = TexturePaintTool.BRUSH;
+    private TextureStrokeShape activeStrokeShape = TextureStrokeShape.SQUARE;
 
     /**
      * Non-null while Alt is held to temporarily use the pipette; stores the tool to restore on Alt release.
@@ -117,6 +119,7 @@ public class UITexturePainter extends UIElement
 
     private UILabel brushSizeLabel;
     private UILabel fillToolHint;
+    private UIToggle roundBrushToggle;
 
     private UITextureTabs tabs;
     private UIElement content;
@@ -223,10 +226,16 @@ public class UITexturePainter extends UIElement
 
         this.brushSizeLabel = UI.label(UIKeys.TEXTURES_BRUSH_SIZE);
         this.fillToolHint = new UILabel(UIKeys.TEXTURES_KEYS_FILL, Colors.LIGHTEST_GRAY);
+        this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE,
+            this.activeStrokeShape == TextureStrokeShape.CIRCLE,
+            (b) -> this.setRoundBrushEnabled(b.getValue()));
+        this.roundBrushToggle.h(UIConstants.CONTROL_HEIGHT);
 
         this.options.add(
             UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.colorPickersRow,
-            this.brushSizeLabel, this.brushSize, this.fillToolHint);
+            this.brushSizeLabel, this.brushSize,
+            this.roundBrushToggle,
+            this.fillToolHint);
     }
 
     private void buildEditorHost()
@@ -315,6 +324,11 @@ public class UITexturePainter extends UIElement
         return this.activeTool;
     }
 
+    public TextureStrokeShape getActiveTextureStrokeShape()
+    {
+        return this.activeStrokeShape;
+    }
+
     private void setActiveTool(TexturePaintTool tool)
     {
         if (this.activeTool == tool)
@@ -334,6 +348,11 @@ public class UITexturePainter extends UIElement
     {
         this.toolBeforeAltPipette = null;
         this.setActiveTool(tool);
+    }
+
+    private void setRoundBrushEnabled(boolean value)
+    {
+        this.activeStrokeShape = value ? TextureStrokeShape.CIRCLE : TextureStrokeShape.SQUARE;
     }
 
     private void updateAltPipetteHold()
@@ -359,6 +378,7 @@ public class UITexturePainter extends UIElement
 
         this.brushSizeLabel.setVisible(strokeTool);
         this.brushSize.setVisible(strokeTool);
+        this.roundBrushToggle.setVisible(strokeTool);
         this.fillToolHint.setVisible(fillTool);
 
         this.options.resize();
@@ -426,6 +446,7 @@ public class UITexturePainter extends UIElement
         editor.pickColorConsumer((color) -> this.primary.setColor(color.getRGBColor()));
         editor.backgroundSupplier(() -> (float) this.brightness.getValue());
         editor.toolSupplier(this::getActiveTexturePaintTool);
+        editor.strokeShapeSupplier(this::getActiveTextureStrokeShape);
         editor.setBrushSize((int) this.brushSize.getValue());
         editor.setDocument(link, pixels);
         editor.full(this.editorHost);
