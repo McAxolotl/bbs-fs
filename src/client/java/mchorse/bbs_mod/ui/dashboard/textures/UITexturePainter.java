@@ -202,8 +202,9 @@ public class UITexturePainter extends UIElement
             float f = (context.mouseX - this.options.area.x) / (float) this.content.area.w;
             float w = MathUtils.clamp(f, 0F, 0.5F);
 
-            this.options.w(w).resize();
+            this.options.w(w);
             widths.put(this.getClass(), w);
+            this.content.resize();
             this.optionsDraggable.resize();
         });
         this.optionsDraggable.relative(this.options).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
