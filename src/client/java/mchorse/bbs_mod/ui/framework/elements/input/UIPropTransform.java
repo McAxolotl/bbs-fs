@@ -300,7 +300,7 @@ public class UIPropTransform extends UITransform
     {
         GizmoDrag drag = this.getHotkeyDrag();
 
-        if (mode == Gizmo.Mode.ROTATE.ordinal() && (!this.editing || this.mode != mode))
+        if (mode == Gizmo.Mode.ROTATE.ordinal() && BBSSettings.rotate3dSphere.get() && (!this.editing || this.mode != mode))
         {
             this.enableTrackball(drag);
 

@@ -172,7 +172,7 @@ public class Gizmo
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_XZ) transform.enableMode(this.mode.ordinal(), Axis.X, Axis.Z, drag);
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_XY) transform.enableMode(this.mode.ordinal(), Axis.X, Axis.Y, drag);
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_ZY) transform.enableMode(this.mode.ordinal(), Axis.Z, Axis.Y, drag);
-                else if (this.mode == Mode.ROTATE && this.index == STENCIL_XYZ) transform.enableTrackball(drag);
+                else if (this.mode == Mode.ROTATE && BBSSettings.rotate3dSphere.get() && this.index == STENCIL_XYZ) transform.enableTrackball(drag);
             }
 
             return true;
@@ -383,10 +383,13 @@ public class Gizmo
         {
             this.updateVbos();
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            this.drawCachedSphere(stack, this.rotateSphereVbo, 1F, 1F, 1F, 0.15F);
-            RenderSystem.disableBlend();
+            if (BBSSettings.rotate3dSphere.get())
+            {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                this.drawCachedSphere(stack, this.rotateSphereVbo, 1F, 1F, 1F, 0.15F);
+                RenderSystem.disableBlend();
+            }
 
             RenderSystem.depthFunc(GL11.GL_ALWAYS);
             this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
@@ -463,7 +466,10 @@ public class Gizmo
         {
             this.updateVbos();
 
-            this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
+            if (BBSSettings.rotate3dSphere.get())
+            {
+                this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
+            }
 
             this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
             this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);

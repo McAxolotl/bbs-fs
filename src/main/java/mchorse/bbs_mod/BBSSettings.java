@@ -38,6 +38,7 @@ public class BBSSettings {
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
 	public static ValueBoolean axesKeepScreenSize;
+	public static ValueBoolean rotate3dSphere;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -206,6 +207,7 @@ public class BBSSettings {
 		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
 		axesThickness = builder.getFloat("axes_thickness", 1F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", false);
+		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
 		gizmos = builder.getBoolean("gizmos", true);

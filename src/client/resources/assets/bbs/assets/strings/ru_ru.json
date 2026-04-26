@@ -17,6 +17,8 @@
 	"bbs.config.appearance.morphing_focus_search-comment": "Если включено, при открытии меню морфинга курсор сразу в поле поиска форм",
 	"bbs.config.appearance.gizmos": "Гизмо",
 	"bbs.config.appearance.gizmos-comment": "Определяет если хватабельные оси для перемещния, масштабирования и вращения включены",
+	"bbs.config.appearance.rotate_3d_sphere": "3D сфера вращения",
+	"bbs.config.appearance.rotate_3d_sphere-comment": "Если включено, в режиме вращения появляется внутренняя 3D-сфера для свободного вращения, а клавиша R сначала запускает именно её",
 	"bbs.config.appearance.transform_local_default": "Локальная трансформация по умолчанию",
 	"bbs.config.appearance.transform_local_default-comment": "Если включено, поля трансформации (поза, модель и т.д.) открываются в локальном пространстве, а не в глобальном. Переключение по Q по-прежнему доступно.",
 	"bbs.config.appearance.hsv_color_picker": "HSV пипетка",

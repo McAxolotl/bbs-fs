@@ -17,6 +17,8 @@
 	"bbs.config.appearance.morphing_focus_search-comment": "When enabled, the form search field is focused automatically when you open the morphing menu",
 	"bbs.config.appearance.gizmos": "Gizmos",
 	"bbs.config.appearance.gizmos-comment": "Whether grab-able axes elements for translation, scale and rotation are enabled",
+	"bbs.config.appearance.rotate_3d_sphere": "3D rotate sphere",
+	"bbs.config.appearance.rotate_3d_sphere-comment": "When enabled, rotate mode shows the inner free-rotation 3D sphere, and the R hotkey starts with it first",
 	"bbs.config.appearance.transform_local_default": "Local transformation by default",
 	"bbs.config.appearance.transform_local_default-comment": "When enabled, transform fields (pose, model, etc.) start in local space instead of global. You can still toggle with Q.",
 	"bbs.config.appearance.hsv_color_picker": "HSV picker",
