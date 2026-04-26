@@ -45,6 +45,7 @@ import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -53,6 +54,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -836,12 +838,9 @@ public class UIReplaysEditor extends UIElement {
                     this.filmPanel.showPanel(this);
                 }
 
-                if (Gizmo.INSTANCE.start(
-                        stencil.getIndex(),
-                        context.mouseX,
-                        context.mouseY,
-                        UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)
-                )) {
+                float gizmoTransition = this.filmPanel.isRunning() ? context.getTransition() : 0F;
+
+                if (UIReplaysEditorUtils.startFilmGizmo(this.filmPanel, context, stencil.getIndex(), gizmoTransition)) {
                     return true;
                 }
 
@@ -1010,6 +1009,8 @@ public class UIReplaysEditor extends UIElement {
             && BBSSettings.editorReplayTabs.get()
                 && (this.keyframeEditor == null || !this.keyframeEditor.view.isEditing())
         );
+
+        UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);
 
         super.render(context);
     }

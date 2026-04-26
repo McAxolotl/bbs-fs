@@ -60,6 +60,19 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         return this.getOrigin(transition, FormUtils.getPath(this.form), this.generalPanel != null && this.generalPanel.transform.isLocal());
     }
 
+    /**
+     * Always returns the bone's full local matrix (including its own rotation),
+     * irrespective of the LOCAL/GLOBAL UI toggle. Required for sampling-based
+     * gizmo helpers that need the rotation to be visible in the matrix &mdash;
+     * the rotation-stripped &quot;origin&quot; variant doesn't move when
+     * {@code transform.rotate} is perturbed, so axis extraction would silently
+     * fall back to identity.
+     */
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        return this.getOrigin(transition, FormUtils.getPath(this.form), true);
+    }
+
     protected Matrix4f getOrigin(float transition, String path, boolean local)
     {
         Form root = FormUtils.getRoot(this.form);
@@ -77,6 +90,7 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
         this.generalPanel = panel;
         this.general = panel.transform;
+        this.general.hotkeyDrag(() -> this.editor == null ? null : this.editor.buildHotkeyDrag(this.general));
     }
 
     public void setEditor(UIFormEditor editor)

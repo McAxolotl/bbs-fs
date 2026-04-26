@@ -46,11 +46,13 @@ import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -65,6 +67,7 @@ import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.HashMap;
 import java.util.List;
@@ -355,7 +358,10 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
             if (pair != null)
             {
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, this.editor.getEditableTransform()))
+                UIPropTransform transform = this.editor.getEditableTransform();
+                GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
+
+                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, transform, drag))
                 {
                     return true;
                 }
@@ -367,6 +373,52 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
 
         return false;
+    }
+
+    private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)
+    {
+        if (transform == null || transform.getTransform() == null)
+        {
+            return null;
+        }
+
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.renderer.camera, this.renderer.area);
+
+        if (drag != null)
+        {
+            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+                transform.getTransform(),
+                () ->
+                {
+                    Matrix4f origin = this.getOrigin(transition);
+
+                    return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                }
+            ));
+            drag.setRotateAxes(GizmoDrag.computeRotateAxes(
+                transform.getTransform(),
+                () ->
+                {
+                    /* Always sample the rotation-bearing matrix &mdash; the
+                     * UI's GLOBAL toggle would otherwise hand us an origin
+                     * matrix without rotation, in which the perturbation we
+                     * apply leaves no trace and axis extraction silently
+                     * collapses to identity. */
+                    Matrix4f origin = this.getOriginMatrix(transition);
+
+                    return origin == null ? new Matrix4f() : origin;
+                }
+            ));
+        }
+
+        return drag;
+    }
+
+    public GizmoDrag buildHotkeyDrag(UIPropTransform transform)
+    {
+        UIContext context = this.getContext();
+
+        return this.buildGizmoDrag(transform, context == null ? 0F : context.getTransition());
     }
 
     public void pickFormFromRenderer(Pair<Form, String> pair)
@@ -812,6 +864,22 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
 
         return this.editor.getOrigin(transition);
+    }
+
+    /**
+     * Same as {@link #getOrigin(float)} but always returns the rotation-bearing
+     * matrix regardless of LOCAL/GLOBAL UI state. Used by sampling helpers in
+     * {@link GizmoDrag} that derive rotation axes from finite differences of
+     * the bone's linear transform.
+     */
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        if (this.statesEditor.isVisible())
+        {
+            return this.statesKeyframes.getOriginMatrix(transition);
+        }
+
+        return this.editor.getOriginMatrix(transition);
     }
 
     @Override

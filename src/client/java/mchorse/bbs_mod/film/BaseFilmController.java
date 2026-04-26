@@ -19,6 +19,7 @@ import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -348,6 +349,85 @@ public abstract class BaseFilmController
         matrix.rotateY(MathUtils.toRad(-bodyYaw));
 
         return matrix;
+    }
+
+    /**
+     * Bone transform as composed for the film viewport: the same {@code target}
+     * that {@link #renderEntity} multiplies onto the stack before the bone
+     * matrix from {@link FormUtilsClient#getRenderer(Form)#collectMatrices},
+     * i.e. {@code target.mul(bone)}. This includes replay position, whole-entity
+     * {@code bodyYaw} from {@link #getMatrixForRenderWithRotation}, anchor
+     * chains, etc. — everything that is <em>outside</em> the form's internal
+     * {@code collectMatrices} tree but affects where the gizmo is drawn.
+     *
+     * @param cameraX camera position X (same convention as {@link #renderEntity})
+     * @param cameraY camera position Y
+     * @param cameraZ camera position Z
+     * @param bonePath path key matching {@link #renderAxes} (see pose.bones. stripping)
+     * @param useBoneMatrix if {@code true}, use the rotation-bearing bone matrix;
+     *                      if {@code false}, use the origin-only matrix (matches
+     *                      GLOBAL gizmo mode in {@link #renderAxes})
+     */
+    public static Matrix4f getGizmoBoneCompositeMatrix(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath,
+        boolean useBoneMatrix
+    )
+    {
+        if (entity == null || entity.getForm() == null || bonePath == null)
+        {
+            return null;
+        }
+
+        Form form = entity.getForm();
+        boolean relative = replay != null && replay.relative.get();
+
+        double cx = cameraX;
+        double cy = cameraY;
+        double cz = cameraZ;
+
+        if (relative && replay != null)
+        {
+            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
+            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
+            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+        }
+
+        Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
+        Matrix4f target;
+
+        if (!relative)
+        {
+            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition, 0);
+
+            target = pair.a != null ? pair.a : defaultMatrix;
+        }
+        else
+        {
+            target = defaultMatrix;
+        }
+
+        String mapKey = bonePath.contains(PerLimbService.POSE_BONES)
+            ? bonePath.replace(PerLimbService.POSE_BONES, "")
+            : bonePath;
+
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        MatrixCacheEntry entry = map.get(mapKey);
+        Matrix4f bone = useBoneMatrix ? entry.matrix() : entry.origin();
+
+        if (bone == null)
+        {
+            return null;
+        }
+
+        return new Matrix4f(target).mul(bone);
     }
 
     private static void renderNameTag(IEntity entity, Text text, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)

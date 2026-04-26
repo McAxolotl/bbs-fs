@@ -64,6 +64,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -574,10 +575,9 @@ public class UIFilmController extends UIElement
 
         if (this.stencil.hasPicked())
         {
-            int index = this.stencil.getIndex();
-            UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.panel.replayEditor.keyframeEditor);
+            float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
 
-            if (Gizmo.INSTANCE.start(index, context.mouseX, context.mouseY, transform))
+            if (UIReplaysEditorUtils.startFilmGizmo(this.panel, context, this.stencil.getIndex(), gizmoTransition))
             {
                 this.gizmoActive = true;
                 return true;

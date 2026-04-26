@@ -194,13 +194,19 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
     }
 
-    public static class UIPoseTransforms extends UIPropTransform
+    public static class UIPoseTransforms extends UIKeyframePropTransform
     {
         private UIPoseFactoryEditor editor;
 
         public void setKeyframe(UIPoseFactoryEditor editor)
         {
             this.editor = editor;
+        }
+
+        @Override
+        protected void applyTransform(Consumer<Transform> consumer)
+        {
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> consumer.accept(poseT));
         }
 
         @Override
@@ -214,98 +220,6 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 poseT.rotate2.set(0F, 0F, 0F);
             });
             this.refillTransform();
-        }
-
-        @Override
-        public void pasteTranslation(Vector3d translation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.translate.set(translation));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteScale(Vector3d scale)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.scale.set(scale));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteRotation(Vector3d rotation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteRotation2(Vector3d rotation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
-            this.refillTransform();
-        }
-
-        @Override
-        public void setT(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = (float) (x - transform.translate.x);
-            float dy = (float) (y - transform.translate.y);
-            float dz = (float) (z - transform.translate.z);
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
-            {
-                poseT.translate.x += dx;
-                poseT.translate.y += dy;
-                poseT.translate.z += dz;
-            });
-        }
-
-        @Override
-        public void setS(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = (float) (x - transform.scale.x);
-            float dy = (float) (y - transform.scale.y);
-            float dz = (float) (z - transform.scale.z);
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
-            {
-                poseT.scale.x += dx;
-                poseT.scale.y += dy;
-                poseT.scale.z += dz;
-            });
-        }
-
-        @Override
-        public void setR(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = MathUtils.toRad((float) x) - transform.rotate.x;
-            float dy = MathUtils.toRad((float) y) - transform.rotate.y;
-            float dz = MathUtils.toRad((float) z) - transform.rotate.z;
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
-            {
-                poseT.rotate.x += dx;
-                poseT.rotate.y += dy;
-                poseT.rotate.z += dz;
-            });
-        }
-
-        @Override
-        public void setR2(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = MathUtils.toRad((float) x) - transform.rotate2.x;
-            float dy = MathUtils.toRad((float) y) - transform.rotate2.y;
-            float dz = MathUtils.toRad((float) z) - transform.rotate2.z;
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
-            {
-                poseT.rotate2.x += dx;
-                poseT.rotate2.y += dy;
-                poseT.rotate2.z += dz;
-            });
         }
     }
 }

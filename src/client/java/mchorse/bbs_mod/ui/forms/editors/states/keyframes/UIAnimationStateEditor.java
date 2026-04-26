@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPane
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -28,6 +29,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDo
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -39,6 +41,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import org.joml.Matrix4f;
 import org.joml.Vector2i;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -293,7 +296,10 @@ public class UIAnimationStateEditor extends UIElement
 
             if (pair != null && context.mouseButton < 2)
             {
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)))
+                UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
+                GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
+
+                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, transform, drag))
                 {
                     return true;
                 }
@@ -338,7 +344,60 @@ public class UIAnimationStateEditor extends UIElement
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, false);
     }
 
+    private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)
+    {
+        if (transform == null || transform.getTransform() == null)
+        {
+            return null;
+        }
+
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.editor.renderer.camera, this.editor.renderer.area);
+
+        if (drag != null)
+        {
+            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+                transform.getTransform(),
+                () ->
+                {
+                    Matrix4f origin = this.getOrigin(transition);
+
+                    return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                }
+            ));
+            drag.setRotateAxes(GizmoDrag.computeRotateAxes(
+                transform.getTransform(),
+                () ->
+                {
+                    /* Always sample the rotation-bearing matrix; the GLOBAL
+                     * keyframe variant would otherwise return an origin
+                     * matrix without rotation and the axis sampling would
+                     * collapse to identity. */
+                    Matrix4f origin = this.getOriginMatrix(transition);
+
+                    return origin == null ? new Matrix4f() : origin;
+                }
+            ));
+        }
+
+        return drag;
+    }
+
     public Matrix4f getOrigin(float transition)
+    {
+        return this.getOriginInternal(transition, false);
+    }
+
+    /**
+     * Same as {@link #getOrigin(float)} but always returns the rotation-bearing
+     * matrix regardless of the keyframe's GLOBAL flag. Required for the
+     * sampling-based rotation-axis helper in {@link GizmoDrag}.
+     */
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        return this.getOriginInternal(transition, true);
+    }
+
+    private Matrix4f getOriginInternal(float transition, boolean forceMatrix)
     {
         if (this.keyframeEditor == null)
         {
@@ -354,7 +413,7 @@ public class UIAnimationStateEditor extends UIElement
 
         Form root = FormUtils.getRoot(this.editor.form);
         MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(this.editor.renderer.getTargetEntity(), transition);
-        Matrix4f matrix = bone.b ? map.get(bone.a).origin() : map.get(bone.a).matrix();
+        Matrix4f matrix = (!forceMatrix && bone.b) ? map.get(bone.a).origin() : map.get(bone.a).matrix();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
     }
@@ -364,6 +423,18 @@ public class UIAnimationStateEditor extends UIElement
     {
         if (this.keyframeEditor != null)
         {
+            UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
+
+            if (transform != null)
+            {
+                transform.hotkeyDrag(() ->
+                {
+                    UIContext current = this.getContext();
+
+                    return this.buildGizmoDrag(transform, current == null ? 0F : current.getTransition());
+                });
+            }
+
             this.editArea.area.render(context.batcher, Colors.A75);
         }
 

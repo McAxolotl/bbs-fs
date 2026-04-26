@@ -1,6 +1,11 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
@@ -28,6 +33,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTra
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -38,6 +44,8 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -245,6 +253,123 @@ public class UIReplaysEditorUtils
         }
 
         return null;
+    }
+
+    public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
+    {
+        UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
+        GizmoDrag drag = buildFilmGizmoDrag(
+            panel,
+            panel.getCamera(),
+            panel.preview.getViewport(),
+            transform,
+            gizmoTransition
+        );
+
+        return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
+    }
+
+    public static void configureFilmHotkeyDrag(UIFilmPanel panel, UIContext context)
+    {
+        UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
+
+        if (transform == null)
+        {
+            return;
+        }
+
+        transform.hotkeyDrag(() -> buildFilmGizmoDrag(
+            panel,
+            panel.getCamera(),
+            panel.preview.getViewport(),
+            transform,
+            panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition()
+        ));
+    }
+
+    /**
+     * Ray gizmo context for the film / replay viewport: same camera-origin and
+     * axes as {@link GizmoDrag#fromRenderedGizmo}, plus numeric
+     * {@link GizmoDrag#computeRotateAxes} / {@link GizmoDrag#computeTranslateJacobian}
+     * driven by the composite bone matrix {@code target.mul(bone)} so replay
+     * {@code bodyYaw}, anchor parents, and other film-only transforms match
+     * {@link BaseFilmController#renderEntity}.
+     */
+    public static GizmoDrag buildFilmGizmoDrag(
+        UIFilmPanel panel,
+        mchorse.bbs_mod.camera.Camera camera,
+        Area viewport,
+        UIPropTransform transform,
+        float transition
+    )
+    {
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(camera, viewport);
+
+        if (drag == null || transform == null || transform.getTransform() == null || panel == null)
+        {
+            return drag;
+        }
+
+        UIKeyframeEditor keyframeEditor = panel.replayEditor.keyframeEditor;
+
+        if (keyframeEditor == null)
+        {
+            return drag;
+        }
+
+        Pair<String, Boolean> bone = keyframeEditor.getBone();
+        Replay replay = panel.replayEditor.getReplay();
+        IEntity entity = panel.getController().getCurrentEntity();
+
+        if (bone == null || bone.a == null || replay == null || entity == null)
+        {
+            return drag;
+        }
+
+        java.util.function.Supplier<Matrix4f> matrixSampler = () ->
+        {
+            Form form = entity.getForm();
+            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+
+            if (form != null)
+            {
+                /* Force-apply the perturbed keyframe state to the entity's form 
+                 * so that FormUtilsClient's matrix cache updates for this sample. */
+                replay.properties.applyProperties(form, tick);
+                form.update(entity);
+            }
+
+            Matrix4f m = BaseFilmController.getGizmoBoneCompositeMatrix(
+                panel.getController().getEntities(),
+                entity,
+                replay,
+                camera.position.x,
+                camera.position.y,
+                camera.position.z,
+                transition,
+                bone.a,
+                true
+            );
+
+            return m == null ? new Matrix4f() : m;
+        };
+
+        drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+            transform.getTransform(),
+            () -> matrixSampler.get().getTranslation(new Vector3f())
+        ));
+
+        /* Restore the form to its unperturbed state */
+        Form form = entity.getForm();
+        if (form != null)
+        {
+            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+            replay.properties.applyProperties(form, tick);
+            form.update(entity);
+        }
+
+        return drag;
     }
 
     /* Picking form and form properties */

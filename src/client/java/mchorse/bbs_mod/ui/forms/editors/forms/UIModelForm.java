@@ -22,6 +22,7 @@ public class UIModelForm extends UIForm<ModelForm>
     public UIModelForm()
     {
         this.modelPanel = new UIModelFormPanel(this);
+        this.modelPanel.poseEditor.transform.hotkeyDrag(() -> this.editor == null ? null : this.editor.buildHotkeyDrag(this.modelPanel.poseEditor.transform));
         this.defaultPanel = this.modelPanel;
 
         this.registerPanel(this.defaultPanel, UIKeys.FORMS_EDITORS_MODEL_POSE, Icons.POSE);
@@ -51,9 +52,17 @@ public class UIModelForm extends UIForm<ModelForm>
     @Override
     public Matrix4f getOrigin(float transition)
     {
-        String path = FormUtils.getPath(this.form);
-        UIPoseEditor poseEditor = this.modelPanel.poseEditor;
+        return this.getOrigin(transition, this.bonePath(), this.modelPanel.poseEditor.transform.isLocal());
+    }
 
-        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.getCurrentFirst()), poseEditor.transform.isLocal());
+    @Override
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        return this.getOrigin(transition, this.bonePath(), true);
+    }
+
+    private String bonePath()
+    {
+        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.modelPanel.poseEditor.groups.getCurrentFirst());
     }
 }

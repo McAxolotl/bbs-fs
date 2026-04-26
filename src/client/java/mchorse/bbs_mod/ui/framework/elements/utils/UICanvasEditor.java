@@ -78,7 +78,7 @@ public abstract class UICanvasEditor extends UICanvas
             return;
         }
 
-        context.batcher.clip(area, context);
+        context.batcher.clip(this.area, context);
 
         int ox = (this.area.x - area.x) % 16;
         int oy = (this.area.y - area.y) % 16;
