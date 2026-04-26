@@ -61,8 +61,8 @@ import java.util.function.Consumer;
  */
 public class UITexturePainter extends UIElement
 {
-    private static List<Document> documents = new ArrayList<>();
-    private static int currentIndex = -1;
+    private List<Document> documents = new ArrayList<>();
+    private int currentIndex = -1;
 
     /** Persisted fractional width of the tool options column, keyed by panel class. */
     private static final Map<Class, Float> widths = new HashMap<>();
