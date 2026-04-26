@@ -794,7 +794,16 @@ public class UIPropTransform extends UITransform
      */
     private float getTrackballRadius()
     {
-        return 0.22F * BBSSettings.axesScale.get();
+        float radius = 0.22F * BBSSettings.axesScale.get();
+
+        if (this.drag != null)
+        {
+            Vector3d delta = new Vector3d(this.drag.cameraOrigin).sub(this.drag.gizmoOrigin);
+
+            radius *= BBSSettings.getAxesDistanceScale((float) delta.length());
+        }
+
+        return radius;
     }
 
     private void beginRayRotateTrackball(int mouseX, int mouseY)

@@ -218,14 +218,30 @@ public class Gizmo
 
         if (BBSSettings.gizmos.get())
         {
+            float distanceScale = this.getAxesDistanceScale(stack);
+
+            stack.push();
+            stack.scale(distanceScale, distanceScale, distanceScale);
             this.drawAxes(stack, 0.25F, 0.008F);
-            this.drawInfiniteLine(stack);
+            stack.pop();
         }
         else
         {
+            float distanceScale = this.getAxesDistanceScale(stack);
+
+            stack.push();
+            stack.scale(distanceScale, distanceScale, distanceScale);
             Draw.coolerAxes(stack, 0.25F, 0.008F);
-            this.drawInfiniteLine(stack);
+            stack.pop();
         }
+        this.drawInfiniteLine(stack);
+    }
+
+    private float getAxesDistanceScale(MatrixStack stack)
+    {
+        Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+
+        return BBSSettings.getAxesDistanceScale(cameraRelative.length());
     }
 
     private void drawInfiniteLine(MatrixStack stack)
@@ -422,7 +438,12 @@ public class Gizmo
     {
         if (BBSSettings.gizmos.get())
         {
+            float distanceScale = this.getAxesDistanceScale(stack);
+
+            stack.push();
+            stack.scale(distanceScale, distanceScale, distanceScale);
             this.drawAxes(stack, map, 0.25F, 0.015F);
+            stack.pop();
         }
     }
 

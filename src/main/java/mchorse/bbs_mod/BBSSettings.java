@@ -37,6 +37,7 @@ public class BBSSettings {
 	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
+	public static ValueBoolean axesKeepScreenSize;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -144,6 +145,10 @@ public class BBSSettings {
 		return BBSSettings.fov == null ? MathUtils.toRad(50) : MathUtils.toRad(BBSSettings.fov.get());
 	}
 
+	public static float getAxesDistanceScale(float distance) {
+		return axesKeepScreenSize != null && axesKeepScreenSize.get() ? Math.max(distance / 5F, 0.0001F) : 1F;
+	}
+
 	public static boolean isHorizontalClipEditorEffective() {
 		return editorHorizontalClipEditor.get();
 	}
@@ -198,8 +203,9 @@ public class BBSSettings {
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		freezeModels = builder.getBoolean("freeze_models", false);
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
-		axesScale = builder.getFloat("axes_scale", 1F, 0F, 2F);
+		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
 		axesThickness = builder.getFloat("axes_thickness", 1F, 0.25F, 3F);
+		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", false);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
 		gizmos = builder.getBoolean("gizmos", true);

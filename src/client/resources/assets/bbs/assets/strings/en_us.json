@@ -3,6 +3,8 @@
 	"bbs.config.appearance.axes_scale-comment": "Determines the size of axes, if the axes are too big, you can adjust to your liking",
 	"bbs.config.appearance.axes_thickness": "Axis thickness",
 	"bbs.config.appearance.axes_thickness-comment": "Thickness of the axis lines (gizmo and world axes)",
+	"bbs.config.appearance.axes_keep_screen_size": "Fixed axes size",
+	"bbs.config.appearance.axes_keep_screen_size-comment": "When enabled, axes and gizmos keep roughly the same on-screen size as the camera distance changes",
 	"bbs.config.appearance.click_sound": "Click sounds",
 	"bbs.config.appearance.click_sound-comment": "By enabling this option, button clicks will play BBS Studio's custom clicking sound effect",
 	"bbs.config.appearance.force_qwerty": "Force QWERTY",
