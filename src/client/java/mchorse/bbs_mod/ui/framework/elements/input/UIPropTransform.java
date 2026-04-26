@@ -349,7 +349,7 @@ public class UIPropTransform extends UITransform
         this.cache.copy(this.transform);
         Gizmo.INSTANCE.trackTransform(this);
 
-        if (this.drag != null)
+        if (this.useRayDrag())
         {
             this.beginRayDrag(context.mouseX, context.mouseY);
         }
@@ -365,10 +365,36 @@ public class UIPropTransform extends UITransform
         return this.hotkeyDragSupplier == null ? null : this.hotkeyDragSupplier.get();
     }
 
+    private boolean useRayDrag()
+    {
+        return this.drag != null && (this.mode != 2 || this.axis2 == null);
+    }
+
     private void setEditingAxis(Axis axis)
     {
-        this.axis = axis;
-        this.axis2 = null;
+        if (Window.isShiftPressed())
+        {
+            switch (axis)
+            {
+                case X:
+                    this.axis = Axis.Y;
+                    this.axis2 = Axis.Z;
+                    break;
+                case Y:
+                    this.axis = Axis.Z;
+                    this.axis2 = Axis.X;
+                    break;
+                case Z:
+                    this.axis = Axis.X;
+                    this.axis2 = Axis.Y;
+                    break;
+            }
+        }
+        else
+        {
+            this.axis = axis;
+            this.axis2 = null;
+        }
 
         if (!this.editing)
         {
@@ -377,7 +403,7 @@ public class UIPropTransform extends UITransform
 
         this.restore(true);
 
-        if (this.drag != null)
+        if (this.useRayDrag())
         {
             UIContext context = this.getContext();
 
@@ -960,7 +986,7 @@ public class UIPropTransform extends UITransform
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
 
-                if (this.drag != null) this.beginRayDrag(this.lastX, context.mouseY);
+                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (rawX >= w - border)
             {
@@ -969,9 +995,9 @@ public class UIPropTransform extends UITransform
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
 
-                if (this.drag != null) this.beginRayDrag(this.lastX, context.mouseY);
+                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
-            else if (this.drag != null)
+            else if (this.useRayDrag())
             {
                 this.applyRayDrag(context.mouseX, context.mouseY);
             }
