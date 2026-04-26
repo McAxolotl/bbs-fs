@@ -40,6 +40,7 @@ public class UIPropTransform extends UITransform
     private Axis axis = Axis.X;
     private Axis axis2;
     private int lastX;
+    private int lastY;
     private Transform cache = new Transform();
     private Timer checker = new Timer(30);
 
@@ -77,9 +78,12 @@ public class UIPropTransform extends UITransform
     private float dragStartScaleProj;
     /** Unit ring direction (perpendicular to rotation axis) at drag start. */
     private final Vector3f dragStartRingVec = new Vector3f();
+    /** Previous unit vector on the virtual trackball sphere. */
+    private final Vector3f dragTrackballVec = new Vector3f();
     /** Whether {@link #dragStartRotateDeg} should be written back to {@code rotate2} instead of {@code rotate}. */
     private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
+    private boolean trackball;
     private Supplier<GizmoDrag> hotkeyDragSupplier;
 
     private UITransformHandler handler;
@@ -329,8 +333,9 @@ public class UIPropTransform extends UITransform
         {
             Axis[] values = Axis.values();
 
-            this.axis = values[MathUtils.cycler(this.axis.ordinal() + 1, 0, values.length - 1)];
+            this.axis = values[MathUtils.cycler(this.axis != null ? this.axis.ordinal() + 1 : 0, 0, values.length - 1)];
             this.axis2 = null;
+            this.trackball = false;
             this.drag = drag;
 
             this.restore(true);
@@ -339,7 +344,9 @@ public class UIPropTransform extends UITransform
         {
             this.axis = axis == null ? Axis.X : axis;
             this.axis2 = axis2;
+            this.trackball = false;
             this.lastX = context.mouseX;
+            this.lastY = context.mouseY;
             this.drag = drag;
         }
 
@@ -360,6 +367,44 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    public void enableTrackball(GizmoDrag drag)
+    {
+        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.editing = true;
+        this.trackball = true;
+        this.mode = 2; // ROTATE
+        this.axis = null;
+        this.axis2 = null;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        this.beginRayRotateTrackball(context.mouseX, context.mouseY);
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
     private GizmoDrag getHotkeyDrag()
     {
         return this.hotkeyDragSupplier == null ? null : this.hotkeyDragSupplier.get();
@@ -367,7 +412,7 @@ public class UIPropTransform extends UITransform
 
     private boolean useRayDrag()
     {
-        return this.drag != null && (this.mode != 2 || this.axis2 == null);
+        return this.drag != null && (this.mode != 2 || this.axis2 == null || this.trackball);
     }
 
     private void setEditingAxis(Axis axis)
@@ -423,6 +468,12 @@ public class UIPropTransform extends UITransform
     {
         if (!this.dragHasStart || this.transform == null)
         {
+            return;
+        }
+
+        if (this.mode == 2 && this.trackball)
+        {
+            this.applyRayRotateTrackball(mouseX, mouseY);
             return;
         }
 
@@ -633,7 +684,14 @@ public class UIPropTransform extends UITransform
                 this.beginRayScale(mouseX, mouseY);
                 break;
             case 2:
-                this.beginRayRotate(mouseX, mouseY);
+                if (this.trackball)
+                {
+                    this.beginRayRotateTrackball(mouseX, mouseY);
+                }
+                else
+                {
+                    this.beginRayRotate(mouseX, mouseY);
+                }
                 break;
             default:
                 this.dragHasStart = false;
@@ -723,11 +781,73 @@ public class UIPropTransform extends UITransform
     }
 
     /**
-     * Anchor a rotate drag on the plane perpendicular to the picked axis. The
-     * unit vector from the gizmo origin to the start hit becomes the reference
-     * direction; subsequent intersections produce a signed angle around the
-     * axis via {@code atan2}.
+     * Radius of the rendered trackball sphere in gizmo space.
      */
+    private float getTrackballRadius()
+    {
+        return 0.22F * BBSSettings.axesScale.get();
+    }
+
+    private void beginRayRotateTrackball(int mouseX, int mouseY)
+    {
+        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
+
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+
+        this.dragStartRotateDeg.set(
+            MathUtils.toDeg(source.x),
+            MathUtils.toDeg(source.y),
+            MathUtils.toDeg(source.z)
+        );
+
+        this.drag.projectTrackball(mouseX, mouseY, this.getTrackballRadius(), this.dragTrackballVec);
+        this.dragHasStart = true;
+    }
+
+    private void applyRayRotateTrackball(int mouseX, int mouseY)
+    {
+        Vector3f currentVec = new Vector3f();
+        this.drag.projectTrackball(mouseX, mouseY, this.getTrackballRadius(), currentVec);
+
+        float dot = this.dragTrackballVec.dot(currentVec);
+        dot = Math.max(-1F, Math.min(1F, dot));
+
+        Vector3f axisWorld = new Vector3f();
+        this.dragTrackballVec.cross(currentVec, axisWorld);
+
+        float crossLenSq = axisWorld.lengthSquared();
+
+        if (crossLenSq < 1.0E-10F)
+        {
+            return;
+        }
+
+        float angleDeg = MathUtils.toDeg((float) Math.atan2(Math.sqrt(crossLenSq), dot));
+        axisWorld.normalize();
+
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        float rx = MathUtils.toDeg(source.x);
+        float ry = MathUtils.toDeg(source.y);
+        float rz = MathUtils.toDeg(source.z);
+
+        Vector3f localX = this.drag.rotateAxes.getColumn(0, new Vector3f());
+        Vector3f localY = this.drag.rotateAxes.getColumn(1, new Vector3f());
+        Vector3f localZ = this.drag.rotateAxes.getColumn(2, new Vector3f());
+
+        if (localX.lengthSquared() > 0) localX.normalize();
+        if (localY.lengthSquared() > 0) localY.normalize();
+        if (localZ.lengthSquared() > 0) localZ.normalize();
+
+        rx += angleDeg * axisWorld.dot(localX);
+        ry += angleDeg * axisWorld.dot(localY);
+        rz += angleDeg * axisWorld.dot(localZ);
+
+        if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
+        else this.setR(null, rx, ry, rz);
+
+        this.dragTrackballVec.set(currentVec);
+    }
+
     private void beginRayRotate(int mouseX, int mouseY)
     {
         /* Use the renderer's actual rotation axis (filled by the editor via
@@ -1054,6 +1174,7 @@ public class UIPropTransform extends UITransform
             {
                 this.setTransform(this.transform);
                 this.lastX = context.mouseX;
+                this.lastY = context.mouseY;
             }
         }
 

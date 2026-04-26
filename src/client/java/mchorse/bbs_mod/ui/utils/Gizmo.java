@@ -31,6 +31,7 @@ public class Gizmo
     public final static int STENCIL_XZ = 4;
     public final static int STENCIL_XY = 5;
     public final static int STENCIL_ZY = 6;
+    public final static int STENCIL_XYZ = 7;
 
     public final static Gizmo INSTANCE = new Gizmo();
 
@@ -52,6 +53,8 @@ public class Gizmo
     /* VBO caching for rotation rings to save resources */
     private VertexBuffer rotateRingVbo;
     private VertexBuffer rotateStencilRingVbo;
+    private VertexBuffer rotateSphereVbo;
+    private VertexBuffer rotateStencilSphereVbo;
     private float lastScale = -1F;
     private float lastThickness = -1F;
 
@@ -153,7 +156,7 @@ public class Gizmo
             return false;
         }
 
-        if (index >= STENCIL_X && index <= STENCIL_ZY)
+        if (index >= STENCIL_X && index <= STENCIL_XYZ)
         {
             this.index = index;
             this.mouseX = mouseX;
@@ -169,6 +172,7 @@ public class Gizmo
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_XZ) transform.enableMode(this.mode.ordinal(), Axis.X, Axis.Z, drag);
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_XY) transform.enableMode(this.mode.ordinal(), Axis.X, Axis.Y, drag);
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_ZY) transform.enableMode(this.mode.ordinal(), Axis.Z, Axis.Y, drag);
+                else if (this.mode == Mode.ROTATE && this.index == STENCIL_XYZ) transform.enableTrackball(drag);
             }
 
             return true;
@@ -188,7 +192,7 @@ public class Gizmo
         {
             this.currentTransform = null;
 
-            if (this.index < STENCIL_X || this.index > STENCIL_ZY)
+            if (this.index < STENCIL_X || this.index > STENCIL_XYZ)
             {
                 this.index = -1;
             }
@@ -233,7 +237,7 @@ public class Gizmo
             debugIndex = this.currentTransform.getDebugLineStencilIndex();
         }
 
-        if (debugIndex < STENCIL_X || debugIndex > STENCIL_ZY)
+        if (debugIndex < STENCIL_X || debugIndex > STENCIL_ZY || debugIndex == STENCIL_XYZ)
         {
             return;
         }
@@ -276,10 +280,14 @@ public class Gizmo
             {
                 this.rotateRingVbo.close();
                 this.rotateStencilRingVbo.close();
+                this.rotateSphereVbo.close();
+                this.rotateStencilSphereVbo.close();
             }
 
             this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            this.rotateStencilSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
             BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
@@ -298,11 +306,30 @@ public class Gizmo
             this.rotateStencilRingVbo.bind();
             this.rotateStencilRingVbo.upload(builder.end());
 
+            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+            Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
+            this.rotateSphereVbo.bind();
+            this.rotateSphereVbo.upload(builder.end());
+
+            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+            Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
+            this.rotateStencilSphereVbo.bind();
+            this.rotateStencilSphereVbo.upload(builder.end());
+
             VertexBuffer.unbind();
 
             this.lastScale = scale;
             this.lastThickness = thickness;
         }
+    }
+
+    private void drawCachedSphere(MatrixStack stack, VertexBuffer vbo, float r, float g, float b, float a)
+    {
+        RenderSystem.setShaderColor(r, g, b, a);
+        vbo.bind();
+        vbo.draw(stack.peek().getPositionMatrix(), RenderSystem.getProjectionMatrix(), GameRenderer.getPositionColorProgram());
+        VertexBuffer.unbind();
+        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
     }
 
     private void drawCachedRing(MatrixStack stack, VertexBuffer vbo, Axis axis, int color)
@@ -339,6 +366,11 @@ public class Gizmo
         if (this.mode == Mode.ROTATE)
         {
             this.updateVbos();
+
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            this.drawCachedSphere(stack, this.rotateSphereVbo, 1F, 1F, 1F, 0.15F);
+            RenderSystem.disableBlend();
 
             RenderSystem.depthFunc(GL11.GL_ALWAYS);
             this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
@@ -404,14 +436,19 @@ public class Gizmo
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
+        RenderSystem.disableDepthTest();
+
         if (this.mode == Mode.ROTATE)
         {
             this.updateVbos();
 
-            RenderSystem.disableDepthTest();
+            this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
+
             this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
             this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
             this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
+            
+            RenderSystem.enableDepthTest();
             return;
         }
 
@@ -443,9 +480,10 @@ public class Gizmo
             }
 
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.disableDepthTest();
 
         BufferRenderer.drawWithGlobalProgram(builder.end());
+        
+        RenderSystem.enableDepthTest();
     }
 
     public static enum Mode

@@ -126,6 +126,63 @@ public class GizmoDrag
     }
 
     /**
+     * Project the cursor onto the virtual trackball sphere centered on the
+     * gizmo. When the ray misses the sphere, fall back to the closest point on
+     * the sphere's silhouette so the drag stays continuous outside the disc.
+     *
+     * Returns the unit vector from {@link #gizmoOrigin} to that point.
+     */
+    public Vector3f projectTrackball(int mouseX, int mouseY, float radius, Vector3f out)
+    {
+        Vector3f dir = this.rayDirection(mouseX, mouseY, new Vector3f());
+        Vector3f offset = new Vector3f(
+            (float) (this.cameraOrigin.x - this.gizmoOrigin.x),
+            (float) (this.cameraOrigin.y - this.gizmoOrigin.y),
+            (float) (this.cameraOrigin.z - this.gizmoOrigin.z)
+        );
+        float b = offset.dot(dir);
+        float c = offset.lengthSquared() - radius * radius;
+        float discriminant = b * b - c;
+
+        if (discriminant >= 0F)
+        {
+            float sqrt = (float) Math.sqrt(discriminant);
+            float t = -b - sqrt;
+
+            if (t <= 0F)
+            {
+                t = -b + sqrt;
+            }
+
+            if (t > 0F)
+            {
+                out.set(
+                    offset.x + dir.x * t,
+                    offset.y + dir.y * t,
+                    offset.z + dir.z * t
+                );
+
+                return out.normalize();
+            }
+        }
+
+        float tClosest = Math.max(-b, 0F);
+
+        out.set(
+            offset.x + dir.x * tClosest,
+            offset.y + dir.y * tClosest,
+            offset.z + dir.z * tClosest
+        );
+
+        if (out.lengthSquared() < PARALLEL_EPSILON)
+        {
+            out.set(offset);
+        }
+
+        return out.normalize();
+    }
+
+    /**
      * Intersect the ray cast through the given screen position with a plane
      * passing through {@link #gizmoOrigin} and oriented along {@code planeNormal}.
      */

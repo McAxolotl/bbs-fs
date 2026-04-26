@@ -241,4 +241,42 @@ public class Draw
 
         stack.pop();
     }
+
+    public static void sphere(BufferBuilder builder, MatrixStack stack, float radius, int rings, int sectors, float r, float g, float b, float a)
+    {
+        float constR = 1.0F / (float) (rings - 1);
+        float constS = 1.0F / (float) (sectors - 1);
+        
+        Matrix4f mat = stack.peek().getPositionMatrix();
+        
+        for (int i = 0; i < rings - 1; i++)
+        {
+            for (int j = 0; j < sectors - 1; j++)
+            {
+                float y0 = (float) Math.sin(-Math.PI / 2 + Math.PI * i * constR);
+                float x0 = (float) Math.cos(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * i * constR);
+                float z0 = (float) Math.sin(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * i * constR);
+                
+                float y1 = (float) Math.sin(-Math.PI / 2 + Math.PI * (i + 1) * constR);
+                float x1 = (float) Math.cos(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
+                float z1 = (float) Math.sin(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
+                
+                float y2 = (float) Math.sin(-Math.PI / 2 + Math.PI * (i + 1) * constR);
+                float x2 = (float) Math.cos(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
+                float z2 = (float) Math.sin(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
+                
+                float y3 = (float) Math.sin(-Math.PI / 2 + Math.PI * i * constR);
+                float x3 = (float) Math.cos(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * i * constR);
+                float z3 = (float) Math.sin(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * i * constR);
+                
+                builder.vertex(mat, x0 * radius, y0 * radius, z0 * radius).color(r, g, b, a).next();
+                builder.vertex(mat, x1 * radius, y1 * radius, z1 * radius).color(r, g, b, a).next();
+                builder.vertex(mat, x2 * radius, y2 * radius, z2 * radius).color(r, g, b, a).next();
+                
+                builder.vertex(mat, x0 * radius, y0 * radius, z0 * radius).color(r, g, b, a).next();
+                builder.vertex(mat, x2 * radius, y2 * radius, z2 * radius).color(r, g, b, a).next();
+                builder.vertex(mat, x3 * radius, y3 * radius, z3 * radius).color(r, g, b, a).next();
+            }
+        }
+    }
 }
