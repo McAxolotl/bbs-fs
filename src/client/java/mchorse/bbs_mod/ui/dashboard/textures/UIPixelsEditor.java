@@ -54,6 +54,7 @@ public class UIPixelsEditor extends UICanvasEditor
     private Supplier<TexturePaintTool> toolSupplier = () -> TexturePaintTool.BRUSH;
     private Supplier<TextureStrokeShape> strokeShapeSupplier = () -> TextureStrokeShape.SQUARE;
     private Supplier<Boolean> strokeBuildUpSupplier = () -> false;
+    private Supplier<Float> eraserOpacitySupplier = () -> 1.0F;
 
     public UIPixelsEditor()
     {
@@ -139,6 +140,13 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public UIPixelsEditor eraserOpacitySupplier(Supplier<Float> supplier)
+    {
+        this.eraserOpacitySupplier = supplier != null ? supplier : () -> 1.0F;
+
+        return this;
+    }
+
     protected TexturePaintTool getActivePaintTool()
     {
         TexturePaintTool tool = this.toolSupplier.get();
@@ -199,7 +207,36 @@ public class UIPixelsEditor extends UICanvasEditor
 
         Color color = this.drawColor;
 
-        if (this.blendStroke)
+        if (this.isStrokePaintTool() && this.getActivePaintTool() == TexturePaintTool.ERASER)
+        {
+            float opacity = this.eraserOpacitySupplier.get();
+            
+            if (opacity < 1.0F)
+            {
+                Color destination;
+
+                if (this.isStrokeBuildUpEnabled())
+                {
+                    destination = this.pixels.getColor(x, y);
+                }
+                else
+                {
+                    destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+
+                    if (destination == null)
+                    {
+                        destination = this.pixels.getColor(x, y);
+                    }
+                }
+
+                if (destination != null)
+                {
+                    color = destination.copy();
+                    color.a = color.a * (1.0F - opacity);
+                }
+            }
+        }
+        else if (this.blendStroke)
         {
             Color destination;
 
