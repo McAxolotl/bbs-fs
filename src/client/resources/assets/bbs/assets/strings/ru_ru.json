@@ -1241,6 +1241,7 @@
 	"bbs.ui.textures.tools.selection": "Выделение",
 	"bbs.ui.textures.tools.pipette_hint": "Удерживайте Alt для временного выбора цвета; отпустите Alt, чтобы вернуться к прежнему инструменту",
 	"bbs.ui.textures.brush_size": "Размер кисти",
+	"bbs.ui.textures.brush_softness": "Мягкость кисти",
 	"bbs.ui.textures.brush_shape": "Форма кисти",
 	"bbs.ui.textures.brush_shape.square": "Квадратная кисть",
 	"bbs.ui.textures.brush_shape.circle": "Круглая кисть",

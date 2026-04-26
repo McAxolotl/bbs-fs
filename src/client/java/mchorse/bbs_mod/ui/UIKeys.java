@@ -997,6 +997,7 @@ public class UIKeys
     public static final IKey TEXTURES_TOOLS_SELECTION = L10n.lang("bbs.ui.textures.tools.selection");
     public static final IKey TEXTURES_TOOLS_PIPETTE_HINT = L10n.lang("bbs.ui.textures.tools.pipette_hint");
     public static final IKey TEXTURES_BRUSH_SIZE = L10n.lang("bbs.ui.textures.brush_size");
+    public static final IKey TEXTURES_BRUSH_SOFTNESS = L10n.lang("bbs.ui.textures.brush_softness");
     public static final IKey TEXTURES_BRUSH_SHAPE = L10n.lang("bbs.ui.textures.brush_shape");
     public static final IKey TEXTURES_BRUSH_SHAPE_SQUARE = L10n.lang("bbs.ui.textures.brush_shape.square");
     public static final IKey TEXTURES_BRUSH_SHAPE_CIRCLE = L10n.lang("bbs.ui.textures.brush_shape.circle");

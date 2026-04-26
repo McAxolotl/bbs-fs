@@ -25,14 +25,18 @@ import org.joml.Vector2i;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class UIPixelsEditor extends UICanvasEditor
 {
+    private static final double[] BRUSH_SAMPLE_OFFSETS = {0.25D, 0.75D};
+
     public UIElement toolbar;
 
     private int brushSize = 1;
@@ -44,6 +48,8 @@ public class UIPixelsEditor extends UICanvasEditor
     private Color drawColor;
     private boolean blendStroke;
     private final Color blendedStrokeColor = new Color();
+    private final Color weightedStrokeColor = new Color();
+    private final Map<Integer, Float> strokeStrengths = new HashMap<>();
     private Vector2i lastPixel;
 
     private boolean hasSelection;
@@ -84,6 +90,7 @@ public class UIPixelsEditor extends UICanvasEditor
     private Supplier<TexturePaintTool> toolSupplier = () -> TexturePaintTool.BRUSH;
     private Supplier<TextureStrokeShape> strokeShapeSupplier = () -> TextureStrokeShape.SQUARE;
     private Supplier<Boolean> strokeBuildUpSupplier = () -> false;
+    private Supplier<Float> brushSoftnessSupplier = () -> 0.0F;
     private Supplier<Float> eraserOpacitySupplier = () -> 1.0F;
 
     public UIPixelsEditor()
@@ -199,6 +206,13 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public UIPixelsEditor brushSoftnessSupplier(Supplier<Float> supplier)
+    {
+        this.brushSoftnessSupplier = supplier != null ? supplier : () -> 0.0F;
+
+        return this;
+    }
+
     public UIPixelsEditor eraserOpacitySupplier(Supplier<Float> supplier)
     {
         this.eraserOpacitySupplier = supplier != null ? supplier : () -> 1.0F;
@@ -225,6 +239,11 @@ public class UIPixelsEditor extends UICanvasEditor
         return Boolean.TRUE.equals(this.strokeBuildUpSupplier.get());
     }
 
+    protected float getBrushSoftness()
+    {
+        return MathUtils.clamp(this.brushSoftnessSupplier.get(), 0F, 1F);
+    }
+
     /**
      * Invoked for the flood-fill tool on LMB down. Default does nothing;
      * {@link UITextureEditor} performs {@link UITextureEditor#fillColor}.
@@ -249,15 +268,17 @@ public class UIPixelsEditor extends UICanvasEditor
         {
             for (int dy = -left; dy <= right; dy++)
             {
-                if (shape == TextureStrokeShape.SQUARE || this.isCircleMaskCell(dx, dy, left))
+                float strength = this.getBrushStrength(dx, dy, left, shape);
+
+                if (strength > 0F)
                 {
-                    this.paintPixel(x + dx, y + dy);
+                    this.paintPixel(x + dx, y + dy, strength);
                 }
             }
         }
     }
 
-    private void paintPixel(int x, int y)
+    private void paintPixel(int x, int y, float strength)
     {
         if (x < 0 || y < 0 || x >= this.pixels.width || y >= this.pixels.height)
         {
@@ -269,11 +290,29 @@ public class UIPixelsEditor extends UICanvasEditor
             return;
         }
 
+        if (strength <= 0F)
+        {
+            return;
+        }
+
+        if (!this.isStrokeBuildUpEnabled())
+        {
+            int index = this.pixels.toIndex(x, y);
+            float previousStrength = this.strokeStrengths.getOrDefault(index, 0F);
+
+            if (strength <= previousStrength)
+            {
+                return;
+            }
+
+            this.strokeStrengths.put(index, strength);
+        }
+
         Color color = this.drawColor;
 
         if (this.isStrokePaintTool() && this.getActivePaintTool() == TexturePaintTool.ERASER)
         {
-            float opacity = this.eraserOpacitySupplier.get();
+            float opacity = this.eraserOpacitySupplier.get() * strength;
             
             if (opacity < 1.0F)
             {
@@ -303,6 +342,7 @@ public class UIPixelsEditor extends UICanvasEditor
         else if (this.blendStroke)
         {
             Color destination;
+            Color source = this.getWeightedStrokeColor(this.drawColor, strength);
 
             if (this.isStrokeBuildUpEnabled())
             {
@@ -318,10 +358,18 @@ public class UIPixelsEditor extends UICanvasEditor
                 }
             }
 
-            color = this.blendColorOver(destination, this.drawColor);
+            color = this.blendColorOver(destination, source);
         }
 
         this.pixelsUndo.setColor(this.pixels, x, y, color);
+    }
+
+    private Color getWeightedStrokeColor(Color source, float strength)
+    {
+        this.weightedStrokeColor.copy(source);
+        this.weightedStrokeColor.a *= MathUtils.clamp(strength, 0F, 1F);
+
+        return this.weightedStrokeColor;
     }
 
     private Color blendColorOver(Color destination, Color source)
@@ -353,6 +401,76 @@ public class UIPixelsEditor extends UICanvasEditor
         double y = dy + left - center;
 
         return x * x + y * y <= radius * radius;
+    }
+
+    private float getBrushStrength(int dx, int dy, int left, TextureStrokeShape shape)
+    {
+        int size = this.brushSize;
+        double center = (size - 1) / 2D;
+        double radius = size / 2D;
+        float softness = this.getBrushSoftness();
+
+        if (softness <= 0F)
+        {
+            return shape == TextureStrokeShape.CIRCLE && !this.isCircleMaskCell(dx, dy, left) ? 0F : 1F;
+        }
+
+        if (shape == TextureStrokeShape.CIRCLE)
+        {
+            double strength = 0D;
+
+            for (double sampleY : BRUSH_SAMPLE_OFFSETS)
+            {
+                for (double sampleX : BRUSH_SAMPLE_OFFSETS)
+                {
+                    double x = dx + left - center + sampleX - 0.5D;
+                    double y = dy + left - center + sampleY - 0.5D;
+
+                    strength += this.sampleBrushStrength(x, y, radius, softness, shape);
+                }
+            }
+
+            return (float) (strength / (BRUSH_SAMPLE_OFFSETS.length * BRUSH_SAMPLE_OFFSETS.length));
+        }
+
+        double x = dx + left - center;
+        double y = dy + left - center;
+
+        return (float) this.sampleBrushStrength(x, y, radius, softness, shape);
+    }
+
+    private double sampleBrushStrength(double x, double y, double radius, float softness, TextureStrokeShape shape)
+    {
+        double distance = shape == TextureStrokeShape.CIRCLE
+            ? Math.sqrt(x * x + y * y)
+            : Math.max(Math.abs(x), Math.abs(y));
+
+        if (distance >= radius)
+        {
+            return 0D;
+        }
+
+        double innerRadius = Math.max(0D, radius * (1D - softness));
+
+        if (distance <= innerRadius)
+        {
+            return 1D;
+        }
+
+        double fade = Math.max(radius - innerRadius, 0.0001D);
+        double t = MathUtils.clamp((distance - innerRadius) / fade, 0D, 1D);
+
+        return this.normalizedGaussianFalloff(t);
+    }
+
+    private double normalizedGaussianFalloff(double value)
+    {
+        double t = MathUtils.clamp(value, 0D, 1D);
+        double sigma = 0.42D;
+        double edge = Math.exp(-1D / (2D * sigma * sigma));
+        double current = Math.exp(-(t * t) / (2D * sigma * sigma));
+
+        return MathUtils.clamp((current - edge) / (1D - edge), 0D, 1D);
     }
 
     private void renderStrokePreview(UIContext context, int pixelX, int pixelY)
@@ -808,6 +926,7 @@ public class UIPixelsEditor extends UICanvasEditor
         if (this.isStrokePaintTool())
         {
             this.pixelsUndo = new PixelsUndo();
+            this.strokeStrengths.clear();
             this.blendStroke = tool == TexturePaintTool.BRUSH;
             this.drawColor = tool == TexturePaintTool.ERASER ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
 
@@ -858,6 +977,7 @@ public class UIPixelsEditor extends UICanvasEditor
             this.undoManager.pushUndo(this.pixelsUndo);
 
             this.pixelsUndo = null;
+            this.strokeStrengths.clear();
             this.lastPixel = hoverPixel;
         }
 

@@ -1249,6 +1249,7 @@
 	"bbs.ui.textures.tools.selection": "Selection",
 	"bbs.ui.textures.tools.pipette_hint": "Hold Alt for temporary color pick; release Alt to return to the previous tool",
 	"bbs.ui.textures.brush_size": "Brush size",
+	"bbs.ui.textures.brush_softness": "Brush softness",
 	"bbs.ui.textures.brush_shape": "Brush shape",
 	"bbs.ui.textures.brush_shape.square": "Square brush",
 	"bbs.ui.textures.brush_shape.circle": "Circle brush",

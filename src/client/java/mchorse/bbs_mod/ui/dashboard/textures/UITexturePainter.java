@@ -89,6 +89,7 @@ public class UITexturePainter extends UIElement
 
     public UITrackpad brightness;
     public UITrackpad brushSize;
+    public UITrackpad brushSoftness;
 
     public UIColor primary;
     public UIColor secondary;
@@ -120,6 +121,7 @@ public class UITexturePainter extends UIElement
     private UIIcon toolIconSelection;
 
     private UILabel brushSizeLabel;
+    private UILabel brushSoftnessLabel;
     private UIToggle roundBrushToggle;
     private UIToggle brushBuildUpToggle;
     private UILabel eraserOpacityLabel;
@@ -230,8 +232,11 @@ public class UITexturePainter extends UIElement
 
         this.brushSize = new UITrackpad((v) -> this.setBrushSize(v.intValue()));
         this.brushSize.integer().limit(1, MAX_BRUSH_SIZE, true).setValue(1);
+        this.brushSoftness = new UITrackpad((v) -> {});
+        this.brushSoftness.integer().limit(0, 100, true).setValue(0);
 
         this.brushSizeLabel = UI.label(UIKeys.TEXTURES_BRUSH_SIZE);
+        this.brushSoftnessLabel = UI.label(UIKeys.TEXTURES_BRUSH_SOFTNESS);
         this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE,
             this.activeStrokeShape == TextureStrokeShape.CIRCLE,
             (b) -> this.setRoundBrushEnabled(b.getValue()));
@@ -246,6 +251,7 @@ public class UITexturePainter extends UIElement
         this.options.add(
             UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.colorPickersRow,
             this.brushSizeLabel, this.brushSize,
+            this.brushSoftnessLabel, this.brushSoftness,
             this.roundBrushToggle,
             this.brushBuildUpToggle,
             this.eraserOpacityLabel, this.eraserOpacity);
@@ -398,6 +404,8 @@ public class UITexturePainter extends UIElement
 
         this.brushSizeLabel.setVisible(strokeTool);
         this.brushSize.setVisible(strokeTool);
+        this.brushSoftnessLabel.setVisible(strokeTool);
+        this.brushSoftness.setVisible(strokeTool);
         this.roundBrushToggle.setVisible(strokeTool);
         this.brushBuildUpToggle.setVisible(strokeTool);
         this.eraserOpacityLabel.setVisible(eraserTool);
@@ -470,6 +478,7 @@ public class UITexturePainter extends UIElement
         editor.toolSupplier(this::getActiveTexturePaintTool);
         editor.strokeShapeSupplier(this::getActiveTextureStrokeShape);
         editor.strokeBuildUpSupplier(this::isBrushBuildUpEnabled);
+        editor.brushSoftnessSupplier(() -> (float) this.brushSoftness.getValue() / 100.0F);
         editor.eraserOpacitySupplier(() -> (float) this.eraserOpacity.getValue() / 100.0F);
         editor.setBrushSize((int) this.brushSize.getValue());
         editor.setDocument(link, pixels);
