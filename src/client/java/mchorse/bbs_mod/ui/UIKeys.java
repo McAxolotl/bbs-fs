@@ -982,6 +982,19 @@ public class UIKeys
     public static final IKey TEXTURES_KEYS_BRUSH_INC = L10n.lang("bbs.ui.textures.keys.brush_inc");
     public static final IKey TEXTURES_KEYS_TOOL_BRUSH = L10n.lang("bbs.ui.textures.keys.tool_brush");
     public static final IKey TEXTURES_KEYS_TOOL_ERASER = L10n.lang("bbs.ui.textures.keys.tool_eraser");
+    public static final IKey TEXTURES_LAYERS = L10n.lang("bbs.ui.textures.layers");
+    public static final IKey TEXTURES_LAYERS_ADD = L10n.lang("bbs.ui.textures.layers.add");
+    public static final IKey TEXTURES_LAYERS_DEFAULT_NAME = L10n.lang("bbs.ui.textures.layers.default_name");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_MOVE_UP = L10n.lang("bbs.ui.textures.layers.context.move_up");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_MOVE_DOWN = L10n.lang("bbs.ui.textures.layers.context.move_down");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_DUPE = L10n.lang("bbs.ui.textures.layers.context.dupe");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_REMOVE = L10n.lang("bbs.ui.textures.layers.context.remove");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_RENAME = L10n.lang("bbs.ui.textures.layers.context.rename");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_SELECT = L10n.lang("bbs.ui.textures.layers.context.select");
+    public static final IKey TEXTURES_LAYERS_RENAME_TITLE = L10n.lang("bbs.ui.textures.layers.rename.title");
+    public static final IKey TEXTURES_LAYERS_RENAME_MESSAGE = L10n.lang("bbs.ui.textures.layers.rename.message");
+    public static final IKey TEXTURES_LAYERS_DUPE_SUFFIX = L10n.lang("bbs.ui.textures.layers.dupe_suffix");
+
     public static final IKey TEXTURES_KEYS_TOOL_FILL = L10n.lang("bbs.ui.textures.keys.tool_fill");
     public static final IKey TEXTURES_LINEAR = L10n.lang("bbs.ui.textures.linear");
     public static final IKey TEXTURES_MIPMAP = L10n.lang("bbs.ui.textures.mipmap");

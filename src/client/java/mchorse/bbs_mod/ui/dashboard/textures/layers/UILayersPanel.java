@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.textures.layers;
 
-import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.textures.UITextureEditor;
 import mchorse.bbs_mod.ui.dashboard.textures.UITexturePainter;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -28,11 +28,11 @@ public class UILayersPanel extends UIElement
         this.list.scroll.cancelScrolling();
         this.list.relative(this).y(20).w(1F).h(1F, -UIConstants.CONTROL_HEIGHT - 25);
 
-        UILabel label = UI.label(IKey.raw("Слои")).background();
+        UILabel label = UI.label(UIKeys.TEXTURES_LAYERS).background();
         label.relative(this).w(1F).h(20);
         label.labelAnchor(0.5F, 0.5F);
 
-        this.addLayer = new UIButton(IKey.raw("Добавить"), (b) -> this.addLayer());
+        this.addLayer = new UIButton(UIKeys.TEXTURES_LAYERS_ADD, (b) -> this.addLayer());
         this.addLayer.relative(this).y(1F, -UIConstants.CONTROL_HEIGHT - 5).w(1F).h(UIConstants.CONTROL_HEIGHT);
 
         this.add(label, this.list, this.addLayer);
@@ -49,7 +49,7 @@ public class UILayersPanel extends UIElement
         if (this.currentEditor != null && this.currentEditor.getPixels() != null)
         {
             mchorse.bbs_mod.utils.resources.Pixels newPixels = mchorse.bbs_mod.utils.resources.Pixels.fromSize(this.currentEditor.getPixels().width, this.currentEditor.getPixels().height);
-            TextureLayer layer = new TextureLayer("Слой " + (this.currentEditor.layers.size() + 1), newPixels);
+            TextureLayer layer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format(String.valueOf(this.currentEditor.layers.size() + 1)).get(), newPixels);
             this.currentEditor.layers.add(layer);
             this.currentEditor.activeLayerIndex = this.currentEditor.layers.size() - 1;
             this.currentEditor.setActiveLayer(this.currentEditor.activeLayerIndex);

@@ -955,7 +955,7 @@ public class UIPixelsEditor extends UICanvasEditor
 
         if (pixels != null)
         {
-            TextureLayer layer = new TextureLayer("Слой 1", pixels);
+            TextureLayer layer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format("1").get(), pixels);
             this.layers.add(layer);
             this.activeLayerIndex = 0;
             this.pixels = layer.pixels;

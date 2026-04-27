@@ -59,7 +59,7 @@ public class UILayerElement extends UIElement
 
         if (canMoveUp)
         {
-            menu.action(Icons.MOVE_UP, IKey.raw("Переместить вверх"), () -> {
+            menu.action(Icons.MOVE_UP, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_UP, () -> {
                 TextureLayer current = this.panel.currentEditor.layers.remove(this.index);
                 this.panel.currentEditor.layers.add(this.index + 1, current);
                 if (this.panel.currentEditor.activeLayerIndex == this.index) {
@@ -75,7 +75,7 @@ public class UILayerElement extends UIElement
 
         if (canMoveDown)
         {
-            menu.action(Icons.MOVE_DOWN, IKey.raw("Переместить вниз"), () -> {
+            menu.action(Icons.MOVE_DOWN, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_DOWN, () -> {
                 TextureLayer current = this.panel.currentEditor.layers.remove(this.index);
                 this.panel.currentEditor.layers.add(this.index - 1, current);
                 if (this.panel.currentEditor.activeLayerIndex == this.index) {
@@ -89,17 +89,17 @@ public class UILayerElement extends UIElement
             });
         }
 
-        menu.action(Icons.OUTLINE, IKey.raw("Выделить"), () -> {
+        menu.action(Icons.OUTLINE, UIKeys.TEXTURES_LAYERS_CONTEXT_SELECT, () -> {
             this.panel.currentEditor.setActiveLayer(this.index);
             this.panel.currentEditor.selectLayerBounds();
             this.panel.updateLayers();
             this.panel.currentEditor.dirty();
         });
 
-        menu.action(Icons.EDIT, IKey.raw("Переименовать"), () -> {
+        menu.action(Icons.EDIT, UIKeys.TEXTURES_LAYERS_CONTEXT_RENAME, () -> {
             UIPromptOverlayPanel prompt = new UIPromptOverlayPanel(
-                IKey.raw("Переименовать слой"),
-                IKey.raw("Введите новое имя слоя:"),
+                UIKeys.TEXTURES_LAYERS_RENAME_TITLE,
+                UIKeys.TEXTURES_LAYERS_RENAME_MESSAGE,
                 (str) -> {
                     if (!str.trim().isEmpty()) {
                         this.layer.name = str.trim();
@@ -113,10 +113,10 @@ public class UILayerElement extends UIElement
             UIOverlay.addOverlay(this.getContext(), prompt);
         });
 
-        menu.action(Icons.DUPE, IKey.raw("Дублировать"), () -> {
+        menu.action(Icons.DUPE, UIKeys.TEXTURES_LAYERS_CONTEXT_DUPE, () -> {
             mchorse.bbs_mod.utils.resources.Pixels newPixels = mchorse.bbs_mod.utils.resources.Pixels.fromSize(this.layer.pixels.width, this.layer.pixels.height);
             newPixels.draw(this.layer.pixels, 0, 0, this.layer.pixels.width, this.layer.pixels.height);
-            TextureLayer duplicatedLayer = new TextureLayer(this.layer.name + " (Копия)", newPixels);
+            TextureLayer duplicatedLayer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DUPE_SUFFIX.format(this.layer.name).get(), newPixels);
             
             this.panel.currentEditor.layers.add(this.index + 1, duplicatedLayer);
             this.panel.currentEditor.setActiveLayer(this.index + 1);
@@ -126,7 +126,7 @@ public class UILayerElement extends UIElement
 
         if (canDelete)
         {
-            menu.action(Icons.REMOVE, IKey.raw("Удалить"), Colors.NEGATIVE, () -> {
+            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, Colors.NEGATIVE, () -> {
                 this.panel.currentEditor.layers.remove(this.index);
                 this.layer.delete();
                 if (this.panel.currentEditor.activeLayerIndex >= this.panel.currentEditor.layers.size()) {
