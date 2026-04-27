@@ -966,6 +966,30 @@ public class UIPixelsEditor extends UICanvasEditor
     }
 
     @Override
+    public void setSize(int w, int h)
+    {
+        super.setSize(w, h);
+        
+        for (TextureLayer layer : this.layers)
+        {
+            if (layer.pixels != null && (layer.pixels.width != w || layer.pixels.height != h))
+            {
+                Pixels newPixels = Pixels.fromSize(w, h);
+                newPixels.draw(layer.pixels, 0, 0);
+                layer.pixels.delete();
+                layer.pixels = newPixels;
+                layer.updateTexture();
+            }
+        }
+        
+        if (this.activeLayerIndex >= 0 && this.activeLayerIndex < this.layers.size())
+        {
+            this.pixels = this.layers.get(this.activeLayerIndex).pixels;
+            this.temporary = this.layers.get(this.activeLayerIndex).texture;
+        }
+    }
+
+    @Override
     public boolean subMouseClicked(UIContext context)
     {
         if (this.area.isInside(context) && this.isMouseButtonAllowed(context.mouseButton))
@@ -1129,7 +1153,8 @@ public class UIPixelsEditor extends UICanvasEditor
             {
                 if (layer.visible && layer.texture != null)
                 {
-                    context.batcher.fullTexturedBox(layer.texture, area.x, area.y, area.w, area.h);
+                    int color = Colors.setA(Colors.WHITE, layer.opacity);
+                    context.batcher.texturedBox(layer.texture, color, area.x, area.y, area.w, area.h, 0, 0, layer.texture.width, layer.texture.height, layer.texture.width, layer.texture.height);
                 }
             }
         }
@@ -1203,9 +1228,9 @@ public class UIPixelsEditor extends UICanvasEditor
 
         for (TextureLayer layer : this.layers)
         {
-            if (layer.visible && layer.pixels != null)
+            if (layer.visible && layer.pixels != null && layer.opacity > 0F)
             {
-                output.draw(layer.pixels, 0, 0, this.w, this.h);
+                output.draw(layer.pixels, 0, 0, layer.opacity);
             }
         }
 

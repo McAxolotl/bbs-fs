@@ -1240,6 +1240,8 @@
 	"bbs.ui.textures.layers.context.remove": "Удалить",
 	"bbs.ui.textures.layers.context.rename": "Переименовать",
 	"bbs.ui.textures.layers.context.select": "Выделить",
+	"bbs.ui.textures.layers.add_image": "Добавить слой из изображения",
+	"bbs.ui.textures.layers.opacity": "Непрозрачность",
 	"bbs.ui.textures.layers.rename.title": "Переименовать слой",
 	"bbs.ui.textures.layers.rename.message": "Введите новое имя слоя:",
 	"bbs.ui.textures.layers.dupe_suffix": "%s (Копия)",

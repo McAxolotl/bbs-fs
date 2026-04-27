@@ -1248,6 +1248,8 @@
 	"bbs.ui.textures.layers.context.remove": "Remove",
 	"bbs.ui.textures.layers.context.rename": "Rename",
 	"bbs.ui.textures.layers.context.select": "Select Bounds",
+	"bbs.ui.textures.layers.add_image": "Add Layer from Image",
+	"bbs.ui.textures.layers.opacity": "Opacity",
 	"bbs.ui.textures.layers.rename.title": "Rename Layer",
 	"bbs.ui.textures.layers.rename.message": "Enter new layer name:",
 	"bbs.ui.textures.layers.dupe_suffix": "%s (Copy)",

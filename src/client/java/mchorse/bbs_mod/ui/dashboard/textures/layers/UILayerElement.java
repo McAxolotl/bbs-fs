@@ -115,7 +115,7 @@ public class UILayerElement extends UIElement
 
         menu.action(Icons.DUPE, UIKeys.TEXTURES_LAYERS_CONTEXT_DUPE, () -> {
             mchorse.bbs_mod.utils.resources.Pixels newPixels = mchorse.bbs_mod.utils.resources.Pixels.fromSize(this.layer.pixels.width, this.layer.pixels.height);
-            newPixels.draw(this.layer.pixels, 0, 0, this.layer.pixels.width, this.layer.pixels.height);
+            newPixels.draw(this.layer.pixels, 0, 0);
             TextureLayer duplicatedLayer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DUPE_SUFFIX.format(this.layer.name).get(), newPixels);
             
             this.panel.currentEditor.layers.add(this.index + 1, duplicatedLayer);

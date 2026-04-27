@@ -195,6 +195,11 @@ public class Pixels
 
     public void draw(Pixels pixels, int x, int y)
     {
+        this.draw(pixels, x, y, 1.0F);
+    }
+
+    public void draw(Pixels pixels, int x, int y, float opacity)
+    {
         Color color = new Color();
 
         for (int i = Math.max(x, 0), ic = Math.min(x + pixels.width, this.width); i < ic; i++)
@@ -206,11 +211,16 @@ public class Pixels
 
                 Color target = pixels.getColor(px, py);
                 Color source = this.getColor(i, j);
+                
+                float targetAlpha = target.a * opacity;
 
-                color.a = 1 - (1 - target.a) * (1 - source.a);
-                color.r = target.r * target.a / color.a + source.r * source.a * (1 - target.a) / color.a;
-                color.g = target.g * target.a / color.a + source.g * source.a * (1 - target.a) / color.a;
-                color.b = target.b * target.a / color.a + source.b * source.a * (1 - target.a) / color.a;
+                color.a = 1 - (1 - targetAlpha) * (1 - source.a);
+                if (color.a > 0F)
+                {
+                    color.r = target.r * targetAlpha / color.a + source.r * source.a * (1 - targetAlpha) / color.a;
+                    color.g = target.g * targetAlpha / color.a + source.g * source.a * (1 - targetAlpha) / color.a;
+                    color.b = target.b * targetAlpha / color.a + source.b * source.a * (1 - targetAlpha) / color.a;
+                }
 
                 this.setColor(i, j, color);
             }
@@ -218,6 +228,11 @@ public class Pixels
     }
 
     public void draw(Pixels pixels, int x, int y, int w, int h)
+    {
+        this.draw(pixels, x, y, w, h, 1.0F);
+    }
+
+    public void draw(Pixels pixels, int x, int y, int w, int h, float opacity)
     {
         Color color = new Color();
 
@@ -232,11 +247,16 @@ public class Pixels
 
                 Color target = pixels.getColor(px, py);
                 Color source = this.getColor(i, j);
+                
+                float targetAlpha = target.a * opacity;
 
-                color.a = 1 - (1 - target.a) * (1 - source.a);
-                color.r = target.r * target.a / color.a + source.r * source.a * (1 - target.a) / color.a;
-                color.g = target.g * target.a / color.a + source.g * source.a * (1 - target.a) / color.a;
-                color.b = target.b * target.a / color.a + source.b * source.a * (1 - target.a) / color.a;
+                color.a = 1 - (1 - targetAlpha) * (1 - source.a);
+                if (color.a > 0F)
+                {
+                    color.r = target.r * targetAlpha / color.a + source.r * source.a * (1 - targetAlpha) / color.a;
+                    color.g = target.g * targetAlpha / color.a + source.g * source.a * (1 - targetAlpha) / color.a;
+                    color.b = target.b * targetAlpha / color.a + source.b * source.a * (1 - targetAlpha) / color.a;
+                }
 
                 this.setColor(i, j, color);
             }

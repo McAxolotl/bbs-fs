@@ -10,6 +10,7 @@ public class TextureLayer
     public Pixels pixels;
     public Texture texture;
     public boolean visible = true;
+    public float opacity = 1.0F;
 
     public TextureLayer(String name, Pixels pixels)
     {

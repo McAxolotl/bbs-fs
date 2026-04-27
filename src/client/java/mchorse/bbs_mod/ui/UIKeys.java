@@ -991,6 +991,8 @@ public class UIKeys
     public static final IKey TEXTURES_LAYERS_CONTEXT_REMOVE = L10n.lang("bbs.ui.textures.layers.context.remove");
     public static final IKey TEXTURES_LAYERS_CONTEXT_RENAME = L10n.lang("bbs.ui.textures.layers.context.rename");
     public static final IKey TEXTURES_LAYERS_CONTEXT_SELECT = L10n.lang("bbs.ui.textures.layers.context.select");
+    public static final IKey TEXTURES_LAYERS_ADD_IMAGE = L10n.lang("bbs.ui.textures.layers.add_image");
+    public static final IKey TEXTURES_LAYERS_OPACITY = L10n.lang("bbs.ui.textures.layers.opacity");
     public static final IKey TEXTURES_LAYERS_RENAME_TITLE = L10n.lang("bbs.ui.textures.layers.rename.title");
     public static final IKey TEXTURES_LAYERS_RENAME_MESSAGE = L10n.lang("bbs.ui.textures.layers.rename.message");
     public static final IKey TEXTURES_LAYERS_DUPE_SUFFIX = L10n.lang("bbs.ui.textures.layers.dupe_suffix");

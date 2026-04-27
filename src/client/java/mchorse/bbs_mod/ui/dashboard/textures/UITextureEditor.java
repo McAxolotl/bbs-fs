@@ -54,18 +54,6 @@ public class UITextureEditor extends UIPixelsEditor
             int newW = MathUtils.clamp(size.x, 1, 4096);
             int newH = MathUtils.clamp(size.y, 1, 4096);
 
-            for (mchorse.bbs_mod.ui.dashboard.textures.layers.TextureLayer layer : this.layers)
-            {
-                if (layer.pixels != null)
-                {
-                    Pixels newPixels = Pixels.fromSize(newW, newH);
-                    newPixels.draw(layer.pixels, 0, 0, newW, newH);
-                    layer.pixels.delete();
-                    layer.pixels = newPixels;
-                    layer.updateTexture();
-                }
-            }
-
             this.setSize(newW, newH);
             this.setDirty(true);
             this.setEditing(editing);
