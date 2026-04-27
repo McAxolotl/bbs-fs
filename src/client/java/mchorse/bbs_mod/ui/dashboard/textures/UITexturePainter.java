@@ -61,8 +61,8 @@ import java.util.function.Consumer;
  */
 public class UITexturePainter extends UIElement
 {
-    private static List<Document> documents = new ArrayList<>();
-    private static int currentIndex = -1;
+    private List<Document> documents = new ArrayList<>();
+    private int currentIndex = -1;
 
     /** Persisted fractional width of the tool options column, keyed by panel class. */
     private static final Map<Class, Float> widths = new HashMap<>();
@@ -89,6 +89,7 @@ public class UITexturePainter extends UIElement
 
     public UITrackpad brightness;
     public UITrackpad brushSize;
+    public UITrackpad brushSoftness;
 
     public UIColor primary;
     public UIColor secondary;
@@ -117,11 +118,20 @@ public class UITexturePainter extends UIElement
     private UIIcon toolIconEraser;
     private UIIcon toolIconFill;
     private UIIcon toolIconPipette;
+    private UIIcon toolIconSelection;
+    private UIIcon modelPreviewIcon;
+    
+    private UIElement modelPreviewHost;
+    private UIDraggable modelPreviewDraggable;
+    private UIModelPreviewPanel modelPreviewPanel;
 
     private UILabel brushSizeLabel;
-    private UILabel fillToolHint;
+    private UILabel brushSoftnessLabel;
     private UIToggle roundBrushToggle;
     private UIToggle brushBuildUpToggle;
+    private UIToggle alphaLockToggle;
+    private UILabel eraserOpacityLabel;
+    private UITrackpad eraserOpacity;
 
     private UITextureTabs tabs;
     private UIElement content;
@@ -139,11 +149,12 @@ public class UITexturePainter extends UIElement
 
         this.buildIconBar();
         this.buildOptions();
+        this.buildModelPreviewHost();
         this.buildEditorHost();
 
         this.content.add(new UIRenderable(this::renderPanelBackground),
-            this.iconBar, this.options, this.editorHost, this.optionsDraggable);
-        this.add(this.tabs, this.content, this.brightness);
+            this.iconBar, this.options, this.editorHost, this.modelPreviewHost, this.optionsDraggable, this.modelPreviewDraggable);
+        this.add(this.tabs, this.content, this.brightness, this.alphaLockToggle);
 
         this.syncTabs();
         this.showCurrentEditor();
@@ -176,20 +187,26 @@ public class UITexturePainter extends UIElement
         this.toolIconBrush = this.createToolIcon(Icons.BRUSH, UIKeys.TEXTURES_TOOLS_BRUSH, TexturePaintTool.BRUSH);
         this.toolIconEraser = this.createToolIcon(Icons.ERASER, UIKeys.TEXTURES_TOOLS_ERASER, TexturePaintTool.ERASER);
         this.toolIconFill = this.createToolIcon(Icons.BUCKET, UIKeys.TEXTURES_TOOLS_FILL, TexturePaintTool.FILL);
-        this.toolIconPipette = this.createToolIcon(Icons.PIPETTE,
-            IKey.comp(List.of(UIKeys.TEXTURES_TOOLS_PIPETTE, IKey.constant("\n"), UIKeys.TEXTURES_TOOLS_PIPETTE_HINT)),
-            TexturePaintTool.PIPETTE);
+        this.toolIconPipette = this.createToolIcon(Icons.PIPETTE, UIKeys.TEXTURES_TOOLS_PIPETTE, TexturePaintTool.PIPETTE);
+        this.toolIconSelection = this.createToolIcon(Icons.OUTLINE, UIKeys.TEXTURES_TOOLS_SELECTION, TexturePaintTool.SELECTION);
+        this.modelPreviewIcon = new UIIcon(Icons.POSE, (b) -> this.openModelPreview());
+        this.modelPreviewIcon.tooltip(UIKeys.TEXTURES_PREVIEW_MODEL, Direction.LEFT);
 
         this.iconBar.add(this.saveIcon, this.resizeIcon, this.extractIcon,
             this.toolIconBrush.marginTop(TOOL_SEPARATOR_GAP),
-            this.toolIconEraser, this.toolIconFill, this.toolIconPipette);
+            this.toolIconEraser, this.toolIconFill, this.toolIconPipette,
+            this.toolIconSelection,
+            this.modelPreviewIcon.marginTop(TOOL_SEPARATOR_GAP));
     }
 
     private UIIcon createToolIcon(Icon icon, IKey tooltip, TexturePaintTool tool)
     {
         UIIcon button = new UIIcon(icon, (b) -> this.userSelectTool(tool));
 
-        button.tooltip(tooltip, Direction.LEFT);
+        if (tooltip != null)
+        {
+            button.tooltip(tooltip, Direction.LEFT);
+        }
 
         return button;
     }
@@ -225,9 +242,11 @@ public class UITexturePainter extends UIElement
 
         this.brushSize = new UITrackpad((v) -> this.setBrushSize(v.intValue()));
         this.brushSize.integer().limit(1, MAX_BRUSH_SIZE, true).setValue(1);
+        this.brushSoftness = new UITrackpad((v) -> {});
+        this.brushSoftness.integer().limit(0, 100, true).setValue(0);
 
         this.brushSizeLabel = UI.label(UIKeys.TEXTURES_BRUSH_SIZE);
-        this.fillToolHint = new UILabel(UIKeys.TEXTURES_KEYS_FILL, Colors.LIGHTEST_GRAY);
+        this.brushSoftnessLabel = UI.label(UIKeys.TEXTURES_BRUSH_SOFTNESS);
         this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE,
             this.activeStrokeShape == TextureStrokeShape.CIRCLE,
             (b) -> this.setRoundBrushEnabled(b.getValue()));
@@ -235,12 +254,39 @@ public class UITexturePainter extends UIElement
         this.brushBuildUpToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_BUILD_UP, this.brushBuildUp, (b) -> this.brushBuildUp = b.getValue());
         this.brushBuildUpToggle.h(UIConstants.CONTROL_HEIGHT);
 
+        this.eraserOpacityLabel = UI.label(UIKeys.TEXTURES_ERASER_OPACITY);
+        this.eraserOpacity = new UITrackpad((v) -> {});
+        this.eraserOpacity.limit(0, 100).setValue(100);
+
         this.options.add(
             UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.colorPickersRow,
             this.brushSizeLabel, this.brushSize,
+            this.brushSoftnessLabel, this.brushSoftness,
             this.roundBrushToggle,
             this.brushBuildUpToggle,
-            this.fillToolHint);
+            this.eraserOpacityLabel, this.eraserOpacity);
+    }
+
+    private void buildModelPreviewHost()
+    {
+        this.modelPreviewHost = new UIElement();
+        this.modelPreviewHost.relative(this.content).x(1F, -ICON_BAR_W).h(1F).w(0).anchorX(1F);
+        this.modelPreviewHost.setVisible(false);
+
+        this.modelPreviewPanel = new UIModelPreviewPanel(this);
+        this.modelPreviewPanel.relative(this.modelPreviewHost).w(1F).h(1F);
+
+        this.modelPreviewDraggable = new UIDraggable((context) ->
+        {
+            float f = (this.iconBar.area.x - context.mouseX) / (float) this.content.area.w;
+            float w = MathUtils.clamp(f, 0.1F, 0.8F);
+
+            this.modelPreviewHost.w(w);
+            this.content.resize();
+            this.modelPreviewDraggable.resize();
+        });
+        this.modelPreviewDraggable.relative(this.modelPreviewHost).x(0F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.modelPreviewDraggable.setVisible(false);
     }
 
     private void buildEditorHost()
@@ -253,6 +299,9 @@ public class UITexturePainter extends UIElement
         this.brightness.limit(0, 1).setValue(0.7);
         this.brightness.tooltip(UIKeys.TEXTURES_VIEWER_BRIGHTNESS, Direction.TOP);
         this.brightness.relative(this.editorHost).x(1F, -10).y(1F, -10).w(130).anchor(1F, 1F);
+        
+        this.alphaLockToggle = new UIToggle(UIKeys.TEXTURES_ALPHA_LOCK, false, (b) -> {});
+        this.alphaLockToggle.relative(this.brightness).x(0F).y(-5).w(1F).anchorY(1F);
     }
 
     private void registerShortcuts()
@@ -263,6 +312,7 @@ public class UITexturePainter extends UIElement
         this.keys().register(Keys.PIXEL_TOOL_BRUSH, () -> this.userSelectTool(TexturePaintTool.BRUSH)).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_ERASER, () -> this.userSelectTool(TexturePaintTool.ERASER)).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_FILL, () -> this.userSelectTool(TexturePaintTool.FILL)).inside().category(category);
+        this.keys().register(Keys.PIXEL_TOOL_SELECTION, () -> this.userSelectTool(TexturePaintTool.SELECTION)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_DEC, () -> this.adjustBrushSize(-1)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_INC, () -> this.adjustBrushSize(1)).inside().category(category);
         this.keys().register(Keys.CYCLE_PANELS, this::cycleTabs).inside().category(category);
@@ -295,7 +345,47 @@ public class UITexturePainter extends UIElement
             case ERASER -> this.toolIconEraser;
             case FILL -> this.toolIconFill;
             case PIPETTE -> this.toolIconPipette;
+            case SELECTION -> this.toolIconSelection;
         };
+    }
+
+    public void openModelPreview()
+    {
+        mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel list = new mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel(
+            UIKeys.FORMS_EDITOR_MODEL_MODELS,
+            (model) ->
+            {
+                this.openModelPreview(model);
+            }
+        );
+
+        list.addValues(BBSModClient.getModels().getAvailableKeys());
+        list.list.list.sort();
+        mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay.addOverlay(this.getContext(), list);
+    }
+
+    public void openModelPreview(String model)
+    {
+        this.modelPreviewPanel.setModel(model);
+        this.modelPreviewHost.add(this.modelPreviewPanel);
+        this.modelPreviewHost.w(0.3F);
+        this.modelPreviewHost.setVisible(true);
+        this.modelPreviewDraggable.setVisible(true);
+        
+        this.editorHost.wTo(this.modelPreviewHost.area, 0F, -UIConstants.MARGIN);
+        this.content.resize();
+    }
+
+    public void closeModelPreview()
+    {
+        this.modelPreviewPanel.removeFromParent();
+        this.modelPreviewPanel.cleanUp();
+        this.modelPreviewHost.w(0);
+        this.modelPreviewHost.setVisible(false);
+        this.modelPreviewDraggable.setVisible(false);
+        
+        this.editorHost.wTo(this.iconBar.area, 0F, -UIConstants.MARGIN);
+        this.content.resize();
     }
 
     private void withEditor(Consumer<UITextureEditor> action)
@@ -384,14 +474,16 @@ public class UITexturePainter extends UIElement
     private void refreshToolUi()
     {
         boolean strokeTool = this.activeTool == TexturePaintTool.BRUSH || this.activeTool == TexturePaintTool.ERASER;
-        boolean brushTool = this.activeTool == TexturePaintTool.BRUSH;
-        boolean fillTool = this.activeTool == TexturePaintTool.FILL;
+        boolean eraserTool = this.activeTool == TexturePaintTool.ERASER;
 
         this.brushSizeLabel.setVisible(strokeTool);
         this.brushSize.setVisible(strokeTool);
+        this.brushSoftnessLabel.setVisible(strokeTool);
+        this.brushSoftness.setVisible(strokeTool);
         this.roundBrushToggle.setVisible(strokeTool);
-        this.brushBuildUpToggle.setVisible(brushTool);
-        this.fillToolHint.setVisible(fillTool);
+        this.brushBuildUpToggle.setVisible(strokeTool);
+        this.eraserOpacityLabel.setVisible(eraserTool);
+        this.eraserOpacity.setVisible(eraserTool);
 
         this.options.resize();
     }
@@ -460,6 +552,9 @@ public class UITexturePainter extends UIElement
         editor.toolSupplier(this::getActiveTexturePaintTool);
         editor.strokeShapeSupplier(this::getActiveTextureStrokeShape);
         editor.strokeBuildUpSupplier(this::isBrushBuildUpEnabled);
+        editor.alphaLockSupplier(() -> this.alphaLockToggle.getValue());
+        editor.brushSoftnessSupplier(() -> (float) this.brushSoftness.getValue() / 100.0F);
+        editor.eraserOpacitySupplier(() -> (float) this.eraserOpacity.getValue() / 100.0F);
         editor.setBrushSize((int) this.brushSize.getValue());
         editor.setDocument(link, pixels);
         editor.full(this.editorHost);
@@ -533,7 +628,7 @@ public class UITexturePainter extends UIElement
         this.resize();
     }
 
-    private UITextureEditor getCurrentEditor()
+    public UITextureEditor getCurrentEditor()
     {
         return documents.isEmpty() || currentIndex < 0 || currentIndex >= documents.size()
             ? null

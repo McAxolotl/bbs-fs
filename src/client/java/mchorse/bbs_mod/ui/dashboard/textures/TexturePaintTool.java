@@ -8,5 +8,6 @@ public enum TexturePaintTool
     BRUSH,
     ERASER,
     FILL,
-    PIPETTE
+    PIPETTE,
+    SELECTION
 }

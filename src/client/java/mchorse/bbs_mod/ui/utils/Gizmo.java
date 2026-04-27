@@ -369,6 +369,146 @@ public class Gizmo
         stack.pop();
     }
 
+    private void drawRotatePie(MatrixStack stack, Axis axis)
+    {
+        if (this.currentTransform == null || this.currentTransform.getDrag() == null) return;
+
+        float scale = BBSSettings.axesScale.get();
+        float radius = 0.22F * scale;
+
+        Vector3f initialVec = this.currentTransform.getInitialDragRingVec();
+        
+        Vector3f axisX = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(0, new Vector3f());
+        Vector3f axisY = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(1, new Vector3f());
+        Vector3f axisZ = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(2, new Vector3f());
+        Vector3f dragAxisDir = this.currentTransform.getDrag().rotateAxes.getColumn(axis.ordinal(), new Vector3f());
+
+        float gx = initialVec.dot(axisX);
+        float gy = initialVec.dot(axisY);
+        float gz = initialVec.dot(axisZ);
+
+        float px = 0;
+        float pz = 0;
+        float sweepDir = 1;
+
+        if (axis == Axis.Y)
+        {
+            px = gx;
+            pz = gz;
+            sweepDir = Math.signum(dragAxisDir.dot(new Vector3f(axisY).mul(-1)));
+        }
+        else if (axis == Axis.X)
+        {
+            px = gy;
+            pz = gz;
+            sweepDir = Math.signum(dragAxisDir.dot(axisX));
+        }
+        else if (axis == Axis.Z)
+        {
+            px = gx;
+            pz = -gy;
+            sweepDir = Math.signum(dragAxisDir.dot(new Vector3f(axisZ).mul(-1)));
+        }
+
+        if (sweepDir == 0) sweepDir = 1;
+
+        float startDeg = MathUtils.toDeg((float) Math.atan2(pz, px));
+        float sweepDeg = this.currentTransform.getAccumulatedRotateDeg() * sweepDir;
+
+        if (this.currentTransform.isLocal())
+        {
+            startDeg -= sweepDeg;
+        }
+
+        stack.push();
+        
+        if (axis == Axis.X) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotation(MathUtils.PI / 2F));
+        if (axis == Axis.Z) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotation(MathUtils.PI / 2F));
+
+        int color = axis == Axis.X ? Colors.RED : (axis == Axis.Y ? Colors.GREEN : Colors.BLUE);
+        float r = Colors.getR(color);
+        float g = Colors.getG(color);
+        float b = Colors.getB(color);
+        float a = 0.25F;
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f mat = stack.peek().getPositionMatrix();
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        RenderSystem.disableCull();
+
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        int segments = Math.max(12, (int) (Math.abs(sweepDeg) / 360F * 64F));
+        float step = sweepDeg / segments;
+
+        for (int i = 0; i < segments; i++)
+        {
+            float a1 = MathUtils.toRad(startDeg + step * i);
+            float a2 = MathUtils.toRad(startDeg + step * (i + 1));
+
+            float x1 = (float) Math.cos(a1) * radius;
+            float z1 = (float) Math.sin(a1) * radius;
+            float x2 = (float) Math.cos(a2) * radius;
+            float z2 = (float) Math.sin(a2) * radius;
+
+            builder.vertex(mat, 0, 0, 0).color(r, g, b, a).next();
+            
+            if (sweepDeg > 0)
+            {
+                builder.vertex(mat, x1, 0, z1).color(r, g, b, a).next();
+                builder.vertex(mat, x2, 0, z2).color(r, g, b, a).next();
+            }
+            else
+            {
+                builder.vertex(mat, x2, 0, z2).color(r, g, b, a).next();
+                builder.vertex(mat, x1, 0, z1).color(r, g, b, a).next();
+            }
+        }
+        
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        float lineThickness = 0.005F * scale;
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        
+        float endDeg = startDeg + sweepDeg;
+        
+        float sx = (float) Math.cos(MathUtils.toRad(startDeg)) * radius;
+        float sz = (float) Math.sin(MathUtils.toRad(startDeg)) * radius;
+        float ex = (float) Math.cos(MathUtils.toRad(endDeg)) * radius;
+        float ez = (float) Math.sin(MathUtils.toRad(endDeg)) * radius;
+        
+        Vector3f p1 = new Vector3f(-sz, 0, sx).normalize().mul(lineThickness);
+        
+        builder.vertex(mat, p1.x, 0, p1.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, -p1.x, 0, -p1.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, sx - p1.x, 0, sz - p1.z).color(r, g, b, 1F).next();
+        
+        builder.vertex(mat, p1.x, 0, p1.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, sx - p1.x, 0, sz - p1.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, sx + p1.x, 0, sz + p1.z).color(r, g, b, 1F).next();
+        
+        Vector3f p2 = new Vector3f(-ez, 0, ex).normalize().mul(lineThickness);
+        builder.vertex(mat, p2.x, 0, p2.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, -p2.x, 0, -p2.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex - p2.x, 0, ez - p2.z).color(r, g, b, 1F).next();
+        
+        builder.vertex(mat, p2.x, 0, p2.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex - p2.x, 0, ez - p2.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex + p2.x, 0, ez + p2.z).color(r, g, b, 1F).next();
+
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        RenderSystem.enableCull();
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.disableBlend();
+        
+        stack.pop();
+    }
+
     private void drawAxes(MatrixStack stack, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
@@ -378,12 +518,16 @@ public class Gizmo
         axisOffset *= scale * thickness;
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        boolean building = false;
 
         if (this.mode == Mode.ROTATE)
         {
             this.updateVbos();
 
-            if (BBSSettings.rotate3dSphere.get())
+            boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
+            Axis activeAxis = editing ? this.currentTransform.getAxis() : null;
+
+            if (BBSSettings.rotate3dSphere.get() && (!editing || activeAxis == null))
             {
                 RenderSystem.enableBlend();
                 RenderSystem.defaultBlendFunc();
@@ -392,17 +536,29 @@ public class Gizmo
             }
 
             RenderSystem.depthFunc(GL11.GL_ALWAYS);
-            this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
-            this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
-            this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
+            if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
+            if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+
+            if (editing && activeAxis != null)
+            {
+                this.drawRotatePie(stack, activeAxis);
+            }
+
             RenderSystem.depthFunc(GL11.GL_LEQUAL);
 
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, Colors.WHITE);
+            if (!editing)
+            {
+                builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+                Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, Colors.WHITE);
+                building = true;
+            }
         }
         else
         {
             builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+            building = true;
+            
             Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
             Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
             Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
@@ -429,12 +585,15 @@ public class Gizmo
             }
         }
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        if (building)
+        {
+            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+            BufferRenderer.drawWithGlobalProgram(builder.end());
 
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        }
     }
 
     public void renderStencil(MatrixStack stack, StencilMap map)
@@ -466,14 +625,17 @@ public class Gizmo
         {
             this.updateVbos();
 
-            if (BBSSettings.rotate3dSphere.get())
+            boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
+            Axis activeAxis = editing ? this.currentTransform.getAxis() : null;
+
+            if (BBSSettings.rotate3dSphere.get() && (!editing || activeAxis == null))
             {
                 this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
             }
 
-            this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
-            this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
-            this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
+            if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
+            if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
+            if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
             
             RenderSystem.enableDepthTest();
             return;

@@ -78,6 +78,9 @@ public class UIPropTransform extends UITransform
     private float dragStartScaleProj;
     /** Unit ring direction (perpendicular to rotation axis) at drag start. */
     private final Vector3f dragStartRingVec = new Vector3f();
+    /** Original unit ring direction (perpendicular to rotation axis) captured at the very start of the drag. */
+    private final Vector3f initialDragRingVec = new Vector3f();
+    private float accumulatedRotateDeg;
     /** Previous unit vector on the virtual trackball sphere. */
     private final Vector3f dragTrackballVec = new Vector3f();
     /** Whether {@link #dragStartRotateDeg} should be written back to {@code rotate2} instead of {@code rotate}. */
@@ -223,6 +226,31 @@ public class UIPropTransform extends UITransform
     public Transform getTransform()
     {
         return this.transform;
+    }
+
+    public boolean isEditing()
+    {
+        return this.editing;
+    }
+
+    public Axis getAxis()
+    {
+        return this.axis;
+    }
+
+    public Vector3f getInitialDragRingVec()
+    {
+        return this.initialDragRingVec;
+    }
+
+    public float getAccumulatedRotateDeg()
+    {
+        return this.accumulatedRotateDeg;
+    }
+
+    public GizmoDrag getDrag()
+    {
+        return this.drag;
     }
 
     public int getDebugLineStencilIndex()
@@ -616,13 +644,15 @@ public class UIPropTransform extends UITransform
 
         rel.normalize();
 
-        float dot = this.dragStartRingVec.dot(rel);
+        float dot = Math.max(-1F, Math.min(1F, this.dragStartRingVec.dot(rel)));
         Vector3f cross = new Vector3f();
 
         this.dragStartRingVec.cross(rel, cross);
 
         float crossSign = cross.dot(this.dragAxisDir);
         float angleDeg = MathUtils.toDeg((float) Math.atan2(crossSign, dot));
+
+        this.accumulatedRotateDeg += angleDeg;
 
         float rx = this.dragStartRotateDeg.x;
         float ry = this.dragStartRotateDeg.y;
@@ -637,6 +667,9 @@ public class UIPropTransform extends UITransform
 
         if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
         else this.setR(null, rx, ry, rz);
+
+        this.dragStartRotateDeg.set(rx, ry, rz);
+        this.dragStartRingVec.set(rel);
     }
 
     /**
@@ -914,6 +947,8 @@ public class UIPropTransform extends UITransform
 
         ring.normalize();
         this.dragStartRingVec.set(ring);
+        this.initialDragRingVec.set(ring);
+        this.accumulatedRotateDeg = 0;
 
         this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
 
