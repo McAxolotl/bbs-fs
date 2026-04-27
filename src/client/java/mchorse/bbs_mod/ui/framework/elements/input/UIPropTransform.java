@@ -1064,6 +1064,21 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    private boolean shouldSnapGizmoValues()
+    {
+        return this.editing && this.mode == 2 && !this.trackball && !Window.isAltPressed();
+    }
+
+    private double snapGizmoValue(double value)
+    {
+        if (!this.shouldSnapGizmoValues())
+        {
+            return value;
+        }
+
+        return value < 0D ? Math.ceil(value) : Math.floor(value);
+    }
+
     @Override
     public void setT(Axis axis, double x, double y, double z)
     {
@@ -1098,6 +1113,10 @@ public class UIPropTransform extends UITransform
             return;
         }
 
+        x = this.snapGizmoValue(x);
+        y = this.snapGizmoValue(y);
+        z = this.snapGizmoValue(z);
+
         this.preCallback();
         this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
         this.postCallback();
@@ -1110,6 +1129,10 @@ public class UIPropTransform extends UITransform
         {
             return;
         }
+
+        x = this.snapGizmoValue(x);
+        y = this.snapGizmoValue(y);
+        z = this.snapGizmoValue(z);
 
         this.preCallback();
         this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
