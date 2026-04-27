@@ -858,8 +858,9 @@ public class UIPropTransform extends UITransform
         if (this.drag != null)
         {
             Vector3d delta = new Vector3d(this.drag.cameraOrigin).sub(this.drag.gizmoOrigin);
+            float fov = this.drag.projection.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / this.drag.projection.m11())) : BBSSettings.getFov();
 
-            radius *= BBSSettings.getAxesDistanceScale((float) delta.length());
+            radius *= BBSSettings.getAxesDistanceScale((float) delta.length(), fov);
         }
 
         return radius;

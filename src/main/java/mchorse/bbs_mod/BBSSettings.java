@@ -148,7 +148,19 @@ public class BBSSettings {
 	}
 
 	public static float getAxesDistanceScale(float distance) {
-		return axesKeepScreenSize != null && axesKeepScreenSize.get() ? Math.max(distance / 5F, 0.0001F) : 1F;
+		return getAxesDistanceScale(distance, getFov());
+	}
+
+	public static float getAxesDistanceScale(float distance, float fov) {
+		if (axesKeepScreenSize != null && axesKeepScreenSize.get()) {
+			float tanFov = (float) Math.tan(fov / 2.0);
+			// 0.4663F is roughly tan(50 degrees / 2)
+			float scale = (distance / 5F) * (tanFov / 0.4663F);
+
+			return Math.max(scale, 0.0001F);
+		}
+
+		return 1F;
 	}
 
 	public static boolean isHorizontalClipEditorEffective() {

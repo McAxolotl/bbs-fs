@@ -246,8 +246,10 @@ public class Gizmo
     private float getAxesDistanceScale(MatrixStack stack)
     {
         Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+        Matrix4f proj = com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix();
+        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
 
-        return BBSSettings.getAxesDistanceScale(cameraRelative.length());
+        return BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
     }
 
     private void drawInfiniteLine(MatrixStack stack)
