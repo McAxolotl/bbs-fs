@@ -238,6 +238,11 @@ public class UIPropTransform extends UITransform
         return this.axis;
     }
 
+    public boolean isTrackball()
+    {
+        return this.trackball;
+    }
+
     public Vector3f getInitialDragRingVec()
     {
         return this.initialDragRingVec;
@@ -454,6 +459,8 @@ public class UIPropTransform extends UITransform
 
     private void setEditingAxis(Axis axis)
     {
+        this.trackball = false;
+
         if (Window.isShiftPressed())
         {
             switch (axis)

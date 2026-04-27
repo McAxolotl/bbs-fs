@@ -526,8 +526,9 @@ public class Gizmo
 
             boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
             Axis activeAxis = editing ? this.currentTransform.getAxis() : null;
+            boolean trackball = editing && this.currentTransform.isTrackball();
 
-            if (BBSSettings.rotate3dSphere.get() && (!editing || activeAxis == null))
+            if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
                 RenderSystem.enableBlend();
                 RenderSystem.defaultBlendFunc();
@@ -627,8 +628,9 @@ public class Gizmo
 
             boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
             Axis activeAxis = editing ? this.currentTransform.getAxis() : null;
+            boolean trackball = editing && this.currentTransform.isTrackball();
 
-            if (BBSSettings.rotate3dSphere.get() && (!editing || activeAxis == null))
+            if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
                 this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
             }
