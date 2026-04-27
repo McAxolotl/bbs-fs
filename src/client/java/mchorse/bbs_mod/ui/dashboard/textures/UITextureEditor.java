@@ -44,24 +44,18 @@ public class UITextureEditor extends UIPixelsEditor
     /** Called from UITexturePainter resize icon. Opens the resize overlay. */
     public void openResizeOverlay()
     {
-        Pixels pixels = this.getPixels();
-        if (pixels == null)
+        if (this.layers.isEmpty())
         {
             return;
         }
-        UIResizeTextureOverlayPanel overlayPanel = new UIResizeTextureOverlayPanel(pixels.width, pixels.height, (size) ->
+        UIResizeTextureOverlayPanel overlayPanel = new UIResizeTextureOverlayPanel(this.w, this.h, (size) ->
         {
             boolean editing = this.isEditing();
-            Pixels newPixels = Pixels.fromSize(
-                MathUtils.clamp(size.x, 1, 4096),
-                MathUtils.clamp(size.y, 1, 4096)
-            );
+            int newW = MathUtils.clamp(size.x, 1, 4096);
+            int newH = MathUtils.clamp(size.y, 1, 4096);
 
-            newPixels.draw(pixels, 0, 0, newPixels.width, newPixels.height);
-            pixels.delete();
-
-            this.fillPixels(newPixels);
-            this.setDirty(false);
+            this.setSize(newW, newH);
+            this.setDirty(true);
             this.setEditing(editing);
         });
 
@@ -75,7 +69,16 @@ public class UITextureEditor extends UIPixelsEditor
         {
             return;
         }
-        UIOverlay.addOverlay(this.getContext(), new UITextureExtractOverlayPanel(this.getTexture(), this.getPixels()), 200, 231);
+        
+        Pixels flattened = this.flattenLayers();
+        if (flattened == null)
+        {
+            return;
+        }
+        
+        UITextureExtractOverlayPanel panel = new UITextureExtractOverlayPanel(this.getTexture(), flattened);
+        panel.onClose((e) -> flattened.delete());
+        UIOverlay.addOverlay(this.getContext(), panel, 200, 231);
     }
 
     public UITextureEditor saveCallback(Consumer<Link> saveCallback)
@@ -273,7 +276,7 @@ public class UITextureEditor extends UIPixelsEditor
             file.getParentFile().mkdirs();
         }
 
-        Pixels pixels = this.getPixels();
+        Pixels pixels = this.flattenLayers();
 
         try
         {
@@ -311,6 +314,13 @@ public class UITextureEditor extends UIPixelsEditor
 
             this.getContext().notifyError(UIKeys.TEXTURES_EXPORT_OVERLAY_ERROR.format(file.getName()));
         }
+        finally
+        {
+            if (pixels != null)
+            {
+                pixels.delete();
+            }
+        }
     }
 
     /**
@@ -328,6 +338,16 @@ public class UITextureEditor extends UIPixelsEditor
     @Override
     protected Texture getRenderTexture(UIContext context)
     {
-        return this.isEditing() ? super.getRenderTexture(context) : context.render.getTextures().getTexture(this.texture);
+        if (this.isEditing()) {
+            return super.getRenderTexture(context);
+        }
+        
+        Texture original = context.render.getTextures().getTexture(this.texture);
+        
+        if (!this.isDirty()) {
+            return original;
+        }
+        
+        return super.getRenderTexture(context);
     }
 }

@@ -20,6 +20,7 @@ import mchorse.bbs_mod.utils.interps.rasterizers.LineRasterizer;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import mchorse.bbs_mod.utils.undo.IUndo;
 import mchorse.bbs_mod.utils.undo.UndoManager;
+import mchorse.bbs_mod.ui.dashboard.textures.layers.TextureLayer;
 import org.joml.Vector2d;
 import org.joml.Vector2i;
 import org.lwjgl.opengl.GL11;
@@ -40,6 +41,9 @@ public class UIPixelsEditor extends UICanvasEditor
     public UIElement toolbar;
 
     private int brushSize = 1;
+
+    public List<TextureLayer> layers = new ArrayList<>();
+    public int activeLayerIndex = -1;
 
     private Texture temporary;
     private Pixels pixels;
@@ -162,6 +166,61 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public void selectLayerBounds()
+    {
+        if (this.pixels == null)
+        {
+            return;
+        }
+
+        int minX = this.pixels.width;
+        int minY = this.pixels.height;
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int x = 0; x < this.pixels.width; x++)
+        {
+            for (int y = 0; y < this.pixels.height; y++)
+            {
+                Color color = this.pixels.getColor(x, y);
+                if (color != null && color.a > 0F)
+                {
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
+        if (maxX >= minX && maxY >= minY)
+        {
+            this.selections.clear();
+            
+            // To make the selection rect inclusive of the last pixel, we need to add 1 to the bottom right coordinates
+            boolean[][] mask = this.createSelectionMask();
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    Color color = this.pixels.getColor(x, y);
+                    if (color != null && color.a > 0F)
+                    {
+                        mask[x][y] = true;
+                    }
+                }
+            }
+            
+            this.selections = this.buildSelectionsFromMask(mask);
+            this.hasSelection = !this.selections.isEmpty();
+            this.currentSelectionSubtract = false;
+        }
+        else
+        {
+            this.clearSelection();
+        }
+    }
+
     public UIPixelsEditor pickColorConsumer(Consumer<Color> consumer)
     {
         this.pickColorConsumer = consumer != null ? consumer : (c) -> {};
@@ -169,8 +228,37 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public void setActiveLayer(int index)
+    {
+        if (index >= 0 && index < this.layers.size())
+        {
+            this.activeLayerIndex = index;
+            this.pixels = this.layers.get(index).pixels;
+            this.temporary = this.layers.get(index).texture;
+        }
+    }
+
     public Texture getTemporaryTexture()
     {
+        if (this.layers.isEmpty())
+        {
+            return this.temporary;
+        }
+        
+        Pixels flat = this.flattenLayers();
+        if (flat != null)
+        {
+            if (this.temporaryFlat == null)
+            {
+                this.temporaryFlat = new Texture();
+                this.temporaryFlat.setFilter(org.lwjgl.opengl.GL11.GL_NEAREST);
+            }
+            this.temporaryFlat.bind();
+            this.temporaryFlat.updateTexture(flat);
+            flat.delete();
+            return this.temporaryFlat;
+        }
+
         return this.temporary;
     }
 
@@ -822,7 +910,10 @@ public class UIPixelsEditor extends UICanvasEditor
 
     private void handleUndo(IUndo<Pixels> pixelsIUndo, boolean redo)
     {
-        this.updateTexture();
+        for (TextureLayer layer : this.layers)
+        {
+            layer.updateTexture();
+        }
     }
 
     private void copyPixel()
@@ -842,9 +933,9 @@ public class UIPixelsEditor extends UICanvasEditor
 
     protected void updateTexture()
     {
-        this.pixels.rewindBuffer();
-        this.temporary.bind();
-        this.temporary.updateTexture(this.pixels);
+        if (this.activeLayerIndex >= 0 && this.activeLayerIndex < this.layers.size()) {
+            this.layers.get(this.activeLayerIndex).updateTexture();
+        }
     }
 
     public void undo()
@@ -865,10 +956,18 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void deleteTexture()
     {
-        if (this.temporary != null)
+        for (TextureLayer layer : this.layers)
         {
-            this.temporary.delete();
-            this.temporary = null;
+            layer.delete();
+        }
+        this.layers.clear();
+        this.temporary = null;
+        this.pixels = null;
+        
+        if (this.temporaryFlat != null)
+        {
+            this.temporaryFlat.delete();
+            this.temporaryFlat = null;
         }
     }
 
@@ -879,15 +978,39 @@ public class UIPixelsEditor extends UICanvasEditor
         this.deleteTexture();
         this.setEditing(false);
 
-        this.pixels = pixels;
-
         if (pixels != null)
         {
-            this.temporary = new Texture();
-            this.temporary.setFilter(GL11.GL_NEAREST);
+            TextureLayer layer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format("1").get(), pixels);
+            this.layers.add(layer);
+            this.activeLayerIndex = 0;
+            this.pixels = layer.pixels;
+            this.temporary = layer.texture;
 
-            this.updateTexture();
             this.setSize(pixels.width, pixels.height);
+        }
+    }
+
+    @Override
+    public void setSize(int w, int h)
+    {
+        super.setSize(w, h);
+        
+        for (TextureLayer layer : this.layers)
+        {
+            if (layer.pixels != null && (layer.pixels.width != w || layer.pixels.height != h))
+            {
+                Pixels newPixels = Pixels.fromSize(w, h);
+                newPixels.draw(layer.pixels, 0, 0);
+                layer.pixels.delete();
+                layer.pixels = newPixels;
+                layer.updateTexture();
+            }
+        }
+        
+        if (this.activeLayerIndex >= 0 && this.activeLayerIndex < this.layers.size())
+        {
+            this.pixels = this.layers.get(this.activeLayerIndex).pixels;
+            this.temporary = this.layers.get(this.activeLayerIndex).texture;
         }
     }
 
@@ -1043,9 +1166,23 @@ public class UIPixelsEditor extends UICanvasEditor
         int x = -this.w / 2;
         int y = -this.h / 2;
         Area area = this.calculate(x, y, x + this.w, y + this.h);
-        Texture texture = this.getRenderTexture(context);
 
-        context.batcher.fullTexturedBox(texture, area.x, area.y, area.w, area.h);
+        if (!this.editing)
+        {
+            Texture texture = this.getRenderTexture(context);
+            context.batcher.fullTexturedBox(texture, area.x, area.y, area.w, area.h);
+        }
+        else
+        {
+            for (TextureLayer layer : this.layers)
+            {
+                if (layer.visible && layer.texture != null)
+                {
+                    int color = Colors.setA(Colors.WHITE, layer.opacity);
+                    context.batcher.texturedBox(layer.texture, color, area.x, area.y, area.w, area.h, 0, 0, layer.texture.width, layer.texture.height, layer.texture.width, layer.texture.height);
+                }
+            }
+        }
 
         /* Draw brush preview for stroke tools */
         if (this.isStrokePaintTool())
@@ -1105,9 +1242,37 @@ public class UIPixelsEditor extends UICanvasEditor
         }
     }
 
+    public Pixels flattenLayers()
+    {
+        if (this.layers.isEmpty())
+        {
+            return null;
+        }
+
+        Pixels output = Pixels.fromSize(this.w, this.h);
+
+        for (TextureLayer layer : this.layers)
+        {
+            if (layer.visible && layer.pixels != null && layer.opacity > 0F)
+            {
+                output.draw(layer.pixels, 0, 0, layer.opacity);
+            }
+        }
+
+        output.rewindBuffer();
+        return output;
+    }
+
+    private Texture temporaryFlat;
+
     protected Texture getRenderTexture(UIContext context)
     {
-        return this.temporary;
+        if (this.layers.isEmpty() || this.editing)
+        {
+            return this.temporary;
+        }
+
+        return this.getTemporaryTexture();
     }
 
     @Override

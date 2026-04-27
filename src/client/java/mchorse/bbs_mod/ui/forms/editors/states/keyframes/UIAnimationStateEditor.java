@@ -304,7 +304,7 @@ public class UIAnimationStateEditor extends UIElement
                     return true;
                 }
 
-                if (context.mouseButton == 0)
+                if (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed()))
                 {
                     if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));
                     else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));

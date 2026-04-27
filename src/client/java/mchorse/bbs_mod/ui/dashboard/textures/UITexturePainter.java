@@ -7,6 +7,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.textures.layers.UILayersPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
@@ -114,6 +115,9 @@ public class UITexturePainter extends UIElement
     private UIScrollView options;
     private UIDraggable optionsDraggable;
 
+    private UIElement optionsHost;
+    private UILayersPanel layersPanel;
+
     private UIIcon toolIconBrush;
     private UIIcon toolIconEraser;
     private UIIcon toolIconFill;
@@ -153,7 +157,7 @@ public class UITexturePainter extends UIElement
         this.buildEditorHost();
 
         this.content.add(new UIRenderable(this::renderPanelBackground),
-            this.iconBar, this.options, this.editorHost, this.modelPreviewHost, this.optionsDraggable, this.modelPreviewDraggable);
+            this.iconBar, this.optionsHost, this.editorHost, this.modelPreviewHost, this.optionsDraggable, this.modelPreviewDraggable);
         this.add(this.tabs, this.content, this.brightness, this.alphaLockToggle);
 
         this.syncTabs();
@@ -213,23 +217,31 @@ public class UITexturePainter extends UIElement
 
     private void buildOptions()
     {
-        this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
-        this.options.scroll.cancelScrolling();
-        this.options.relative(this.content).x(0F)
+        this.optionsHost = new UIElement();
+        this.optionsHost.relative(this.content).x(0F)
             .w(widths.getOrDefault(this.getClass(), DEFAULT_OPTIONS_WIDTH))
             .minW(MIN_OPTIONS_WIDTH).h(1F);
 
+        this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
+        this.options.scroll.cancelScrolling();
+        this.options.relative(this.optionsHost).w(1F).h(0.5F);
+
+        this.layersPanel = new UILayersPanel(this);
+        this.layersPanel.relative(this.optionsHost).y(0.5F).w(1F).h(0.5F);
+        
+        this.optionsHost.add(this.options, this.layersPanel);
+
         this.optionsDraggable = new UIDraggable((context) ->
         {
-            float f = (context.mouseX - this.options.area.x) / (float) this.content.area.w;
+            float f = (context.mouseX - this.optionsHost.area.x) / (float) this.content.area.w;
             float w = MathUtils.clamp(f, 0F, 0.5F);
 
-            this.options.w(w);
+            this.optionsHost.w(w);
             widths.put(this.getClass(), w);
             this.content.resize();
             this.optionsDraggable.resize();
         });
-        this.optionsDraggable.relative(this.options).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.optionsDraggable.relative(this.optionsHost).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
         this.primary = new UIColor((c) -> {}).noLabel().withAlpha();
         this.primary.direction(Direction.LEFT).h(UIConstants.CONTROL_HEIGHT);
@@ -292,7 +304,7 @@ public class UITexturePainter extends UIElement
     private void buildEditorHost()
     {
         this.editorHost = new UIElement();
-        this.editorHost.relative(this.options).x(1F, UIConstants.MARGIN).h(1F)
+        this.editorHost.relative(this.optionsHost).x(1F, UIConstants.MARGIN).h(1F)
             .wTo(this.iconBar.area, 0F, -UIConstants.MARGIN);
 
         this.brightness = new UITrackpad();
@@ -485,7 +497,7 @@ public class UITexturePainter extends UIElement
         this.eraserOpacityLabel.setVisible(eraserTool);
         this.eraserOpacity.setVisible(eraserTool);
 
-        this.options.resize();
+        this.optionsHost.resize();
     }
 
     private void cycleTabs()
@@ -540,6 +552,11 @@ public class UITexturePainter extends UIElement
         currentIndex = index;
         this.showCurrentEditor();
         this.syncTabs();
+        
+        if (this.layersPanel != null)
+        {
+            this.layersPanel.setEditor(this.getCurrentEditor());
+        }
     }
 
     private UITextureEditor createEditor(Link link, Pixels pixels)
@@ -742,6 +759,11 @@ public class UITexturePainter extends UIElement
         }
 
         this.syncTabs();
+        
+        if (this.layersPanel != null)
+        {
+            this.layersPanel.setEditor(this.getCurrentEditor());
+        }
     }
 
     private void syncTabs()

@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -246,8 +247,10 @@ public class Gizmo
     private float getAxesDistanceScale(MatrixStack stack)
     {
         Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+        Matrix4f proj = com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix();
+        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
 
-        return BBSSettings.getAxesDistanceScale(cameraRelative.length());
+        return BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
     }
 
     private void drawInfiniteLine(MatrixStack stack)
@@ -536,16 +539,20 @@ public class Gizmo
 
             if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
-                RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
-                this.drawCachedSphere(stack, this.rotateSphereVbo, 1F, 1F, 1F, 0.15F);
-                RenderSystem.disableBlend();
+                if (!Window.isAltPressed()) {
+                    RenderSystem.enableBlend();
+                    RenderSystem.defaultBlendFunc();
+                    this.drawCachedSphere(stack, this.rotateSphereVbo, 1F, 1F, 1F, 0.15F);
+                    RenderSystem.disableBlend();
+                }
             }
 
             RenderSystem.depthFunc(GL11.GL_ALWAYS);
-            if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
-            if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
-            if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            if (!BBSSettings.rotateHideRings.get()) {
+                if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
+                if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
+                if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            }
 
             if (editing && activeAxis != null)
             {
@@ -643,12 +650,16 @@ public class Gizmo
 
             if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
-                this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
+                if (!Window.isAltPressed()) {
+                    this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
+                }
             }
 
-            if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
-            if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
-            if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
+            if (!BBSSettings.rotateHideRings.get()) {
+                if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
+                if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
+                if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
+            }
             
             RenderSystem.enableDepthTest();
             return;

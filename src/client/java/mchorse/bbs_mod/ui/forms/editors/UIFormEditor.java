@@ -352,7 +352,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         {
             return true;
         }
-        else if (stencil.hasPicked() && context.mouseButton == 0)
+        else if (stencil.hasPicked() && (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed())))
         {
             Pair<Form, String> pair = stencil.getPicked();
 
@@ -424,7 +424,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     public void pickFormFromRenderer(Pair<Form, String> pair)
     {
         if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
-        else if (Window.isAltPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
+        else if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else this.pickFormBone(pair.a, pair.b);
     }

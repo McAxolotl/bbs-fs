@@ -833,7 +833,7 @@ public class UIReplaysEditor extends UIElement {
         if (stencil.hasPicked()) {
             Pair<Form, String> pair = stencil.getPicked();
 
-            if (pair != null && context.mouseButton < 2) {
+            if (pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
                 if (!this.isVisible()) {
                     this.filmPanel.showPanel(this);
                 }
@@ -844,7 +844,7 @@ public class UIReplaysEditor extends UIElement {
                     return true;
                 }
 
-                if (context.mouseButton == 0) {
+                if (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed())) {
                     if (Window.isCtrlPressed()) {
                         UIReplaysEditorUtils.offerAdjacent(
                                 this.getContext(),
