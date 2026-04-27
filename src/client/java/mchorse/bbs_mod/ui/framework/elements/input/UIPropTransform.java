@@ -87,6 +87,7 @@ public class UIPropTransform extends UITransform
     private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
     private boolean trackball;
+    private boolean hotkeyMode;
     private Supplier<GizmoDrag> hotkeyDragSupplier;
 
     private UITransformHandler handler;
@@ -333,9 +334,15 @@ public class UIPropTransform extends UITransform
     {
         GizmoDrag drag = this.getHotkeyDrag();
 
-        if (mode == Gizmo.Mode.ROTATE.ordinal() && BBSSettings.rotate3dSphere.get() && (!this.editing || this.mode != mode))
+        if (
+            mode == Gizmo.Mode.ROTATE.ordinal()
+            && BBSSettings.rotate3dSphere.get()
+            && BBSSettings.transformHotkeys3dRay.get()
+            && drag != null
+            && (!this.editing || this.mode != mode)
+        )
         {
-            this.enableTrackball(drag);
+            this.enableTrackball(drag, true);
 
             return;
         }
@@ -394,6 +401,7 @@ public class UIPropTransform extends UITransform
 
         this.editing = true;
         this.mode = mode;
+        this.hotkeyMode = axis == null;
 
         this.cache.copy(this.transform);
         Gizmo.INSTANCE.trackTransform(this);
@@ -410,6 +418,11 @@ public class UIPropTransform extends UITransform
     }
 
     public void enableTrackball(GizmoDrag drag)
+    {
+        this.enableTrackball(drag, false);
+    }
+
+    public void enableTrackball(GizmoDrag drag, boolean hotkeyMode)
     {
         if (Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
         {
@@ -432,6 +445,7 @@ public class UIPropTransform extends UITransform
         this.mode = 2; // ROTATE
         this.axis = null;
         this.axis2 = null;
+        this.hotkeyMode = hotkeyMode;
         this.drag = drag;
         this.lastX = context.mouseX;
         this.lastY = context.mouseY;
@@ -454,6 +468,11 @@ public class UIPropTransform extends UITransform
 
     private boolean useRayDrag()
     {
+        if (this.hotkeyMode && !BBSSettings.transformHotkeys3dRay.get())
+        {
+            return false;
+        }
+
         return this.drag != null && (this.mode != 2 || this.axis2 == null || this.trackball);
     }
 
@@ -1004,6 +1023,7 @@ public class UIPropTransform extends UITransform
     {
         this.editing = false;
         this.axis2 = null;
+        this.hotkeyMode = false;
         this.drag = null;
         this.dragHasStart = false;
         Gizmo.INSTANCE.clearTrackedTransform(this);
