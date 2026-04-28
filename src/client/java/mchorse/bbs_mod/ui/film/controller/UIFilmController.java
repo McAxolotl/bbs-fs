@@ -609,6 +609,17 @@ public class UIFilmController extends UIElement
         }
     }
 
+    public void stopGizmoInteraction()
+    {
+        if (!this.gizmoActive)
+        {
+            return;
+        }
+
+        Gizmo.INSTANCE.stop();
+        this.gizmoActive = false;
+    }
+
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
@@ -617,11 +628,7 @@ public class UIFilmController extends UIElement
             return true;
         }
 
-        if (this.gizmoActive)
-        {
-            Gizmo.INSTANCE.stop();
-            this.gizmoActive = false;
-        }
+        this.stopGizmoInteraction();
 
         this.orbit.stop();
 

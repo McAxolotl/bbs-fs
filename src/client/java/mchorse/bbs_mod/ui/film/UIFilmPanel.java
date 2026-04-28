@@ -2196,6 +2196,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
      */
     public void setFlight(boolean flight)
     {
+        if (flight)
+        {
+            this.controller.stopGizmoInteraction();
+        }
+
         if (!this.isRunning() || !flight)
         {
             if (!flight)

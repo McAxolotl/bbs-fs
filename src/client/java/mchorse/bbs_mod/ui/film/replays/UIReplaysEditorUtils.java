@@ -257,6 +257,11 @@ public class UIReplaysEditorUtils
 
     public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
     {
+        if (panel.isFlying())
+        {
+            return false;
+        }
+
         UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
         GizmoDrag drag = buildFilmGizmoDrag(
             panel,
