@@ -8,6 +8,8 @@ import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
@@ -94,20 +96,14 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, Consumer<Pose> consumer)
         {
-            for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+            UIReplaysEditorUtils.forEachSelectedKeyframe(editor, keyframe, (selected) ->
             {
-                if (sheet.channel.getFactory() != keyframe.getFactory()) continue;
+                Pose pose = (Pose) selected.getValue();
 
-                for (Keyframe kf : sheet.selection.getSelected())
-                {
-                    if (kf.getValue() instanceof Pose pose)
-                    {
-                        kf.preNotify();
-                        consumer.accept(pose);
-                        kf.postNotify();
-                    }
-                }
-            }
+                selected.preNotify();
+                consumer.accept(pose);
+                selected.postNotify();
+            });
         }
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, String group, Consumer<PoseTransform> consumer)
@@ -204,9 +200,51 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
-        protected void applyTransform(Consumer<Transform> consumer)
+        protected void applyToSelection(Consumer<Transform> consumer)
         {
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> consumer.accept(poseT));
+        }
+
+        @Override
+        protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
+        {
+            applyRecording(this.editor.editor, this.editor.keyframe, tick, this.editor.groups.getCurrent(), (poseT) -> consumer.accept(poseT));
+        }
+
+        @Override
+        protected Transform getRecordedTransform(int tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            Keyframe<Pose> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick);
+            String bone = this.editor.getGroup();
+
+            if (recorded == null || bone == null)
+            {
+                return null;
+            }
+
+            return recorded.getValue().get(bone);
+        }
+
+        public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, Consumer<PoseTransform> consumer)
+        {
+            if (bones == null || bones.isEmpty())
+            {
+                return;
+            }
+
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                Pose pose = (Pose) recorded.getValue();
+                recorded.preNotify();
+
+                for (String bone : bones)
+                {
+                    consumer.accept(pose.get(bone));
+                }
+
+                recorded.postNotify();
+            });
         }
 
         @Override

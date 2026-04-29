@@ -257,6 +257,7 @@ public class UIKeys
     public static final IKey FILM_GROUPS_ONLY_POSITION = L10n.lang("bbs.ui.film.groups.only_position");
     public static final IKey FILM_GROUPS_ONLY_POS_ROT = L10n.lang("bbs.ui.film.groups.pos_rot");
     public static final IKey FILM_GROUPS_ONLY_ROTATION = L10n.lang("bbs.ui.film.groups.only_rotation");
+    public static final IKey FILM_GROUPS_TRANSFORM = L10n.lang("bbs.ui.film.groups.transform");
     public static final IKey FILM_GROUPS_OUTSIDE = L10n.lang("bbs.ui.film.groups.outside");
     public static final IKey FILM_GROUPS_RIGHT_STICK = L10n.lang("bbs.ui.film.groups.right_stick");
     public static final IKey FILM_GROUPS_TRIGGERS = L10n.lang("bbs.ui.film.groups.triggers");

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -94,30 +95,48 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
         }
 
         @Override
-        protected void applyTransform(Consumer<Transform> consumer)
+        protected void applyToSelection(Consumer<Transform> consumer)
         {
             apply(this.editor.editor, this.editor.keyframe, (poseT) -> consumer.accept(poseT));
         }
 
+        @Override
+        protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
+        {
+            applyRecording(this.editor.editor, this.editor.keyframe, tick, (poseT) -> consumer.accept(poseT));
+        }
+
+        @Override
+        protected Transform getRecordedTransform(int tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            Keyframe<PoseTransform> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick);
+
+            return recorded == null ? null : recorded.getValue();
+        }
+
+        public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, Consumer<PoseTransform> consumer)
+        {
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                PoseTransform transform = (PoseTransform) recorded.getValue();
+
+                recorded.preNotify();
+                consumer.accept(transform);
+                recorded.postNotify();
+            });
+        }
+
         public static void apply(UIKeyframes editor, Keyframe keyframe, Consumer<PoseTransform> consumer)
         {
-            for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+            UIReplaysEditorUtils.forEachSelectedKeyframe(editor, keyframe, (selected) ->
             {
-                if (sheet.channel.getFactory() != keyframe.getFactory())
-                {
-                    continue;
-                }
+                PoseTransform transform = (PoseTransform) selected.getValue();
 
-                for (Keyframe kf : sheet.selection.getSelected())
-                {
-                    if (kf.getValue() instanceof PoseTransform transform)
-                    {
-                        kf.preNotify();
-                        consumer.accept(transform);
-                        kf.postNotify();
-                    }
-                }
-            }
+                selected.preNotify();
+                consumer.accept(transform);
+                selected.postNotify();
+            });
         }
     }
 }

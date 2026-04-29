@@ -516,6 +516,7 @@
 	"bbs.ui.film.groups.outside": "Снаружи",
 	"bbs.ui.film.groups.pos_rot": "Позиция и вращение",
 	"bbs.ui.film.groups.right_stick": "Правый стик",
+	"bbs.ui.film.groups.transform": "Трансформация",
 	"bbs.ui.film.groups.triggers": "Триггеры",
 	"bbs.ui.film.history-title": "История изменений",
 	"bbs.ui.film.insert_space-description": "Введите сколько тиков пустоты должно быть вставлено:",

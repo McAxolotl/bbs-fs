@@ -517,6 +517,7 @@
 	"bbs.ui.film.groups.outside": "Outside",
 	"bbs.ui.film.groups.pos_rot": "Position + rotation",
 	"bbs.ui.film.groups.right_stick": "Right stick",
+	"bbs.ui.film.groups.transform": "Transform",
 	"bbs.ui.film.groups.triggers": "Triggers",
 	"bbs.ui.film.history-title": "Undo history",
 	"bbs.ui.film.insert_space-description": "Input how many ticks of emptiness to insert:",

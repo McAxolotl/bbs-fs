@@ -28,6 +28,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
@@ -42,6 +43,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import org.joml.Matrix4f;
@@ -76,20 +78,115 @@ public class UIReplaysEditorUtils
                     continue;
                 }
 
-                KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
-                KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
-                PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-
-                int index = poseChannel.insert(tick, value);
-                Keyframe<PoseTransform> kf = poseChannel.get(index);
-
-                Keyframe<PoseTransform> template = segment != null ? segment.a : null;
-                if (template != null && template != kf)
-                {
-                    kf.copyOverExtra(template);
-                }
+                insertPoseTransformKeyframe((KeyframeChannel<PoseTransform>) channel, tick, null);
             }
         });
+    }
+
+    public static <T> Keyframe<T> ensureKeyframe(UIKeyframeSheet sheet, float tick)
+    {
+        if (sheet == null)
+        {
+            return null;
+        }
+
+        for (Keyframe<T> keyframe : (List<Keyframe<T>>) sheet.channel.getKeyframes())
+        {
+            if (keyframe.getTick() == tick)
+            {
+                return keyframe;
+            }
+        }
+
+        KeyframeSegment<T> segment = sheet.channel.find(tick);
+        BaseValueBasic property = sheet.property;
+        Keyframe<T> template = null;
+        T value;
+
+        if (segment != null)
+        {
+            value = segment.createInterpolated();
+            template = segment.a;
+        }
+        else if (property != null)
+        {
+            value = (T) sheet.channel.getFactory().copy(property.get());
+        }
+        else
+        {
+            value = (T) sheet.channel.getFactory().createEmpty();
+        }
+
+        int index = sheet.channel.insert(tick, value);
+        Keyframe<T> keyframe = (Keyframe<T>) sheet.channel.get(index);
+
+        if (template != null && template != keyframe)
+        {
+            keyframe.copyOverExtra(template);
+        }
+
+        return keyframe;
+    }
+
+    public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
+    {
+        if (editor == null || keyframe == null)
+        {
+            return;
+        }
+
+        for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+        {
+            if (sheet.channel.getFactory() != keyframe.getFactory())
+            {
+                continue;
+            }
+
+            for (Keyframe selected : sheet.selection.getSelected())
+            {
+                consumer.accept((Keyframe<T>) selected);
+            }
+        }
+    }
+
+    public static <T> void forEachRecordedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, int tick, Consumer<Keyframe<T>> consumer)
+    {
+        if (editor == null || keyframe == null)
+        {
+            return;
+        }
+
+        for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+        {
+            if (sheet.channel.getFactory() != keyframe.getFactory() || sheet.selection.getSelected().isEmpty())
+            {
+                continue;
+            }
+
+            Keyframe<T> recorded = ensureKeyframe(sheet, tick);
+
+            if (recorded != null)
+            {
+                consumer.accept(recorded);
+            }
+        }
+    }
+
+    private static void insertPoseTransformKeyframe(KeyframeChannel<PoseTransform> channel, float tick, PoseTransform value)
+    {
+        KeyframeSegment<PoseTransform> segment = channel.find(tick);
+        PoseTransform poseTransform = value == null
+            ? segment != null ? segment.createInterpolated() : new PoseTransform()
+            : (PoseTransform) value.copy();
+
+        int index = channel.insert(tick, poseTransform);
+        Keyframe<PoseTransform> keyframe = channel.get(index);
+        Keyframe<PoseTransform> template = segment != null ? segment.a : null;
+
+        if (template != null && template != keyframe)
+        {
+            keyframe.copyOverExtra(template);
+        }
     }
 
     public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)

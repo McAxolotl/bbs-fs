@@ -32,6 +32,7 @@ import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -455,6 +456,18 @@ public class UIFilmController extends UIElement
         return this.recordingGroups;
     }
 
+    private boolean hasTransformRecordingGroup()
+    {
+        return this.recordingGroups != null && this.recordingGroups.contains(ReplayKeyframes.GROUP_TRANSFORM);
+    }
+
+    public boolean isTransformRecording()
+    {
+        return this.recording
+            && this.recordingCountdown <= 0
+            && this.hasTransformRecordingGroup();
+    }
+
     public void startRecording(List<String> groups)
     {
         if (groups != null && groups.contains("outside"))
@@ -476,10 +489,20 @@ public class UIFilmController extends UIElement
         this.recording = true;
         this.recordingCountdown = Math.max(0, TimeUtils.toTick(BBSSettings.recordingCountdown.get()));
         this.recordingGroups = groups;
+        boolean transformRecording = groups != null && groups.contains(ReplayKeyframes.GROUP_TRANSFORM);
 
-        this.recordingOld = this.getReplay().keyframes.toData();
+        this.recordingOld = transformRecording ? this.getReplay().properties.toData() : this.getReplay().keyframes.toData();
 
-        if (groups != null)
+        if (transformRecording)
+        {
+            if (this.controlled != null)
+            {
+                this.toggleControl();
+            }
+
+            this.setMouseMode(0);
+        }
+        else if (groups != null)
         {
             if (groups.contains(ReplayKeyframes.GROUP_LEFT_STICK))
             {
@@ -507,12 +530,12 @@ public class UIFilmController extends UIElement
             }
         }
 
-        if (this.controlled == null)
+        if (!transformRecording && this.controlled == null)
         {
             this.toggleControl();
         }
 
-        this.toggleMousePointer(this.controlled != null);
+        this.toggleMousePointer(!transformRecording && this.controlled != null);
     }
 
     public void stopRecording()
@@ -522,10 +545,12 @@ public class UIFilmController extends UIElement
             return;
         }
 
+        boolean transformRecording = this.hasTransformRecordingGroup();
+
         this.recording = false;
         this.recordingGroups = null;
 
-        if (this.controlled != null)
+        if (!transformRecording && this.controlled != null)
         {
             this.toggleControl();
         }
@@ -546,17 +571,42 @@ public class UIFilmController extends UIElement
 
         if (replay != null && this.recordingOld != null)
         {
-            for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+            if (transformRecording)
             {
-                channel.simplify();
+                for (KeyframeChannel<?> channel : replay.properties.properties.values())
+                {
+                    if (PerLimbService.isPoseBoneChannel(channel.getId()))
+                    {
+                        channel.simplify();
+                    }
+                }
+
+                BaseType newData = replay.properties.toData();
+
+                replay.properties.fromData(this.recordingOld);
+                replay.properties.preNotify();
+                replay.properties.fromData(newData);
+                replay.properties.postNotify();
+
+                if (this.panel.replayEditor.getReplay() == replay)
+                {
+                    this.panel.replayEditor.setReplay(replay, false, false);
+                }
             }
+            else
+            {
+                for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+                {
+                    channel.simplify();
+                }
 
-            BaseType newData = replay.keyframes.toData();
+                BaseType newData = replay.keyframes.toData();
 
-            replay.keyframes.fromData(this.recordingOld);
-            replay.keyframes.preNotify();
-            replay.keyframes.fromData(newData);
-            replay.keyframes.postNotify();
+                replay.keyframes.fromData(this.recordingOld);
+                replay.keyframes.preNotify();
+                replay.keyframes.fromData(newData);
+                replay.keyframes.postNotify();
+            }
 
             this.recordingOld = null;
         }
@@ -708,7 +758,8 @@ public class UIFilmController extends UIElement
         UIRecordOverlayPanel panel = new UIRecordOverlayPanel(
             UIKeys.FILM_CONTROLLER_RECORD_TITLE,
             UIKeys.FILM_CONTROLLER_RECORD_DESCRIPTION,
-            this::startRecording
+            this::startRecording,
+            this.panel.replayEditor.getCategory() == UIReplaysEditor.ReplayCategory.POSE
         );
         UIIcon icon = new UIIcon(Icons.UPLOAD, (b) -> panel.submit(Arrays.asList("outside")));
 
@@ -1060,23 +1111,23 @@ public class UIFilmController extends UIElement
 
                 context.batcher.box(bx - 4, by - 4, bx + 4, by + 4, color);
             }
+        }
 
-            /* Render recording overlay */
-            if (this.recording)
+        /* Render recording overlay */
+        if (this.recording)
+        {
+            int x = area.x + 5 + 16;
+            int y = area.y + 5;
+
+            context.batcher.icon(Icons.SPHERE, Colors.RED | Colors.A100, x, y, 1F, 0F);
+
+            if (this.recordingCountdown <= 0)
             {
-                int x = area.x + 5 + 16;
-                int y = area.y + 5;
-
-                context.batcher.icon(Icons.SPHERE, Colors.RED | Colors.A100, x, y, 1F, 0F);
-
-                if (this.recordingCountdown <= 0)
-                {
-                    context.batcher.textCard(UIKeys.FILM_CONTROLLER_TICKS.format(this.getTick()).get(), x + 3, y + 4, Colors.WHITE, Colors.A50);
-                }
-                else
-                {
-                    context.batcher.textCard(String.valueOf(this.recordingCountdown / 20F), x + 3, y + 4, Colors.WHITE, Colors.A50);
-                }
+                context.batcher.textCard(UIKeys.FILM_CONTROLLER_TICKS.format(this.getTick()).get(), x + 3, y + 4, Colors.WHITE, Colors.A50);
+            }
+            else
+            {
+                context.batcher.textCard(String.valueOf(this.recordingCountdown / 20F), x + 3, y + 4, Colors.WHITE, Colors.A50);
             }
         }
 
