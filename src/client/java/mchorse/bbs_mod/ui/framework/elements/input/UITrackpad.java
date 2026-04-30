@@ -268,7 +268,10 @@ public class UITrackpad extends UIBaseTextbox
     public void setValue(double value)
     {
         this.setValueInternal(value);
-        this.updateTextField();
+        if (!this.textbox.isFocused())
+        {
+            this.updateTextField();
+        }
     }
 
     private void updateTextField()
