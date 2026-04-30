@@ -252,7 +252,10 @@ public abstract class BaseFilmController
 
         if (same || only)
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, same ? value : value.previous, defaultMatrix, transition, i, fullMatrix);
+            Anchor anchor = same ? value : value.previous;
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix);
+
+            matrix = applyAnchorTransform(matrix, anchor);
 
             if (matrix != defaultMatrix)
             {
@@ -265,6 +268,9 @@ public abstract class BaseFilmController
             Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix);
             Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix);
 
+            matrix = applyAnchorTransform(matrix, value);
+            lastMatrix = applyAnchorTransform(lastMatrix, value.previous);
+
             result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
 
             if (value.isFadeOut()) result.b = value.x;
@@ -273,6 +279,16 @@ public abstract class BaseFilmController
         }
 
         return result;
+    }
+
+    private static Matrix4f applyAnchorTransform(Matrix4f matrix, Anchor anchor)
+    {
+        if (matrix == null || anchor == null || anchor.transform.isDefault())
+        {
+            return matrix;
+        }
+
+        return matrix.mul(anchor.transform.createMatrix());
     }
 
     public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
@@ -327,6 +343,7 @@ public abstract class BaseFilmController
                         basic.setTranslation(t);
                     }
                 }
+
             }
 
             return basic;
