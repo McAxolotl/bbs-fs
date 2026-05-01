@@ -17,6 +17,8 @@ public class UIDraggable extends UIElement
     private Runnable dragEndCallback;
     private boolean dragging;
     private boolean hover;
+    private boolean referenceX = true;
+    private boolean referenceY = true;
 
     private int mouseX;
     private int mouseY;
@@ -44,6 +46,14 @@ public class UIDraggable extends UIElement
     public UIDraggable reference(Supplier<Vector2i> reference)
     {
         this.reference = reference;
+
+        return this;
+    }
+
+    public UIDraggable referenceAxis(boolean x, boolean y)
+    {
+        this.referenceX = x;
+        this.referenceY = y;
 
         return this;
     }
@@ -119,8 +129,15 @@ public class UIDraggable extends UIElement
 
             if (this.referenceMouse != null)
             {
-                context.mouseX = this.referenceMouse.x + (mouseX - this.mouseX);
-                context.mouseY = this.referenceMouse.y + (mouseY - this.mouseY);
+                if (this.referenceX)
+                {
+                    context.mouseX = this.referenceMouse.x + (mouseX - this.mouseX);
+                }
+
+                if (this.referenceY)
+                {
+                    context.mouseY = this.referenceMouse.y + (mouseY - this.mouseY);
+                }
             }
 
             this.callback.accept(context);
