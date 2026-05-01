@@ -504,7 +504,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             @Override
             protected boolean subMouseScrolled(UIContext context)
             {
-                if (Window.isCtrlPressed() && !UIFilmPanel.this.isFlying())
+                if (Window.isCtrlPressed() && !UIFilmPanel.this.isFlying() && UIFilmPanel.this.isCursorOverTimeline(context))
                 {
                     int magnitude = Window.isShiftPressed() ? BBSSettings.editorJump.get() : 1;
                     int newCursor = UIFilmPanel.this.getCursor() + (int) Math.copySign(magnitude, context.mouseWheel);
@@ -534,6 +534,32 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
         this.add(this.selectionPanel);
+    }
+
+    private boolean isCursorOverTimeline(UIContext context)
+    {
+        return this.isCursorOverClipsTimeline(this.cameraEditor, context)
+            || this.isCursorOverClipsTimeline(this.actionEditor, context)
+            || this.isCursorOverReplayTimeline(context);
+    }
+
+    private boolean isCursorOverClipsTimeline(UIClipsPanel panel, UIContext context)
+    {
+        return panel != null
+            && panel.isVisible()
+            && panel.clips != null
+            && panel.clips.isVisible()
+            && panel.clips.area.isInside(context);
+    }
+
+    private boolean isCursorOverReplayTimeline(UIContext context)
+    {
+        return this.replayEditor != null
+            && this.replayEditor.isVisible()
+            && this.replayEditor.keyframeEditor != null
+            && this.replayEditor.keyframeEditor.view != null
+            && this.replayEditor.keyframeEditor.view.isVisible()
+            && this.replayEditor.keyframeEditor.view.area.isInside(context);
     }
 
     public boolean isLayoutLocked()

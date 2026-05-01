@@ -317,9 +317,11 @@ public class UIKeys
     public static final IKey FILM_REPLAY_LOOPING_TOOLTIP = L10n.lang("bbs.ui.film.replay.looping-tooltip");
     public static final IKey FILM_REPLAY_NAME_TAG = L10n.lang("bbs.ui.film.replay.name_tag");
     public static final IKey FILM_REPLAY_ORBIT_CAMERA = L10n.lang("bbs.ui.film.replay.orbit.camera");
+    public static final IKey FILM_REPLAY_ORBIT_BIND_TO_RECORDING = L10n.lang("bbs.ui.film.replay.orbit.bind_to_recording");
     public static final IKey FILM_REPLAY_ORBIT_FIRST_PERSON = L10n.lang("bbs.ui.film.replay.orbit.first_person");
     public static final IKey FILM_REPLAY_ORBIT_FREE = L10n.lang("bbs.ui.film.replay.orbit.free");
     public static final IKey FILM_REPLAY_ORBIT_ORBIT = L10n.lang("bbs.ui.film.replay.orbit.orbit");
+    public static final IKey FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING = L10n.lang("bbs.ui.film.replay.orbit.teleport_to_recording");
     public static final IKey FILM_REPLAY_ORBIT_THIRD_PERSON_BACK = L10n.lang("bbs.ui.film.replay.orbit.third_person_back");
     public static final IKey FILM_REPLAY_ORBIT_THIRD_PERSON_FRONT = L10n.lang("bbs.ui.film.replay.orbit.third_person_front");
     public static final IKey FILM_REPLAY_PICK_AXES_PREVIEW = L10n.lang("bbs.ui.film.replay.pick_axes_preview");

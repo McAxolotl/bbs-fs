@@ -786,6 +786,26 @@ public class UIFilmController extends UIElement
         return Icons.CAMERA;
     }
 
+    public boolean isOrbitBoundToReplay()
+    {
+        return this.orbit.isBindToReplay();
+    }
+
+    public void toggleOrbitBindToReplay()
+    {
+        this.orbit.toggleBindToReplay();
+    }
+
+    public void teleportOrbitPivotToReplay()
+    {
+        this.orbit.teleportPivotToReplay();
+    }
+
+    public boolean zoomOrbit(double mouseWheel)
+    {
+        return this.orbit.zoom(mouseWheel);
+    }
+
     public void toggleOrbitMode()
     {
         if (this.controlled != null)

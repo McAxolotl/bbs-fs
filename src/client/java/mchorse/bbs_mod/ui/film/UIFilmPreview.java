@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.controller.UIOnionSkinContextMenu;
+import mchorse.bbs_mod.ui.film.controller.UIFilmController;
 import mchorse.bbs_mod.ui.film.utils.UICameraUtils;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -143,6 +144,16 @@ public class UIFilmPreview extends UIElement
         this.control.tooltip(UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_CONTROL);
         this.perspective = new UIIcon(this.panel.getController()::getOrbitModeIcon, (b) -> this.panel.getController().toggleOrbitMode());
         this.perspective.tooltip(UIKeys.FILM_CONTROLLER_KEYS_CHANGE_CAMERA_MODE);
+        this.perspective.context((menu) ->
+        {
+            UIFilmController controller = this.panel.getController();
+
+            if (controller.getPovMode() == UIFilmController.CAMERA_MODE_ORBIT)
+            {
+                menu.action(Icons.ORBIT, UIKeys.FILM_REPLAY_ORBIT_BIND_TO_RECORDING, controller.isOrbitBoundToReplay(), controller::toggleOrbitBindToReplay);
+                menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
+            }
+        });
         this.recordReplay = new UIIcon(Icons.SPHERE, (b) -> this.panel.getController().pickRecording());
         this.recordReplay.tooltip(UIKeys.FILM_REPLAY_RECORD);
         this.recordReplay.context((menu) ->
@@ -280,6 +291,19 @@ public class UIFilmPreview extends UIElement
         }
 
         return super.subMouseClicked(context);
+    }
+
+    @Override
+    protected boolean subMouseScrolled(UIContext context)
+    {
+        Area area = this.getViewport();
+
+        if (area.isInside(context) && !this.panel.isFlying() && this.panel.getController().getPovMode() == UIFilmController.CAMERA_MODE_ORBIT)
+        {
+            return this.panel.getController().zoomOrbit(context.mouseWheel);
+        }
+
+        return super.subMouseScrolled(context);
     }
 
     @Override

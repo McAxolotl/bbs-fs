@@ -814,12 +814,7 @@ public class UIReplaysEditor extends UIElement {
                 return true;
             }
             if (context.mouseButton == 2) {
-                if (Window.isKeyPressed(Keys.FLIGHT_ORBIT.getMainKey())
-                        && this.filmPanel.getController().orbit.enabled) {
-                    this.filmPanel.getController().orbit.start(context);
-                } else {
-                    this.filmPanel.dashboard.orbit.start(2, context.mouseX, context.mouseY);
-                }
+                this.filmPanel.dashboard.orbit.start(2, context.mouseX, context.mouseY);
 
                 return true;
             }
@@ -827,6 +822,12 @@ public class UIReplaysEditor extends UIElement {
 
         if (this.filmPanel.isFlying()) {
             return false;
+        }
+
+        if (area.isInside(context) && context.mouseButton == 2 && this.filmPanel.getController().orbit.enabled) {
+            this.filmPanel.getController().orbit.start(context);
+
+            return true;
         }
 
         StencilFormFramebuffer stencil = this.filmPanel.getController().getStencil();
@@ -958,7 +959,7 @@ public class UIReplaysEditor extends UIElement {
             }
         }
 
-        if (area.isInside(context) && this.filmPanel.getController().orbit.enabled) {
+        if (area.isInside(context) && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
             this.filmPanel.getController().orbit.start(context);
 
             return true;
