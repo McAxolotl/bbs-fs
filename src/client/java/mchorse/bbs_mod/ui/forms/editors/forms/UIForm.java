@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -129,7 +130,8 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     @Override
     protected void renderBackground(UIContext context, int x, int y, int w, int h)
     {
-        context.batcher.box(x, y, x + w, y + h, Colors.A100);
+        context.batcher.box(x, y, x + w, y + h, BBSSettings.baseSurface());
+        context.batcher.box(x, y, x + w, y + h, BBSSettings.backgroundTint(Colors.A6));
     }
 
     @Override

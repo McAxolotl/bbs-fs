@@ -39,6 +39,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -786,6 +787,26 @@ public class UIFilmController extends UIElement
         return Icons.CAMERA;
     }
 
+    public boolean isOrbitBoundToReplay()
+    {
+        return this.orbit.isBindToReplay();
+    }
+
+    public void toggleOrbitBindToReplay()
+    {
+        this.orbit.toggleBindToReplay();
+    }
+
+    public void teleportOrbitPivotToReplay()
+    {
+        this.orbit.teleportPivotToReplay();
+    }
+
+    public boolean zoomOrbit(double mouseWheel)
+    {
+        return this.orbit.zoom(mouseWheel);
+    }
+
     public void toggleOrbitMode()
     {
         if (this.controlled != null)
@@ -1295,6 +1316,8 @@ public class UIFilmController extends UIElement
             }
         }
 
+        this.renderOrbitCenterMarker(context);
+
         Mouse mouse = MinecraftClient.getInstance().mouse;
         int x = (int) mouse.getX();
         int y = (int) mouse.getY();
@@ -1325,6 +1348,43 @@ public class UIFilmController extends UIElement
         this.lastMouse.set(x, y);
 
         RenderSystem.disableDepthTest();
+    }
+
+    private void renderOrbitCenterMarker(WorldRenderContext context)
+    {
+        if (this.getPovMode() != CAMERA_MODE_ORBIT || !BBSSettings.editorOrbitCenterMarker.get())
+        {
+            return;
+        }
+
+        Vector3d center = this.orbit.getOrbitCenter(this.getCurrentTransition());
+
+        if (center == null)
+        {
+            return;
+        }
+
+        net.minecraft.client.render.Camera camera = context.camera();
+        double x = center.x - camera.getPos().x;
+        double y = center.y - camera.getPos().y;
+        double z = center.z - camera.getPos().z;
+        float distanceScale = BBSSettings.getAxesDistanceScale((float) Math.sqrt(x * x + y * y + z * z));
+        MatrixStack stack = context.matrixStack();
+
+        stack.push();
+        stack.translate(x, y, z);
+        stack.scale(distanceScale, distanceScale, distanceScale);
+        Draw.coolerAxes(stack, 0.12F, 0.007F);
+        stack.pop();
+
+        RenderSystem.enableDepthTest();
+    }
+
+    private float getCurrentTransition()
+    {
+        UIContext context = this.getContext();
+
+        return context == null ? 0F : context.getTransition();
     }
 
     public Pair<String, Boolean> getBone()

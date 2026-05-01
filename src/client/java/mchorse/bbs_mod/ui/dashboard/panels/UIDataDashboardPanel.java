@@ -83,9 +83,30 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         }
 
         int tabsHeight = UIDataTabs.TABS_HEIGHT_PX;
+        int sidebarWidth = Math.max(0, this.getSidebarWidthPx());
 
-        this.iconBar.relative(this).x(1F, -20).y(tabsHeight).w(20).h(1F, -tabsHeight).column(0).stretch();
-        this.editor.relative(this).y(tabsHeight).wTo(this.iconBar.area).h(1F, -tabsHeight);
+        this.tabBar.setRightInsetPx(this.getTabsRightInsetPx());
+        this.iconBar.relative(this).x(1F, -sidebarWidth).y(tabsHeight).w(sidebarWidth).h(1F, -tabsHeight).column(0).stretch();
+        this.iconBar.setVisible(sidebarWidth > 0);
+
+        if (sidebarWidth > 0)
+        {
+            this.editor.relative(this).y(tabsHeight).wTo(this.iconBar.area).h(1F, -tabsHeight);
+        }
+        else
+        {
+            this.editor.relative(this).y(tabsHeight).w(1F).h(1F, -tabsHeight);
+        }
+    }
+
+    protected int getSidebarWidthPx()
+    {
+        return 20;
+    }
+
+    protected int getTabsRightInsetPx()
+    {
+        return 0;
     }
 
     public boolean areTabsEnabled()
@@ -589,6 +610,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     public void resize()
     {
         super.resize();
+        this.setupTabsLayout();
 
         if (!this.openedBefore && this.getContext() != null && this.shouldAutoOpenListOnFirstResize())
         {

@@ -121,17 +121,18 @@ public class UIClips extends UIElement
         /* Draw the marker */
         FontRenderer font = context.batcher.getFont();
         int width = font.getWidth(label) + 3;
+        int color = BBSSettings.primaryColor.get();
 
-        context.batcher.box(x, area.y, x + 2, area.ey(), Colors.CURSOR);
+        context.batcher.box(x, area.y, x + 1, area.ey(), color | Colors.A100);
 
         /* Move the tick line left, so it won't overflow the timeline */
-        if (x + 2 + width > area.ex())
+        if (x + 1 + width > area.ex())
         {
             x -= width + 1;
         }
 
         /* Draw the tick label */
-        context.batcher.textCard(label, x + 4, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(Colors.CURSOR, 0.75F), 2);
+        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(color, 0.78F), 2);
     }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
@@ -1715,10 +1716,12 @@ public class UIClips extends UIElement
 
         if (leftEdge > this.area.x)
         {
-            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), Colors.A75);
+            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.chromeSurface());
+            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
 
-        area.render(batcher, Colors.A50);
+        area.render(batcher, BBSSettings.deepSurface());
+        area.render(batcher, BBSSettings.backgroundTint(Colors.A6));
         batcher.clip(this.vertical.area.x, rulerBottom, this.vertical.area.ex(), this.vertical.area.ey(), context);
 
         for (int i = 0; i < this.layers; i++)
@@ -1727,7 +1730,8 @@ public class UIClips extends UIElement
 
             if (i % 2 != 0)
             {
-                batcher.box(leftEdge, ly, this.area.ex(), ly + h, Colors.A50);
+                batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
+                batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.backgroundTint(Colors.A6));
             }
         }
 

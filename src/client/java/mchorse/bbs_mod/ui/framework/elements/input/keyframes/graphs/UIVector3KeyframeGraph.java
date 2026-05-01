@@ -116,6 +116,26 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         BufferRenderer.drawWithGlobalProgram(builder.end());
     }
 
+    @Override
+    public void renderTopmostKeyframes(UIContext context)
+    {
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+
+        context.batcher.clip(this.keyframes.graphArea, context);
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            this.renderGraphPoints(context, builder, matrix, axis);
+        }
+
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+        context.batcher.unclip(context);
+    }
+
     private void renderGraphLine(UIContext context, int axis, KeyframeSegment segment)
     {
         List<Keyframe> keyframes = this.sheet.channel.getKeyframes();

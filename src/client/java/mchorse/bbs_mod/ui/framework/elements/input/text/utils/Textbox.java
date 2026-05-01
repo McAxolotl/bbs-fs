@@ -706,11 +706,12 @@ public class Textbox
 
         if (this.background)
         {
-            this.area.render(context.batcher, 0xff000000);
+            this.area.render(context.batcher, BBSSettings.inputSurface());
+            this.area.render(context.batcher, BBSSettings.inputSurfaceTint());
 
             if (this.border)
             {
-                int borderColor = this.focused ? 0xff000000 + BBSSettings.primaryColor.get() : 0xffaaaaaa;
+                int borderColor = BBSSettings.inputBorderColor(this.focused);
 
                 context.batcher.outline(this.area.x, this.area.y, this.area.ex(), this.area.ey(), borderColor);
             }
@@ -733,7 +734,7 @@ public class Textbox
             int sx = x + offset;
             int sw = this.font.getWidth(text.substring(min, max));
 
-            context.batcher.box(sx, y - 2, sx + sw, y + this.font.getHeight() + 2, 0x88000000 + BBSSettings.primaryColor.get());
+            context.batcher.box(sx, y - 2, sx + sw, y + this.font.getHeight() + 2, BBSSettings.accentOverlay(0x88));
         }
 
         context.batcher.textShadow(text, x, y, color);

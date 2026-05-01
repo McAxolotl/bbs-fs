@@ -83,12 +83,14 @@ public class UIReplaysListPanel extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int panelBg = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.1F);
-        int barBg = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F);
+        int panelBg = BBSSettings.baseSurface();
+        int barBg = BBSSettings.raisedSurface();
 
         this.area.render(context.batcher, panelBg);
+        this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
         this.updateButtonsState();
         context.batcher.box(this.bar.area.x, this.bar.area.y, this.bar.area.ex(), this.bar.area.ey(), barBg);
+        context.batcher.box(this.bar.area.x, this.bar.area.y, this.bar.area.ex(), this.bar.area.ey(), BBSSettings.backgroundTint(Colors.A12));
         super.render(context);
     }
 }

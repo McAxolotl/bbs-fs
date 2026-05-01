@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.selectors;
 
 import com.mojang.brigadier.StringReader;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.selectors.EntitySelector;
@@ -175,6 +176,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
     {
         super.renderBackground(context);
 
-        this.content.area.render(context.batcher, Colors.A100);
+        this.content.area.render(context.batcher, BBSSettings.baseSurface());
+        this.content.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
     }
 }

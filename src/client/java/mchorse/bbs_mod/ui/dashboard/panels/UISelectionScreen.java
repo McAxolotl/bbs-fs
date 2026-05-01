@@ -697,22 +697,21 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     private void renderBackdrop(UIContext context)
     {
         this.updateActionButtons();
-
         int color = BBSSettings.primaryColor.get();
 
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.baseSurface());
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
         context.batcher.gradientVBox(this.area.x, this.area.ey() - this.area.h / 2, this.area.ex(), this.area.ey(), 0, Colors.A12 | color);
     }
 
     private void renderCard(UIContext context, Area area)
     {
-        int color = BBSSettings.primaryColor.get();
-        int bg = Colors.mulRGB(Colors.CONTROL_BAR, 1.30F);
-        int border = Colors.A12;
+        int bg = BBSSettings.raisedSurface();
+        int border = BBSSettings.color(BBSSettings.dividerColor(), Colors.A12);
 
         context.batcher.dropShadow(area.x, area.y, area.ex(), area.ey(), 10, Colors.A50, 0);
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);
-        context.batcher.box(area.x, area.y, area.ex(), area.ey(), Colors.A6 | color);
+        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A12));
         context.batcher.box(area.x, area.y, area.ex(), area.y + 1, border);
         context.batcher.box(area.x, area.ey() - 1, area.ex(), area.ey(), border);
         context.batcher.box(area.x, area.y, area.x + 1, area.ey(), border);
@@ -720,15 +719,16 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
         int sepY = area.y + BANNER_H;
 
-        context.batcher.box(area.x, sepY, area.ex(), sepY + 1, Colors.A100 | color);
-        context.batcher.gradientVBox(area.x, sepY + 1, area.ex(), sepY + 14, Colors.A25 | color, 0);
+        context.batcher.box(area.x, sepY, area.ex(), sepY + 1, BBSSettings.primaryColor(Colors.A100));
+        context.batcher.gradientVBox(area.x, sepY + 1, area.ex(), sepY + 14, BBSSettings.primaryColor(Colors.A25), 0);
     }
 
     private void renderListBackground(UIContext context, Area area)
     {
-        int bg = Colors.mulRGB(Colors.CONTROL_BAR, 1.10F);
+        int bg = BBSSettings.baseSurface();
 
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);
+        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A6));
     }
 
     private void renderBanner(UIContext context, Area area)

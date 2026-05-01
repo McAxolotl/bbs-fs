@@ -187,9 +187,10 @@ public class UIReplayPropertiesPanel extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int panelBg = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F);
+        int panelBg = BBSSettings.baseSurface();
 
         this.area.render(context.batcher, panelBg);
+        this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
         super.render(context);
     }
 }

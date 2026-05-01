@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils.renderers;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -13,8 +14,9 @@ public class TimelineRulerRenderer
     public static final int RULER_BLOCK_HEIGHT = 21;
 
     private static final int SUBDIVISIONS = 5;
-    private static final float MAJOR_ALPHA = 0.2F;
-    private static final float MINOR_ALPHA = 0.2F;
+    private static final float MAJOR_ALPHA = 0.55F;
+    private static final float MINOR_ALPHA = 0.3F;
+    private static final float LABEL_ALPHA = 0.72F;
 
     public static int getTimelineBottom(Area area)
     {
@@ -56,7 +58,8 @@ public class TimelineRulerRenderer
         end = Math.max(mult, Math.min(end, max));
 
         context.batcher.clip(area, context);
-        context.batcher.box(area.x, area.y, area.ex(), rulerBottom, Colors.A100);
+        context.batcher.box(area.x, area.y, area.ex(), rulerBottom, BBSSettings.chromeSurface());
+        context.batcher.box(area.x, area.y, area.ex(), rulerBottom, BBSSettings.backgroundTint(Colors.A6));
 
         for (int tick = start; tick <= end; tick += mult)
         {
@@ -72,8 +75,8 @@ public class TimelineRulerRenderer
                 continue;
             }
 
-            context.batcher.box(x, majorTop, x + 1, timelineBottom - 1, Colors.setA(Colors.WHITE, MAJOR_ALPHA));
-            context.batcher.text(labelFormatter.apply(tick), x + 4, area.y + 2);
+            context.batcher.box(x, majorTop, x + 1, timelineBottom - 1, Colors.setA(BBSSettings.dividerColor(), MAJOR_ALPHA));
+            context.batcher.textShadow(labelFormatter.apply(tick), x + 4, area.y + 2, Colors.setA(Colors.WHITE, LABEL_ALPHA));
 
             int nextX = Math.min(toGraphX.applyAsInt(tick + mult), timelineEndX);
             int interval = nextX - x;
@@ -86,7 +89,7 @@ public class TimelineRulerRenderer
 
                     if (mx > area.x && mx < area.ex())
                     {
-                        context.batcher.box(mx, minorTop, mx + 1, timelineBottom - 1, Colors.setA(Colors.WHITE, MINOR_ALPHA));
+                        context.batcher.box(mx, minorTop, mx + 1, timelineBottom - 1, Colors.setA(BBSSettings.dividerColor(), MINOR_ALPHA));
                     }
                 }
             }
@@ -94,10 +97,10 @@ public class TimelineRulerRenderer
 
         if (timelineBottom < rulerBottom)
         {
-            context.batcher.box(area.x, timelineBottom - 1, area.ex(), timelineBottom, Colors.A25);
+            context.batcher.box(area.x, timelineBottom - 1, area.ex(), timelineBottom, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
         }
 
-        context.batcher.box(area.x, rulerBottom - 1, area.ex(), rulerBottom, Colors.A25);
+        context.batcher.box(area.x, rulerBottom - 1, area.ex(), rulerBottom, BBSSettings.color(BBSSettings.dividerColor(), Colors.A75));
         context.batcher.unclip(context);
     }
 }

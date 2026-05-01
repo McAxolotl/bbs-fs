@@ -1231,7 +1231,7 @@ public class UIKeyframes extends UIElement
         if (this.labelResizer.isVisible() && (this.labelResizer.area.isInside(context) || this.labelResizer.isDragging()))
         {
             Area a = this.labelResizer.area;
-            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey(), Colors.A100);
+            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey(), BBSSettings.dividerColor());
         }
     }
 
@@ -1294,17 +1294,24 @@ public class UIKeyframes extends UIElement
      */
     protected void renderBackground(UIContext context)
     {
-        this.area.render(context.batcher, Colors.A50);
+        this.area.render(context.batcher, BBSSettings.baseSurface());
+        this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
+        this.graphArea.render(context.batcher, BBSSettings.deepSurface());
+        this.graphArea.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
 
         int duration = this.getDuration();
 
         if (duration > 0)
         {
             int leftBorder = this.toGraphX(0);
-            int rightBorder = this.toGraphX(duration);
 
-            if (leftBorder > this.graphArea.x) context.batcher.box(this.graphArea.x, this.graphArea.y, Math.min(this.graphArea.ex(), leftBorder), this.graphArea.y + this.graphArea.h, Colors.A50);
-            if (rightBorder < this.graphArea.ex()) context.batcher.box(Math.max(this.graphArea.x, rightBorder), this.graphArea.y, this.graphArea.ex() , this.graphArea.y + this.graphArea.h, Colors.A50);
+            if (leftBorder > this.graphArea.x)
+            {
+                int leftEx = Math.min(this.graphArea.ex(), leftBorder);
+
+                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.chromeSurface());
+                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.backgroundTint(Colors.A6));
+            }
         }
 
         if (this.backgroundRender != null)

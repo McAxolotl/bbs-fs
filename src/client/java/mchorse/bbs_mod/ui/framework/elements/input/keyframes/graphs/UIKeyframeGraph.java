@@ -620,7 +620,15 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
         /* Render track bars (horizontal lines) */
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        this.renderGraphPointShapes(context, builder, matrix, keyframes);
 
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
+    protected void renderGraphPointShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, List keyframes)
+    {
         /* Draw keyframe handles (outer) */
         int forcedIndex = 0;
 
@@ -715,10 +723,23 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 shapeResult.renderKeyframeBackground(context, builder, matrix, lx, ly, 2, c | Colors.A100);
             }
         }
+    }
 
+    @Override
+    public void renderTopmostKeyframes(UIContext context)
+    {
+        Area area = this.keyframes.graphArea;
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        List keyframes = this.sheet.channel.getKeyframes();
+
+        context.batcher.clip(area, context);
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        this.renderGraphPointShapes(context, builder, matrix, keyframes);
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferRenderer.drawWithGlobalProgram(builder.end());
+        context.batcher.unclip(context);
     }
 
     @Override

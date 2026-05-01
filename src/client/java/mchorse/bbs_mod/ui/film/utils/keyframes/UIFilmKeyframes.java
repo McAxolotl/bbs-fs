@@ -84,9 +84,9 @@ public class UIFilmKeyframes extends UIKeyframes
     }
 
     @Override
-    protected void renderBackground(UIContext context)
+    public void render(UIContext context)
     {
-        super.renderBackground(context);
+        super.render(context);
 
         if (this.editor != null)
         {
@@ -96,6 +96,7 @@ public class UIFilmKeyframes extends UIKeyframes
             context.batcher.clip(this.graphArea, context);
             UIClips.renderCursor(context, label, this.area, cx - 1);
             context.batcher.unclip(context);
+            this.getGraph().renderTopmostKeyframes(context);
         }
     }
 }

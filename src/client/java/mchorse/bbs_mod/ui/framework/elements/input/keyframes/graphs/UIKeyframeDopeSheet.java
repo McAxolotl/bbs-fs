@@ -44,6 +44,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 {
     private static final int POSE_TAB_BASE_INDENT = 4;
     private static final int POSE_TAB_DEPTH_STEP = 4;
+    private static final float TRACK_BAR_ALPHA = 0.3F;
 
     private UIKeyframes keyframes;
 
@@ -720,6 +721,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         this.renderGrid(context);
         this.renderGraph(context);
+        this.renderPreviewHints(context);
     }
 
     /**
@@ -743,7 +745,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             TimeUtils::formatTime
         );
 
-        /* Render where the keyframe will be duplicated or added */
+    }
+
+    private void renderPreviewHints(UIContext context)
+    {
+        Area area = this.keyframes.graphArea;
+
         if (!area.isInside(context))
         {
             return;
@@ -913,17 +920,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
 
         int startX = this.keyframes.toGraphX(0);
-        int endX = this.keyframes.toGraphX(this.keyframes.getDuration());
-        int shadeColor = Colors.A50;
-
         if (startX > area.x)
         {
-            context.batcher.box(area.x, contentY, Math.min(startX, area.ex()), area.ey(), shadeColor);
-        }
+            int leftEx = Math.min(startX, area.ex());
 
-        if (endX < area.ex())
-        {
-            context.batcher.box(Math.max(endX, area.x), contentY, area.ex(), area.ey(), shadeColor);
+            context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.chromeSurface());
+            context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
     }
 
@@ -933,7 +935,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int w = this.keyframes.getLabelWidth();
 
         /* Render background */
-        context.batcher.box(area.x + w - 1, area.y, area.x + w, area.ey(), Colors.A12);
+        context.batcher.box(area.x + w - 1, area.y, area.x + w, area.ey(), BBSSettings.dividerColor());
 
         context.batcher.clip(area.x, area.y, area.x + w, area.ey(), context);
 
@@ -978,7 +980,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         if (hover)
         {
-            context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(group.color, 0.35F), Colors.setA(group.color, 0.08F));
+            context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(group.color, 0.2F), Colors.setA(group.color, 0.04F));
         }
 
         context.batcher.box(lx, y, lx + 2, y + (int) this.trackHeight, group.color | Colors.A100);
@@ -1008,7 +1010,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         if (hover)
         {
-            context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(sheet.color, 0.35F), Colors.setA(sheet.color, 0.08F));
+            context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(sheet.color, 0.2F), Colors.setA(sheet.color, 0.04F));
         }
 
         context.batcher.box(lx, y, lx + 2, y + (int) this.trackHeight, sheet.color | Colors.A100);
@@ -1060,7 +1062,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private int getTrackGap()
     {
-        return Math.max(1, (int) Math.round(this.trackHeight * 0.06D));
+        return 0;
     }
 
     private int getTrackBodyY(int y)
@@ -1085,16 +1087,16 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
         int by = this.getTrackBodyY(y);
         int bh = this.getTrackBodyHeight();
-        int bg = Colors.setA(BBSSettings.darkMode.get() ? Colors.DARKER_GRAY : group.color, hover ? 0.25F : 0.2F);
+        int row = Math.max(0, (y - TimelineRulerRenderer.getTimelineBottom(area)) / Math.max(1, (int) this.trackHeight));
+        int surface = row % 2 == 0 ? BBSSettings.deepSurface() : BBSSettings.baseSurface();
 
-        /* Render track background block */
-        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        context.batcher.box(area.x, by, area.ex(), by + bh, surface);
+        context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.backgroundTint(Colors.A6));
 
-        context.batcher.fillRect(builder, matrix, area.x, by, area.w, bh, bg, bg, bg, bg);
-
-        RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        if (hover)
+        {
+            context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
+        }
     }
 
     private void renderSheet(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int offset, int y)
@@ -1115,7 +1117,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int my = y + (int) this.trackHeight / 2;
         int by = this.getTrackBodyY(y);
         int bh = this.getTrackBodyHeight();
-        int trackColor = BBSSettings.darkMode.get() ? Colors.DARKER_GRAY : sheet.color;
         int row = 0;
         Integer sheetY = this.sheetYCache.get(sheet);
 
@@ -1124,23 +1125,26 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             row = sheetY / Math.max(1, (int) this.trackHeight);
         }
 
-        float baseAlpha = row % 2 == 0 ? 0.2F : 0.25F;
-        float hoverAlpha = row % 2 == 0 ? 0.25F : 0.3F;
-        int bg = Colors.setA(trackColor, hover ? hoverAlpha : baseAlpha);
-
         int trackWidth = BBSSettings.editorTrackWidth.get();
 
-        /* Render track background block */
-        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        int surface = row % 2 == 0 ? BBSSettings.deepSurface() : BBSSettings.baseSurface();
 
-        context.batcher.fillRect(builder, matrix, area.x, by, area.w, bh, bg, bg, bg, bg);
+        context.batcher.box(area.x, by, area.ex(), by + bh, surface);
+        context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.backgroundTint(Colors.A6));
+
+        if (hover)
+        {
+            context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
+        }
+
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
 
         /* Render bars indicating same values */
         for (int j = 1; j < keyframes.size(); j++)
         {
             Keyframe previous = (Keyframe) keyframes.get(j - 1);
             Keyframe frame = (Keyframe) keyframes.get(j);
-            int c = Colors.setA(sheet.color, 0.3F);
+            int c = Colors.setA(sheet.color, TRACK_BAR_ALPHA);
             int xx = this.keyframes.toGraphX(previous.getTick());
             int xxx = this.keyframes.toGraphX(frame.getTick());
 
@@ -1218,6 +1222,109 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
+    private void renderSheetKeyframeShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int y)
+    {
+        if (!this.isVisible(sheet))
+        {
+            return;
+        }
+
+        if (y + this.trackHeight < area.y || y > area.ey())
+        {
+            return;
+        }
+
+        List keyframes = sheet.channel.getKeyframes();
+        int my = y + (int) this.trackHeight / 2;
+        int forcedIndex = 0;
+
+        for (int j = 0; j < keyframes.size(); j++)
+        {
+            Keyframe frame = (Keyframe) keyframes.get(j);
+            float tick = frame.getTick();
+            int x1 = this.keyframes.toGraphX(tick);
+            int x2 = this.keyframes.toGraphX(tick + frame.getDuration());
+
+            if (x1 != x2)
+            {
+                forcedIndex += 1;
+            }
+
+            boolean isPointHover = this.isNear(x1, my, context.mouseX, context.mouseY, Window.isAltPressed() && Window.isShiftPressed());
+            boolean toRemove = Window.isCtrlPressed() && isPointHover;
+
+            if (this.keyframes.isSelecting())
+            {
+                isPointHover = isPointHover || this.keyframes.getGrabbingArea(context).isInside(x1, my);
+            }
+
+            int kc = frame.getColor() != null ? frame.getColor().getRGBColor() | Colors.A100 : sheet.color;
+            int c = (sheet.selection.has(j) || isPointHover ? Colors.WHITE : kc) | Colors.A100;
+
+            if (toRemove)
+            {
+                c = Colors.RED | Colors.A100;
+            }
+
+            int pointOffset = toRemove ? 4 : 3;
+
+            renderShape(frame, context, builder, matrix, x1, my, pointOffset, c);
+        }
+
+        for (int j = 0; j < keyframes.size(); j++)
+        {
+            Keyframe frame = (Keyframe) keyframes.get(j);
+            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int mx = this.keyframes.toGraphX(frame.getTick());
+            int mc = c | Colors.A100;
+            IKeyframeShapeRenderer shapeResult = renderShape(frame, context, builder, matrix, mx, my, 2, mc);
+
+            shapeResult.renderKeyframeBackground(context, builder, matrix, mx, my, 2, mc);
+        }
+    }
+
+    private int renderElementsTopmostKeyframes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, List<UIKeyframeElement> elements, int y)
+    {
+        for (UIKeyframeElement element : elements)
+        {
+            if (element instanceof UIKeyframeSheet sheet)
+            {
+                this.renderSheetKeyframeShapes(context, builder, matrix, area, sheet, y);
+            }
+
+            y += this.getElementHeight(element);
+
+            if (element instanceof UIKeyframeGroup group && !group.collapsed)
+            {
+                y = this.renderElementsTopmostKeyframes(context, builder, matrix, area, group.children, y);
+            }
+        }
+
+        return y;
+    }
+
+    @Override
+    public void renderTopmostKeyframes(UIContext context)
+    {
+        if (this.elements.isEmpty())
+        {
+            return;
+        }
+
+        Area area = this.keyframes.graphArea;
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+
+        context.batcher.clip(area.x, rulerBottom, area.ex(), area.ey(), context);
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        this.renderElementsTopmostKeyframes(context, builder, matrix, area, this.elements, this.getDopeSheetY());
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+        context.batcher.unclip(context);
     }
 
     private boolean isPoseTabArrowHit(UIContext context, int y, int labelWidth)
