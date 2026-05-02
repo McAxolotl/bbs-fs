@@ -401,6 +401,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         int hx = this.keyframes.getDuration() / mult;
         int ht = (int) this.keyframes.fromGraphX(area.x);
 
+        this.keyframes.renderRuler(context);
+
         for (int j = Math.max(ht / mult, 0); j <= hx; j++)
         {
             int x = this.keyframes.toGraphX(j * mult);

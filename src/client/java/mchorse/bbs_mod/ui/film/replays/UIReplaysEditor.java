@@ -59,6 +59,7 @@ import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -209,11 +210,36 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
-    public static boolean renderBackground(
+    public static void renderRuler(
+            UIContext context,
+            UIKeyframes keyframes,
+            UIClipsPanel clipsPanel,
+            Clips camera,
+            int clipOffset
+    ) {
+        Area area = keyframes.graphArea;
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
+
+        if (rulerBottom <= area.y)
+        {
+            return;
+        }
+
+        context.batcher.clip(area.x, area.y, area.ex(), rulerBottom, context);
+
+        renderRulerAudio(context, keyframes, camera, clipOffset, area, rulerBottom);
+        renderRulerClipGradient(context, keyframes, clipsPanel, clipOffset, area, rulerBottom);
+
+        context.batcher.unclip(context);
+    }
+
+    private static boolean renderRulerAudio(
             UIContext context,
             UIKeyframes keyframes,
             Clips camera,
-            int clipOffset
+            int clipOffset,
+            Area area,
+            int rulerBottom
     ) {
         if (!BBSSettings.audioWaveformVisibleInKeyframes.get()) {
             return false;
@@ -221,48 +247,84 @@ public class UIReplaysEditor extends UIElement {
 
         Scale scale = keyframes.getXAxis();
         boolean renderedOnce = false;
+        int y = area.y + 1;
+        int h = Math.max(1, rulerBottom - y - 1);
 
         for (Clip clip : camera.get()) {
-            if (clip instanceof AudioClip audioClip) {
-                Link link = audioClip.audio.get();
-
-                if (link == null) {
-                    continue;
-                }
-
-                SoundBuffer buffer = BBSModClient.getSounds().get(link, true);
-
-                if (buffer == null || buffer.getWaveform() == null) {
-                    continue;
-                }
-
-                Waveform wave = buffer.getWaveform();
-
-                if (wave != null) {
-                    int audioOffset = audioClip.offset.get();
-                    float offset = audioClip.tick.get() - clipOffset;
-                    int duration = Math.min((int) (wave.getDuration() * 20), clip.duration.get());
-
-                    int x1 = (int) scale.to(offset);
-                    int x2 = (int) scale.to(offset + duration);
-
-                    wave.render(
-                            context.batcher,
-                            Colors.WHITE,
-                            x1,
-                            keyframes.area.y + 15,
-                            x2 - x1,
-                            20,
-                            TimeUtils.toSeconds(audioOffset),
-                            TimeUtils.toSeconds(audioOffset + duration)
-                    );
-
-                    renderedOnce = true;
-                }
+            if (!(clip instanceof AudioClip audioClip)) {
+                continue;
             }
+
+            Link link = audioClip.audio.get();
+
+            if (link == null) {
+                continue;
+            }
+
+            SoundBuffer buffer = BBSModClient.getSounds().get(link, true);
+
+            if (buffer == null || buffer.getWaveform() == null) {
+                continue;
+            }
+
+            Waveform wave = buffer.getWaveform();
+            int audioOffset = audioClip.offset.get();
+            float offset = audioClip.tick.get() - clipOffset;
+            int duration = Math.min((int) (wave.getDuration() * 20), clip.duration.get());
+            int x1 = (int) scale.to(offset);
+            int x2 = (int) scale.to(offset + duration);
+
+            if (x2 <= area.x || x1 >= area.ex()) {
+                continue;
+            }
+
+            wave.render(
+                    context.batcher,
+                    Colors.WHITE,
+                    x1,
+                    y,
+                    x2 - x1,
+                    h,
+                    TimeUtils.toSeconds(audioOffset),
+                    TimeUtils.toSeconds(audioOffset + duration)
+            );
+
+            renderedOnce = true;
         }
 
         return renderedOnce;
+    }
+
+    private static void renderRulerClipGradient(
+            UIContext context,
+            UIKeyframes keyframes,
+            UIClipsPanel clipsPanel,
+            int clipOffset,
+            Area area,
+            int rulerBottom
+    ) {
+        Clip clip = clipsPanel.getClip();
+
+        if (clip == null || clip instanceof AudioClip || !BBSSettings.editorClipPreview.get()) {
+            return;
+        }
+
+        Scale scale = keyframes.getXAxis();
+        int x1 = (int) scale.to(clip.tick.get() - clipOffset);
+        int x2 = (int) scale.to(clip.tick.get() + clip.duration.get() - clipOffset);
+
+        if (x2 <= area.x || x1 >= area.ex()) {
+            return;
+        }
+
+        int color = clipsPanel.clips.getFactory().getData(clip).color;
+        int left = Math.max(area.x, x1);
+        int right = Math.min(area.ex(), x2);
+        int top = area.y + 1;
+        int bottom = Math.max(top + 1, rulerBottom - 1);
+
+        context.batcher.gradientVBox(left, top, right, bottom, Colors.setA(color, 0.03F), Colors.setA(color, 0.78F));
+        context.batcher.box(left, Math.max(top, bottom - 2), right, bottom, Colors.setA(color, 0.92F));
     }
 
     public UIReplaysEditor(UIFilmPanel filmPanel) {
@@ -486,28 +548,9 @@ public class UIReplaysEditor extends UIElement {
                 this.keyframeEditor.view.copyViewport(lastEditor);
             }
 
-            this.keyframeEditor.view.backgroundRenderer(context -> {
-                UIKeyframes view = this.keyframeEditor.view;
-                boolean yes = renderBackground(context, view, this.film.camera, 0);
-                int shift = yes ? 35 : 15;
-
-                UIClipsPanel cameraEditor = this.filmPanel.cameraEditor;
-                Clip clip = cameraEditor.getClip();
-
-                if (clip != null && BBSSettings.editorClipPreview.get()) {
-                    IUIClipRenderer<Clip> renderer = cameraEditor.clips.getRenderers().get(clip);
-                    Scale scale = view.getXAxis();
-                    Area area = new Area();
-
-                    float offset = clip.tick.get();
-                    int duration = clip.duration.get();
-                    int x1 = (int) scale.to(offset);
-                    int x2 = (int) scale.to(offset + duration);
-
-                    area.setPoints(x1, view.area.y + shift, x2, view.area.y + shift + 20);
-                    renderer.renderClip(context, cameraEditor.clips, clip, area, true, true);
-                }
-            });
+            this.keyframeEditor.view.rulerRenderer(context ->
+                    renderRuler(context, this.keyframeEditor.view, this.filmPanel.cameraEditor, this.film.camera, 0)
+            );
             this.keyframeEditor.view.duration(() -> this.film.camera.calculateDuration());
             this.keyframeEditor.view.context(menu -> {
                 if (this.replay.form.get() instanceof ModelForm modelForm) {

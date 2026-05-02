@@ -743,7 +743,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             duration,
             duration,
             this.keyframes::toGraphX,
-            TimeUtils::formatTime
+            TimeUtils::formatTime,
+            this.keyframes::renderRuler
         );
 
     }

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.colors.Colors;
 
+import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.function.IntUnaryOperator;
 
@@ -39,6 +40,21 @@ public class TimelineRulerRenderer
         IntFunction<String> labelFormatter
     )
     {
+        render(context, area, mult, startTick, endTick, durationTick, toGraphX, labelFormatter, null);
+    }
+
+    public static void render(
+        UIContext context,
+        Area area,
+        int mult,
+        int startTick,
+        int endTick,
+        int durationTick,
+        IntUnaryOperator toGraphX,
+        IntFunction<String> labelFormatter,
+        Consumer<UIContext> rulerDecorator
+    )
+    {
         if (mult <= 0)
         {
             return;
@@ -68,6 +84,11 @@ public class TimelineRulerRenderer
 
             context.batcher.box(rightX, area.y, area.ex(), rulerBottom, BBSSettings.chromeSurface());
             context.batcher.box(rightX, area.y, area.ex(), rulerBottom, BBSSettings.backgroundTint(Colors.A6));
+        }
+
+        if (rulerDecorator != null)
+        {
+            rulerDecorator.accept(context);
         }
 
         for (int tick = start; tick <= end; tick += mult)
