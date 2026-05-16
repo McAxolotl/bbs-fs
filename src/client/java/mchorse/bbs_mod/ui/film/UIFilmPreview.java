@@ -223,6 +223,7 @@ public class UIFilmPreview extends UIElement
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
             menu.action(Icons.GEAR, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS, () -> UIOverlay.addOverlay(this.getContext(), new UIVideoSettingsOverlayPanel(BBSSettings.videoSettings)));
 
+            menu.action(Icons.VIDEO_CAMERA, UIKeys.FILM_RENDER_QUEUE, this::exportQueueFromTabs);
             menu.action(Icons.SOUND, UIKeys.FILM_RENDER_AUDIO, this::renderAudio);
             menu.action(Icons.REFRESH, UIKeys.FILM_RESET_REPLAYS, this.panel.recorder.resetReplays, () ->
             {
@@ -237,6 +238,29 @@ public class UIFilmPreview extends UIElement
     public void openOnionSkin()
     {
         this.getContext().replaceContextMenu(new UIOnionSkinContextMenu(this.panel, this.panel.getController().getOnionSkin()));
+    }
+
+    private void exportQueueFromTabs()
+    {
+        if (this.panel.checkShowNoCamera())
+        {
+            return;
+        }
+
+        if (!FFMpegUtils.checkFFMPEG())
+        {
+            UIMessageOverlayPanel panel = new UIMessageOverlayPanel(UIKeys.GENERAL_WARNING, UIKeys.GENERAL_FFMPEG_ERROR_DESCRIPTION);
+            UIIcon guide = new UIIcon(Icons.HELP, (bb) -> UIUtils.openWebLink(UIKeys.GENERAL_FFMPEG_ERROR_GUIDE_LINK.get()));
+
+            guide.tooltip(UIKeys.GENERAL_FFMPEG_ERROR_GUIDE, Direction.LEFT);
+            panel.icons.add(guide);
+
+            UIOverlay.addOverlay(this.getContext(), panel);
+
+            return;
+        }
+
+        this.panel.startQueueExportFromOpenTabs();
     }
 
     private void renderAudio()
