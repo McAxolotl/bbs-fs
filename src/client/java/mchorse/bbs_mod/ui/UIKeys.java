@@ -287,6 +287,13 @@ public class UIKeys
     public static final IKey FILM_RENDER_AUDIO = L10n.lang("bbs.ui.film.render_audio");
     public static final IKey FILM_RENDER_AUDIO_ERROR = L10n.lang("bbs.ui.film.render_audio.error");
     public static final IKey FILM_RENDER_AUDIO_SUCCESS = L10n.lang("bbs.ui.film.render_audio.success");
+    public static final IKey FILM_RENDER_QUEUE = L10n.lang("bbs.ui.film.render_queue");
+    public static final IKey FILM_RENDER_QUEUE_EMPTY = L10n.lang("bbs.ui.film.render_queue.empty");
+    public static final IKey FILM_RENDER_QUEUE_STARTED = L10n.lang("bbs.ui.film.render_queue.started");
+    public static final IKey FILM_RENDER_QUEUE_PROGRESS = L10n.lang("bbs.ui.film.render_queue.progress");
+    public static final IKey FILM_RENDER_QUEUE_FINISHED = L10n.lang("bbs.ui.film.render_queue.finished");
+    public static final IKey FILM_RENDER_QUEUE_CANCELLED = L10n.lang("bbs.ui.film.render_queue.cancelled");
+    public static final IKey FILM_RENDER_QUEUE_LOAD_TIMEOUT = L10n.lang("bbs.ui.film.render_queue.load_timeout");
     public static final IKey FILM_PLAYER_SETTINGS = L10n.lang("bbs.ui.film.player_settings");
     public static final IKey FILM_PLAYER_SETTINGS_DESCRIPTION = L10n.lang("bbs.ui.film.player_settings-description");
     public static final IKey FILM_PLAYER_SETTINGS_HUNGER = L10n.lang("bbs.ui.film.player_settings.hunger");

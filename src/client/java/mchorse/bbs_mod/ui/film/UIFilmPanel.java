@@ -159,6 +159,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private double timelineXMin = Double.NaN;
     private double timelineXMax = Double.NaN;
 
+    private FilmQueueExporter queueExporter;
+
     /* Docking: layout panels and drag-to-swap/split */
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
     private final Map<String, UIDraggable> dragHandlesById = new LinkedHashMap<>();
@@ -1855,6 +1857,63 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     /**
+     * Returns the currently-active queue exporter, or {@code null} when no
+     * multi-film export is in progress.
+     */
+    public FilmQueueExporter getQueueExporter()
+    {
+        return this.queueExporter;
+    }
+
+    /**
+     * Builds a queue exporter from all currently-open film tabs and starts it.
+     * If a single-film export is already in progress, or no tabs hold a film,
+     * the call is a no-op and notifies the user.
+     */
+    public void startQueueExportFromOpenTabs()
+    {
+        UIContext context = this.getContext();
+
+        if (this.recorder.isExporting() || this.queueExporter != null)
+        {
+            return;
+        }
+
+        FilmQueueExporter exporter = FilmQueueExporter.fromOpenTabs(this);
+
+        if (exporter == null)
+        {
+            if (context != null)
+            {
+                context.notifyError(UIKeys.FILM_RENDER_QUEUE_EMPTY);
+            }
+
+            return;
+        }
+
+        this.queueExporter = exporter;
+
+        if (context != null)
+        {
+            context.notifyInfo(UIKeys.FILM_RENDER_QUEUE_STARTED.format(exporter.totalCount()));
+        }
+
+        exporter.start();
+    }
+
+    /**
+     * Invoked by {@link FilmQueueExporter} once it has fully shut down.
+     * Guarded so a stale exporter cannot clear a newer one.
+     */
+    public void clearQueueExporter(FilmQueueExporter exporter)
+    {
+        if (this.queueExporter == exporter)
+        {
+            this.queueExporter = null;
+        }
+    }
+
+    /**
      * Sets BBS fake window size to export resolution (from video settings).
      * Use when starting record, or when entering F1 fullscreen in film panel.
      */
@@ -2289,6 +2348,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void close()
     {
+        if (this.queueExporter != null)
+        {
+            this.queueExporter.cancel();
+        }
+
         super.close();
 
         BBSRendering.setCustomSize(false);
@@ -2686,6 +2750,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.undoHandler != null)
         {
             this.undoHandler.submitUndo();
+        }
+
+        if (this.queueExporter != null)
+        {
+            this.queueExporter.tick(context);
         }
 
         this.updateLogic(context);
