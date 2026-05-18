@@ -33,6 +33,7 @@ import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -376,7 +377,7 @@ public class UIAnimationStateEditor extends UIElement
                      * collapse to identity. */
                     Matrix4f origin = this.getOriginMatrix(transition);
 
-                    return origin == null ? new Matrix4f() : origin;
+                    return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
                 }
             ));
         }

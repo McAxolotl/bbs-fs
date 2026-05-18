@@ -8,6 +8,7 @@ import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -220,8 +221,9 @@ public class Gizmo
             return;
         }
 
-        this.lastRenderMatrix.set(stack.peek().getPositionMatrix());
-        this.hasLastRenderMatrix = true;
+        stack.push();
+        MatrixStackUtils.scaleBack(stack);
+        this.captureRenderMatrix(stack);
 
         if (BBSSettings.gizmos.get())
         {
@@ -241,7 +243,9 @@ public class Gizmo
             Draw.coolerAxes(stack, 0.25F, 0.008F);
             stack.pop();
         }
+
         this.drawInfiniteLine(stack);
+        stack.pop();
     }
 
     private float getAxesDistanceScale(MatrixStack stack)
@@ -625,15 +629,28 @@ public class Gizmo
             return;
         }
 
-        if (BBSSettings.gizmos.get())
+        if (!BBSSettings.gizmos.get())
         {
-            float distanceScale = this.getAxesDistanceScale(stack);
-
-            stack.push();
-            stack.scale(distanceScale, distanceScale, distanceScale);
-            this.drawAxes(stack, map, 0.25F, 0.015F);
-            stack.pop();
+            return;
         }
+
+        stack.push();
+        MatrixStackUtils.scaleBack(stack);
+        this.captureRenderMatrix(stack);
+
+        float distanceScale = this.getAxesDistanceScale(stack);
+
+        stack.push();
+        stack.scale(distanceScale, distanceScale, distanceScale);
+        this.drawAxes(stack, map, 0.25F, 0.015F);
+        stack.pop();
+        stack.pop();
+    }
+
+    private void captureRenderMatrix(MatrixStack stack)
+    {
+        this.lastRenderMatrix.set(stack.peek().getPositionMatrix());
+        this.hasLastRenderMatrix = true;
     }
 
     private void drawAxes(MatrixStack stack, StencilMap map, float axisSize, float axisOffset)

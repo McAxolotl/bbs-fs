@@ -444,7 +444,7 @@ public abstract class BaseFilmController
             return null;
         }
 
-        return new Matrix4f(target).mul(bone);
+        return MatrixStackUtils.stripScale(new Matrix4f(target).mul(bone));
     }
 
     private static void renderNameTag(IEntity entity, Text text, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
