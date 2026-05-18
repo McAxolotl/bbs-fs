@@ -19,6 +19,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -51,7 +52,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
          * the keybinds are processed afterwards. */
         UIElement savePlease = new UIElement().noCulling();
 
-        savePlease.keys().register(Keys.SAVE, this::save).active(() -> this.data != null);
+        savePlease.keys().register(Keys.SAVE, () -> {UIUtils.playClick(); this.save();}).active(() -> this.data != null);
         savePlease.keys().register(Keys.OPEN_NEW_TAB, this::addTab).active(this::areTabsEnabled);
         this.add(savePlease);
     }
