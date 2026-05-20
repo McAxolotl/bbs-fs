@@ -72,6 +72,12 @@ public class Gizmo
      *  project an edge point and report the sphere's real pixel size. */
     private float lastSphereLocalRadius;
 
+    /** Driven by {@link mchorse.bbs_mod.ui.film.controller.UIFilmController}'s
+     *  per-frame hover pass. When true the sphere is repainted with
+     *  {@link BBSSettings#stencilHighlightColor} so the user can see
+     *  the cursor sits in its pick disc. */
+    private boolean sphereHovered;
+
     private Gizmo()
     {}
 
@@ -142,6 +148,11 @@ public class Gizmo
     public Mode getMode()
     {
         return this.mode;
+    }
+
+    public void setSphereHovered(boolean hovered)
+    {
+        this.sphereHovered = hovered;
     }
 
     public boolean isSphereInteractive()
@@ -708,7 +719,9 @@ public class Gizmo
 
             if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
-                int color = BBSSettings.rotate3dSphereColor.get();
+                int color = this.sphereHovered
+                    ? BBSSettings.stencilHighlightColor.get()
+                    : BBSSettings.rotate3dSphereColor.get();
 
                 RenderSystem.enableBlend();
                 RenderSystem.defaultBlendFunc();

@@ -27,6 +27,7 @@ public class BBSSettings {
 	public static ValueStringKeys disabledMorphFormCategories;
 	public static ValueLanguage language;
 	public static ValueInt primaryColor;
+	public static ValueInt stencilHighlightColor;
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
 	public static ValueInt userIntefaceScale;
@@ -397,6 +398,7 @@ public class BBSSettings {
 		coloredBackground = builder.getBoolean("colored_background", false);
 		backgroundBrightness = builder.getFloat("background_brightness", DEFAULT_BACKGROUND_BRIGHTNESS, MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
+		stencilHighlightColor = builder.getInt("stencil_highlight_color", Colors.setA(0x0080FF, 0.5F)).colorAlpha();
 		theme = builder.getInt("theme", DEFAULT_THEME);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);

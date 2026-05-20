@@ -721,6 +721,7 @@ public class UIFilmController extends UIElement
         }
 
         this.sphereHovered = hover;
+        Gizmo.INSTANCE.setSphereHovered(hover);
     }
 
     private boolean stencilWouldWinSpherePick()
@@ -1356,6 +1357,14 @@ public class UIFilmController extends UIElement
         if (target != null)
         {
             target.set(index);
+        }
+
+        GlUniform highlight = previewProgram.getUniform("HighlightColor");
+
+        if (highlight != null)
+        {
+            int color = BBSSettings.stencilHighlightColor.get();
+            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
         }
 
         RenderSystem.enableBlend();

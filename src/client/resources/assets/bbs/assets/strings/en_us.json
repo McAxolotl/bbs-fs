@@ -43,6 +43,8 @@
 	"bbs.config.personalization.theme-comment": "Choose the theme used for GUI tooltips",
 	"bbs.config.personalization.primary_color": "Primary color",
 	"bbs.config.personalization.primary_color-comment": "The color which is used everywhere in the GUI system",
+	"bbs.config.personalization.stencil_highlight_color": "Selection highlight color",
+	"bbs.config.personalization.stencil_highlight_color-comment": "Color used to highlight the bone or replay under the cursor in the viewport. Alpha controls the highlight intensity.",
 	"bbs.config.personalization.colored_background": "Colored background",
 	"bbs.config.personalization.colored_background-comment": "When disabled, panel backgrounds use neutral colors from the selected theme instead of the primary color",
 	"bbs.config.personalization.background_brightness": "Background brightness",
