@@ -101,6 +101,8 @@ public class UIFilmController extends UIElement
     public static final int CAMERA_MODE_THIRD_PERSON_BACK = 4;
     public static final int CAMERA_MODE_THIRD_PERSON_FRONT = 5;
     private static final int REPLAY_STENCIL_OFFSET = Gizmo.STENCIL_VIEW + 1;
+    private static final int SPHERE_PICK_MIN_RADIUS_PX = 12;
+    private static final int BONE_VS_SPHERE_DRAG_THRESHOLD_PX = 4;
 
     public final UIFilmPanel panel;
 
@@ -128,6 +130,16 @@ public class UIFilmController extends UIElement
     private StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private StencilMap stencilMap = new StencilMap();
     private boolean gizmoActive;
+    private boolean sphereHovered;
+    private final Vector2f sphereScreenCenter = new Vector2f();
+    /** Deferred bone-vs-sphere click. Non-null form means a press is
+     *  in flight on a bone inside the sphere's pick disc — drag past
+     *  {@link #BONE_VS_SPHERE_DRAG_THRESHOLD_PX} → trackball, release
+     *  without drag → bone pick. */
+    private int pendingDownX;
+    private int pendingDownY;
+    private Form pendingPickForm;
+    private String pendingPickBone;
 
     public final OrbitFilmCameraController orbit = new OrbitFilmCameraController(this);
     private int pov;
@@ -645,9 +657,79 @@ public class UIFilmController extends UIElement
 
                 return true;
             }
+
+            if (this.sphereHovered && Gizmo.INSTANCE.isSphereInteractive())
+            {
+                if (this.stencil.hasPicked())
+                {
+                    Pair<Form, String> pair = this.stencil.getPicked();
+
+                    if (pair != null && pair.a != null)
+                    {
+                        this.pendingDownX = context.mouseX;
+                        this.pendingDownY = context.mouseY;
+                        this.pendingPickForm = pair.a;
+                        this.pendingPickBone = pair.b == null ? "" : pair.b;
+
+                        return true;
+                    }
+                }
+                else if (this.startGizmo(context, Gizmo.STENCIL_XYZ))
+                {
+                    return true;
+                }
+            }
         }
 
         return super.subMouseClicked(context);
+    }
+    private boolean startGizmo(UIContext context, int stencilIndex)
+    {
+        float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
+
+        if (UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition))
+        {
+            this.gizmoActive = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void updateSphereHover(UIContext context, Area area)
+    {
+        boolean hover = false;
+
+        if (Gizmo.INSTANCE.isSphereInteractive())
+        {
+            if (this.gizmoActive)
+            {
+                hover = true;
+            }
+            else if (this.stencilWouldWinSpherePick())
+            {
+                hover = false;
+            }
+            else if (Gizmo.INSTANCE.computeScreenCenter(this.panel.lastProjection, area.x, area.y, area.w, area.h, this.sphereScreenCenter))
+            {
+                float radius = Math.max(SPHERE_PICK_MIN_RADIUS_PX, Gizmo.INSTANCE.computeScreenRadius(this.panel.lastProjection, area.x, area.y, area.w, area.h));
+                float dx = context.mouseX - this.sphereScreenCenter.x;
+                float dy = context.mouseY - this.sphereScreenCenter.y;
+
+                hover = dx * dx + dy * dy <= radius * radius;
+            }
+        }
+
+        this.sphereHovered = hover;
+    }
+
+    private boolean stencilWouldWinSpherePick()
+    {
+        if (!this.stencil.hasPicked()) return false;
+
+        int idx = this.stencil.getIndex();
+
+        return idx >= Gizmo.STENCIL_X && idx <= Gizmo.STENCIL_VIEW;
     }
 
     private void pickReplay(int index)
@@ -686,6 +768,19 @@ public class UIFilmController extends UIElement
         if (this.panel.isFlying() && context.mouseButton == 2)
         {
             this.panel.dashboard.orbit.release();
+        }
+
+        if (this.pendingPickForm != null && context.mouseButton == 0)
+        {
+            Form form = this.pendingPickForm;
+            String bone = this.pendingPickBone;
+
+            this.pendingPickForm = null;
+            this.pendingPickBone = null;
+
+            this.panel.replayEditor.pickForm(form, bone);
+
+            return true;
         }
 
         return super.subMouseReleased(context);
@@ -1203,6 +1298,19 @@ public class UIFilmController extends UIElement
             return;
         }
 
+        if (this.pendingPickForm != null)
+        {
+            int dx = context.mouseX - this.pendingDownX;
+            int dy = context.mouseY - this.pendingDownY;
+
+            if (dx * dx + dy * dy > BONE_VS_SPHERE_DRAG_THRESHOLD_PX * BONE_VS_SPHERE_DRAG_THRESHOLD_PX)
+            {
+                this.pendingPickForm = null;
+                this.pendingPickBone = null;
+                this.startGizmo(context, Gizmo.STENCIL_XYZ);
+            }
+        }
+
         boolean altPressed = Window.isAltPressed();
 
         RenderSystem.depthFunc(GL11.GL_LESS);
@@ -1228,6 +1336,7 @@ public class UIFilmController extends UIElement
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
         this.hoveredReplayIndex = -1;
+        this.updateSphereHover(context, area);
 
         if (!this.stencil.hasPicked())
         {

@@ -11,7 +11,6 @@ import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -23,8 +22,10 @@ import net.minecraft.client.gl.VertexBuffer;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector2f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 
 public class Gizmo
@@ -62,9 +63,14 @@ public class Gizmo
     private VertexBuffer rotateRingVbo;
     private VertexBuffer rotateStencilRingVbo;
     private VertexBuffer rotateSphereVbo;
-    private VertexBuffer rotateStencilSphereVbo;
     private float lastScale = -1F;
     private float lastThickness = -1F;
+    /** World-space radius the sphere is drawn at, expressed in
+     *  the local coordinate frame {@link #lastRenderMatrix} describes
+     *  (i.e. already includes axesScale and the per-frame distanceScale).
+     *  Captured in {@link #render} so {@link #computeScreenRadius} can
+     *  project an edge point and report the sphere's real pixel size. */
+    private float lastSphereLocalRadius;
 
     private Gizmo()
     {}
@@ -138,6 +144,123 @@ public class Gizmo
         return this.mode;
     }
 
+    public boolean isSphereInteractive()
+    {
+        if (!BBSSettings.gizmos.get() || !BBSSettings.rotate3dSphere.get())
+        {
+            return false;
+        }
+
+        if (this.mode != Mode.ROTATE)
+        {
+            return false;
+        }
+
+        if (this.currentTransform != null && this.currentTransform.isEditing() && !this.currentTransform.isTrackball())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Project the gizmo's origin onto the viewport in pixel space and
+     * write the result into {@code out}. Returns {@code false} when the
+     * gizmo hasn't been rendered yet or the origin sits behind the
+     * camera ({@code clip.w <= 0}) — caller should skip the hover check.
+     *
+     * <p>{@link #lastRenderMatrix} already encodes
+     * {@code view * translate(-cam) * gizmoChain}, so left-multiplying
+     * by the projection matrix yields clip space directly. NDC → pixel
+     * mapping then accounts for the inverted Y between OpenGL NDC
+     * (Y up) and screen coordinates (Y down).
+     */
+    public boolean computeScreenCenter(Matrix4f projection, float areaX, float areaY, float areaW, float areaH, Vector2f out)
+    {
+        if (!this.hasLastRenderMatrix)
+        {
+            return false;
+        }
+
+        Matrix4f mvp = new Matrix4f(projection).mul(this.lastRenderMatrix);
+        Vector4f clip = mvp.transform(new Vector4f(0F, 0F, 0F, 1F));
+
+        if (clip.w <= 0F)
+        {
+            return false;
+        }
+
+        float ndcX = clip.x / clip.w;
+        float ndcY = clip.y / clip.w;
+
+        out.x = areaX + (ndcX * 0.5F + 0.5F) * areaW;
+        out.y = areaY + (1F - (ndcY * 0.5F + 0.5F)) * areaH;
+
+        return true;
+    }
+
+    /**
+     * Effective pixel radius of the rotate-mode sphere on screen, so the
+     * hover/pick disc in {@link mchorse.bbs_mod.ui.film.controller.UIFilmController}
+     * matches the sphere's actual visual size at the current camera
+     * distance and axes scale.
+     *
+     * <p>Projects three local-axis edge points
+     * ({@code (r,0,0)}, {@code (0,r,0)}, {@code (0,0,r)}) onto the
+     * viewport and returns the largest pixel distance from the
+     * projected centre — covers all camera orientations without
+     * needing a true ellipse-from-sphere derivation. Returns {@code 0}
+     * when the gizmo hasn't been rendered yet, the centre is behind
+     * the camera, or the sphere radius hasn't been captured.
+     */
+    public float computeScreenRadius(Matrix4f projection, float areaX, float areaY, float areaW, float areaH)
+    {
+        if (!this.hasLastRenderMatrix || this.lastSphereLocalRadius <= 0F)
+        {
+            return 0F;
+        }
+
+        Vector2f center = new Vector2f();
+
+        if (!this.computeScreenCenter(projection, areaX, areaY, areaW, areaH, center))
+        {
+            return 0F;
+        }
+
+        Matrix4f mvp = new Matrix4f(projection).mul(this.lastRenderMatrix);
+        float r = this.lastSphereLocalRadius;
+        float[] xs = {r, 0F, 0F};
+        float[] ys = {0F, r, 0F};
+        float[] zs = {0F, 0F, r};
+        float maxSq = 0F;
+
+        for (int i = 0; i < 3; i++)
+        {
+            Vector4f clip = mvp.transform(new Vector4f(xs[i], ys[i], zs[i], 1F));
+
+            if (clip.w <= 0F) continue;
+
+            float ndcX = clip.x / clip.w;
+            float ndcY = clip.y / clip.w;
+            float px = areaX + (ndcX * 0.5F + 0.5F) * areaW;
+            float py = areaY + (1F - (ndcY * 0.5F + 0.5F)) * areaH;
+            float dx = px - center.x;
+            float dy = py - center.y;
+            float d = dx * dx + dy * dy;
+
+            if (d > maxSq) maxSq = d;
+        }
+
+        return (float) Math.sqrt(maxSq);
+    }
+
+    /**
+     * Set the persistent gizmo mode. Returns {@code true} iff the mode
+     * actually changed — callers (notably the tool-switch hotkey
+     * helper) use this to distinguish a real switch from a no-op press
+     * on the already-active tool.
+     */
     public boolean setMode(Mode mode)
     {
         if (!BBSSettings.gizmos.get())
@@ -235,6 +358,12 @@ public class Gizmo
         {
             float distanceScale = this.getAxesDistanceScale(stack);
 
+            /* Cache the sphere's effective world radius (in
+             * {@link #lastRenderMatrix}'s coordinate frame) so
+             * {@link #computeScreenRadius} can report the real on-screen
+             * pixel size for hover/pick distance checks. */
+            this.lastSphereLocalRadius = 0.22F * BBSSettings.axesScale.get() * distanceScale;
+
             stack.push();
             stack.scale(distanceScale, distanceScale, distanceScale);
             this.drawAxes(stack, 0.25F, 0.008F);
@@ -316,13 +445,11 @@ public class Gizmo
                 this.rotateRingVbo.close();
                 this.rotateStencilRingVbo.close();
                 this.rotateSphereVbo.close();
-                this.rotateStencilSphereVbo.close();
             }
 
             this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            this.rotateStencilSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
             BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
@@ -345,11 +472,6 @@ public class Gizmo
             Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
             this.rotateSphereVbo.bind();
             this.rotateSphereVbo.upload(builder.end());
-
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
-            this.rotateStencilSphereVbo.bind();
-            this.rotateStencilSphereVbo.upload(builder.end());
 
             VertexBuffer.unbind();
 
@@ -586,13 +708,12 @@ public class Gizmo
 
             if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
             {
-                if (!Window.isAltPressed()) {
-                    int color = BBSSettings.rotate3dSphereColor.get();
-                    RenderSystem.enableBlend();
-                    RenderSystem.defaultBlendFunc();
-                    this.drawCachedSphere(stack, this.rotateSphereVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-                    RenderSystem.disableBlend();
-                }
+                int color = BBSSettings.rotate3dSphereColor.get();
+
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                this.drawCachedSphere(stack, this.rotateSphereVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+                RenderSystem.disableBlend();
             }
 
             boolean viewActive = editing && this.currentTransform.isViewRotate();
@@ -717,13 +838,6 @@ public class Gizmo
             boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
             Axis activeAxis = editing ? this.currentTransform.getAxis() : null;
             boolean trackball = editing && this.currentTransform.isTrackball();
-
-            if (BBSSettings.rotate3dSphere.get() && (!editing || trackball))
-            {
-                if (!Window.isAltPressed()) {
-                    this.drawCachedSphere(stack, this.rotateStencilSphereVbo, STENCIL_XYZ / 255F, 0F, 0F, 1F);
-                }
-            }
 
             boolean viewActive = editing && this.currentTransform.isViewRotate();
 
