@@ -57,7 +57,7 @@ import java.util.function.Consumer;
  *   └─────────────────────────────────┴─────┘
  * </pre>
  * The 20px icon strip on the right combines action icons (save/resize/extract) and
- * tool icons (brush/eraser/fill/pipette) separated by a small gap, styled via
+ * tool icons (brush/eraser/fill/eyedropper) separated by a small gap, styled via
  * {@link mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels#renderHighlightHorizontal}.
  * The left options column is a {@link UIScrollView} with a draggable splitter whose
  * width is persisted per panel class. Closing is handled by Escape in
@@ -108,10 +108,16 @@ public class UITexturePainter extends UIElement
     private boolean brushBuildUp;
 
     /**
-     * Non-null while Alt is held to temporarily use the pipette; stores the tool to restore on Alt release.
-     * Null means Alt-pipette is not active.
+     * Non-null while Alt is held to temporarily use the eyedropper; stores the tool to restore on Alt release.
+     * Null means Alt-eyedropper is not active.
      */
     private TexturePaintTool toolBeforeAltPipette;
+
+    /**
+     * Non-null while the right mouse button drives the temporary eraser; stores the tool to restore
+     * when the stroke ends. Null means the right-mouse-button eraser is not active.
+     */
+    private TexturePaintTool toolBeforeSecondaryEraser;
 
     private UIScrollView iconBar;
     private UIElement editorHost;
@@ -195,7 +201,7 @@ public class UITexturePainter extends UIElement
         this.toolIconBrush = this.createToolIcon(Icons.BRUSH, UIKeys.TEXTURES_TOOLS_BRUSH, TexturePaintTool.BRUSH);
         this.toolIconEraser = this.createToolIcon(Icons.ERASER, UIKeys.TEXTURES_TOOLS_ERASER, TexturePaintTool.ERASER);
         this.toolIconFill = this.createToolIcon(Icons.BUCKET, UIKeys.TEXTURES_TOOLS_FILL, TexturePaintTool.FILL);
-        this.toolIconPipette = this.createToolIcon(Icons.PIPETTE, UIKeys.TEXTURES_TOOLS_PIPETTE, TexturePaintTool.PIPETTE);
+        this.toolIconPipette = this.createToolIcon(Icons.EYEDROPPER, UIKeys.TEXTURES_TOOLS_EYEDROPPER, TexturePaintTool.PIPETTE);
         this.toolIconSelection = this.createToolIcon(Icons.OUTLINE, UIKeys.TEXTURES_TOOLS_SELECTION, TexturePaintTool.SELECTION);
         this.modelPreviewIcon = new UIIcon(Icons.POSE, (b) -> this.openModelPreview());
         this.modelPreviewIcon.tooltip(UIKeys.TEXTURES_PREVIEW_MODEL, Direction.LEFT);
@@ -472,12 +478,14 @@ public class UITexturePainter extends UIElement
     }
 
     /**
-     * Tool change from UI or keyboard shortcuts; also cancels any active Alt-pipette temporary mode so
-     * releasing Alt afterwards does not unexpectedly restore the old tool.
+     * Tool change from UI or keyboard shortcuts; also cancels any active temporary mode (Alt-eyedropper or
+     * right-mouse-button eraser) so releasing the modifier afterwards does not unexpectedly restore the
+     * old tool.
      */
     private void userSelectTool(TexturePaintTool tool)
     {
         this.toolBeforeAltPipette = null;
+        this.toolBeforeSecondaryEraser = null;
         this.setActiveTool(tool);
     }
 
@@ -490,7 +498,7 @@ public class UITexturePainter extends UIElement
     {
         boolean alt = Window.isAltPressed();
 
-        if (alt && this.toolBeforeAltPipette == null && this.activeTool != TexturePaintTool.PIPETTE)
+        if (alt && this.toolBeforeAltPipette == null && this.toolBeforeSecondaryEraser == null && this.activeTool != TexturePaintTool.PIPETTE)
         {
             this.toolBeforeAltPipette = this.activeTool;
             this.setActiveTool(TexturePaintTool.PIPETTE);
@@ -499,6 +507,29 @@ public class UITexturePainter extends UIElement
         {
             this.setActiveTool(this.toolBeforeAltPipette);
             this.toolBeforeAltPipette = null;
+        }
+    }
+
+    /**
+     * Engages ({@code engage == true}) or disengages the right-mouse-button eraser. While engaged the
+     * active tool is temporarily switched to the eraser; on release the previously selected tool (the
+     * brush) is restored. Driven by {@link UIPixelsEditor}'s canvas input, mirroring the Alt-eyedropper
+     * temporary mode in {@link #updateAltPipetteHold()}.
+     */
+    private void setSecondaryEraser(boolean engage)
+    {
+        if (engage)
+        {
+            if (this.toolBeforeSecondaryEraser == null)
+            {
+                this.toolBeforeSecondaryEraser = this.activeTool;
+                this.setActiveTool(TexturePaintTool.ERASER);
+            }
+        }
+        else if (this.toolBeforeSecondaryEraser != null)
+        {
+            this.setActiveTool(this.toolBeforeSecondaryEraser);
+            this.toolBeforeSecondaryEraser = null;
         }
     }
 
@@ -591,6 +622,7 @@ public class UITexturePainter extends UIElement
         editor.alphaLockSupplier(() -> this.alphaLockToggle.getValue());
         editor.brushSoftnessSupplier(() -> (float) this.brushSoftness.getValue() / 100.0F);
         editor.eraserOpacitySupplier(() -> (float) this.eraserOpacity.getValue() / 100.0F);
+        editor.secondaryEraserToggle(this::setSecondaryEraser);
         editor.setBrushSize((int) this.brushSize.getValue());
         editor.setDocument(link, pixels);
         editor.full(this.editorHost);
