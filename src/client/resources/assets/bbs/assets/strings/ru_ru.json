@@ -37,6 +37,8 @@
 	"bbs.config.transformation.transform_local_default-comment": "Если включено, поля трансформации (поза, модель и т.д.) открываются в локальном пространстве, а не в глобальном. Переключение по Q по-прежнему доступно.",
 	"bbs.config.transformation.hotkeys_3d_ray": "3D-луч для R/G/S",
 	"bbs.config.transformation.hotkeys_3d_ray-comment": "Если включено, трансформация через горячие клавиши R/G/S работает по 3D-лучу, а не по экранному смещению влево/вправо",
+	"bbs.config.transformation.trackball_sensitivity": "Чувствительность трекбола",
+	"bbs.config.transformation.trackball_sensitivity-comment": "Насколько быстро сфера свободного вращения (трекбол) крутится на пиксель движения курсора",
 	"bbs.config.personalization.theme": "Тема",
 	"bbs.config.personalization.theme-comment": "Выбор оформления подсказок интерфейса",
 	"bbs.config.personalization.primary_color": "Основной цвет",

@@ -88,8 +88,12 @@ public class UIPropTransform extends UITransform
     private float dragLastScreenAngle;
     /** Maps screen-space angular motion to a rotation about {@link #dragAxisDir} (+1 or -1). */
     private float dragRotateSign = 1F;
-    /** Previous unit vector on the virtual trackball sphere. */
-    private final Vector3f dragTrackballVec = new Vector3f();
+    /** Screen right/up axes in the bone's parent frame, captured at trackball-drag start. */
+    private final Vector3f trackballRightLocal = new Vector3f();
+    private final Vector3f trackballUpLocal = new Vector3f();
+    /** Previous cursor position, for the trackball's frame-to-frame mouse delta. */
+    private int trackballLastX;
+    private int trackballLastY;
     /** Whether {@link #dragStartRotateDeg} should be written back to {@code rotate2} instead of {@code rotate}. */
     private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
@@ -955,81 +959,88 @@ public class UIPropTransform extends UITransform
     }
 
     /**
-     * Radius of the rendered trackball sphere in gizmo space.
+     * Anchor a trackball drag. The sphere is no longer projected onto &mdash;
+     * the turn is driven purely by cursor motion (Blender-style), so all we
+     * capture here is the screen's right/up axes mapped once into the bone's
+     * parent frame (constant for the drag) and the starting cursor position.
      */
-    private float getTrackballRadius()
-    {
-        float radius = 0.22F * BBSSettings.axesScale.get();
-
-        if (this.drag != null)
-        {
-            Vector3d delta = new Vector3d(this.drag.cameraOrigin).sub(this.drag.gizmoOrigin);
-            float fov = this.drag.projection.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / this.drag.projection.m11())) : BBSSettings.getFov();
-
-            radius *= BBSSettings.getAxesDistanceScale((float) delta.length(), fov);
-        }
-
-        return radius;
-    }
-
     private void beginRayRotateTrackball(int mouseX, int mouseY)
     {
         this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
 
         Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Matrix3f parentInverse = this.computeParentInverse(source);
 
-        this.dragStartRotateDeg.set(
-            MathUtils.toDeg(source.x),
-            MathUtils.toDeg(source.y),
-            MathUtils.toDeg(source.z)
-        );
+        if (parentInverse == null)
+        {
+            this.dragHasStart = false;
 
-        this.drag.projectTrackball(mouseX, mouseY, this.getTrackballRadius(), this.dragTrackballVec);
+            return;
+        }
+
+        Matrix3f invView = this.drag.view.get3x3(new Matrix3f()).invert();
+
+        parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
+        parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
+
+        if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.trackballRightLocal.normalize();
+        this.trackballUpLocal.normalize();
+        this.trackballLastX = mouseX;
+        this.trackballLastY = mouseY;
         this.dragHasStart = true;
     }
 
+    /**
+     * Roll the bone by the cursor's frame-to-frame motion: horizontal travel
+     * turns it about the screen's vertical axis, vertical travel about the
+     * screen's horizontal axis, like spinning a ball under the fingertip. The
+     * two turns are composed and premultiplied onto the live rotation matrix
+     * (then read back as Euler), so it stays smooth through gimbal lock and a
+     * circular drag naturally accumulates roll &mdash; the trackball feel.
+     */
     private void applyRayRotateTrackball(int mouseX, int mouseY)
     {
-        Vector3f currentVec = new Vector3f();
-        this.drag.projectTrackball(mouseX, mouseY, this.getTrackballRadius(), currentVec);
+        int dx = mouseX - this.trackballLastX;
+        int dy = mouseY - this.trackballLastY;
 
-        float dot = this.dragTrackballVec.dot(currentVec);
-        dot = Math.max(-1F, Math.min(1F, dot));
+        this.trackballLastX = mouseX;
+        this.trackballLastY = mouseY;
 
-        Vector3f axisWorld = new Vector3f();
-        this.dragTrackballVec.cross(currentVec, axisWorld);
-
-        float crossLenSq = axisWorld.lengthSquared();
-
-        if (crossLenSq < 1.0E-10F)
+        if (dx == 0 && dy == 0)
         {
             return;
         }
 
-        float angleDeg = MathUtils.toDeg((float) Math.atan2(Math.sqrt(crossLenSq), dot));
-        axisWorld.normalize();
-
         Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-        float rx = MathUtils.toDeg(source.x);
-        float ry = MathUtils.toDeg(source.y);
-        float rz = MathUtils.toDeg(source.z);
 
-        Vector3f localX = this.drag.rotateAxes.getColumn(0, new Vector3f());
-        Vector3f localY = this.drag.rotateAxes.getColumn(1, new Vector3f());
-        Vector3f localZ = this.drag.rotateAxes.getColumn(2, new Vector3f());
+        Matrix3f rotation = new Matrix3f()
+            .rotationZ(source.z)
+            .rotateY(source.y)
+            .rotateX(source.x);
 
-        if (localX.lengthSquared() > 0) localX.normalize();
-        if (localY.lengthSquared() > 0) localY.normalize();
-        if (localZ.lengthSquared() > 0) localZ.normalize();
+        float sensitivity = BBSSettings.trackballSensitivity.get();
+        float yaw = MathUtils.toRad(dx * sensitivity);
+        float pitch = MathUtils.toRad(dy * sensitivity);
 
-        rx += angleDeg * axisWorld.dot(localX);
-        ry += angleDeg * axisWorld.dot(localY);
-        rz += angleDeg * axisWorld.dot(localZ);
+        Vector3f euler = new Matrix3f()
+            .rotation(yaw, this.trackballUpLocal)
+            .rotate(pitch, this.trackballRightLocal.x, this.trackballRightLocal.y, this.trackballRightLocal.z)
+            .mul(rotation)
+            .getEulerAnglesZYX(new Vector3f());
+
+        float rx = MathUtils.toDeg(euler.x);
+        float ry = MathUtils.toDeg(euler.y);
+        float rz = MathUtils.toDeg(euler.z);
 
         if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
         else this.setR(null, rx, ry, rz);
-
-        this.dragTrackballVec.set(currentVec);
     }
 
     /**
@@ -1066,24 +1077,20 @@ public class UIPropTransform extends UITransform
 
         this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
 
-        /* Express the view axis once in the bone's parent frame. rotateAxes maps
-         * Euler changes to world axes at the start pose (= parent * startEulerAxes),
-         * so parent^-1 * viewAxis = startEulerAxes * rotateAxes^-1 * viewAxis. The
-         * parent stays fixed for the whole drag, so this local axis is constant
-         * even as the bone spins; applyRayRotateView premultiplies the live
-         * rotation by a turn about it. */
-        Matrix3f rotateAxesInverse = new Matrix3f(this.drag.rotateAxes);
+        /* Express the view axis once in the bone's parent frame; it stays
+         * constant for the whole drag, while applyRayRotateView premultiplies
+         * the live rotation by a turn about it. */
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Matrix3f parentInverse = this.computeParentInverse(source);
 
-        if (Math.abs(rotateAxesInverse.determinant()) < 1.0E-4F)
+        if (parentInverse == null)
         {
             this.dragHasStart = false;
 
             return;
         }
 
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-
-        this.eulerAxes(source).transform(rotateAxesInverse.invert().transform(new Vector3f(this.dragAxisDir)), this.viewLocalAxis);
+        parentInverse.transform(this.dragAxisDir, this.viewLocalAxis);
 
         if (this.viewLocalAxis.lengthSquared() < 1.0E-8F)
         {
@@ -1094,6 +1101,25 @@ public class UIPropTransform extends UITransform
 
         this.viewLocalAxis.normalize();
         this.dragHasStart = true;
+    }
+
+    /**
+     * World-direction &rarr; bone-parent-frame map captured at drag start:
+     * {@code parent^-1 = startEulerAxes * rotateAxes^-1}. {@code rotateAxes}
+     * already folds in the parent and any model flips, so this recovers the
+     * pure parent rotation; it is constant for the whole drag since the parent
+     * doesn't move. Returns {@code null} when {@code rotateAxes} is degenerate.
+     */
+    private Matrix3f computeParentInverse(Vector3f sourceRadians)
+    {
+        Matrix3f rotateAxesInverse = new Matrix3f(this.drag.rotateAxes);
+
+        if (Math.abs(rotateAxesInverse.determinant()) < 1.0E-4F)
+        {
+            return null;
+        }
+
+        return this.eulerAxes(sourceRadians).mul(rotateAxesInverse.invert());
     }
 
     /**

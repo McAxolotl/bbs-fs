@@ -37,6 +37,8 @@
 	"bbs.config.transformation.transform_local_default-comment": "When enabled, transform fields (pose, model, etc.) start in local space instead of global. You can still toggle with Q.",
 	"bbs.config.transformation.hotkeys_3d_ray": "3D ray for R/G/S",
 	"bbs.config.transformation.hotkeys_3d_ray-comment": "When enabled, transformations started with R/G/S use a 3D ray instead of the old left/right screen-space drag",
+	"bbs.config.transformation.trackball_sensitivity": "Trackball sensitivity",
+	"bbs.config.transformation.trackball_sensitivity-comment": "How fast the free-rotation sphere (trackball) turns per pixel of cursor movement",
 	"bbs.config.personalization.theme": "Theme",
 	"bbs.config.personalization.theme-comment": "Choose the theme used for GUI tooltips",
 	"bbs.config.personalization.primary_color": "Primary color",

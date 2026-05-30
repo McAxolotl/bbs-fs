@@ -47,6 +47,7 @@ public class BBSSettings {
 	public static ValueBoolean gizmos;
 	public static ValueBoolean transformLocalDefault;
 	public static ValueBoolean transformHotkeys3dRay;
+	public static ValueFloat trackballSensitivity;
 
 	public static ValueBoolean enableCursorRendering;
 	public static ValueBoolean enableMouseButtonRendering;
@@ -410,6 +411,7 @@ public class BBSSettings {
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		transformLocalDefault = builder.getBoolean("transform_local_default", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
+		trackballSensitivity = builder.getFloat("trackball_sensitivity", 0.4F, 0.05F, 2F);
 
 		builder.category("tutorials");
 		enableCursorRendering = builder.getBoolean("cursor", false);
