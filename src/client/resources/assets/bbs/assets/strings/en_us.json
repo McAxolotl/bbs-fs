@@ -1316,6 +1316,7 @@
 	"bbs.ui.transforms.context.reset": "Reset transformation",
 	"bbs.ui.transforms.context.switch_global": "Switch to global",
 	"bbs.ui.transforms.context.switch_local": "Switch to local",
+	"bbs.ui.transforms.combined": "Combined",
 	"bbs.ui.transforms.editing": "Editing...",
 	"bbs.ui.transforms.keys.category": "Transformations",
 	"bbs.ui.transforms.keys.toggle_axes": "Toggle XYZ axes",

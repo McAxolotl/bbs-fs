@@ -223,6 +223,7 @@ public class UIPropTransform extends UITransform
         this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
@@ -248,6 +249,11 @@ public class UIPropTransform extends UITransform
     public Axis getAxis()
     {
         return this.axis;
+    }
+
+    public int getMode()
+    {
+        return this.mode;
     }
 
     public boolean isTrackball()
@@ -392,7 +398,11 @@ public class UIPropTransform extends UITransform
 
     public void enableMode(int mode, Axis axis, Axis axis2, GizmoDrag drag)
     {
-        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]) && axis == null)
+        /* Only the keyboard path (axis == null) flips the gizmo's display mode,
+         * and never while combined is on screen: there G/S/R run their operation
+         * and leave every handle visible. Grabbing a handle with the mouse
+         * (axis != null) likewise must not switch the displayed mode. */
+        if (axis == null && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
         {
             return;
         }
@@ -454,7 +464,7 @@ public class UIPropTransform extends UITransform
 
     public void enableTrackball(GizmoDrag drag, boolean hotkeyMode)
     {
-        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
         {
             return;
         }
@@ -498,7 +508,7 @@ public class UIPropTransform extends UITransform
 
     public void enableViewRotate(GizmoDrag drag, boolean hotkeyMode)
     {
-        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
         {
             return;
         }

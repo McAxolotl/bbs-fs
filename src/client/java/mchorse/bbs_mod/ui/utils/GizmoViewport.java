@@ -22,7 +22,7 @@ public interface GizmoViewport
     Area getGizmoArea();
 
     /** Build the editable transform + drag and start {@link Gizmo} on the
-     *  given stencil index (handle or {@link Gizmo#STENCIL_XYZ} trackball).
+     *  given stencil index (handle or {@link Gizmo#STENCIL_TRACKBALL} trackball).
      *  Returns whether a drag actually began. */
     boolean startGizmo(UIContext context, int stencilIndex);
 

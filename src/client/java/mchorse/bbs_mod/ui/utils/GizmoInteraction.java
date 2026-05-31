@@ -77,7 +77,7 @@ public class GizmoInteraction
         }
         else if (this.sphereHovered && Gizmo.INSTANCE.isSphereInteractive())
         {
-            return this.startGizmo(context, Gizmo.STENCIL_XYZ);
+            return this.startGizmo(context, Gizmo.STENCIL_TRACKBALL);
         }
 
         return false;
@@ -147,7 +147,7 @@ public class GizmoInteraction
         if (dx * dx + dy * dy > BONE_VS_SPHERE_DRAG_THRESHOLD_PX * BONE_VS_SPHERE_DRAG_THRESHOLD_PX)
         {
             this.clearPending();
-            this.startGizmo(context, Gizmo.STENCIL_XYZ);
+            this.startGizmo(context, Gizmo.STENCIL_TRACKBALL);
         }
     }
 
