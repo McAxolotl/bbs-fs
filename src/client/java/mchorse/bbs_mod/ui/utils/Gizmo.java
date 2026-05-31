@@ -60,6 +60,11 @@ public class Gizmo
     /** Move/scale handles shrink inside the rotation rings in combined mode. */
     private final static float COMBINED_INNER_SCALE = 0.6F;
 
+    /** Half-size of the scale handle's end cube, in gizmo-local units (× axes scale × thickness).
+     *  Based on scale/thickness rather than the per-pass line offset, so the cube is the same
+     *  size in the visual and stencil passes and its hitbox matches the drawn cube exactly. */
+    private final static float SCALE_CUBE_HALF = 0.064F;
+
     public final static Gizmo INSTANCE = new Gizmo();
 
     private Mode mode = Mode.TRANSLATE;
@@ -861,11 +866,11 @@ public class Gizmo
 
             if (showScale)
             {
-                float scaleEnd = axisSize + axisOffset * 2F;
+                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
 
-                Draw.fillBox(builder, stack, axisSize, -axisOffset * 2F, -axisOffset * 2F, scaleEnd, axisOffset * 2F, axisOffset * 2F, Colors.RED);
-                Draw.fillBox(builder, stack, -axisOffset * 2F, axisSize, -axisOffset * 2F, axisOffset * 2F, scaleEnd, axisOffset * 2F, Colors.GREEN);
-                Draw.fillBox(builder, stack, -axisOffset * 2F, -axisOffset * 2F, axisSize, axisOffset * 2F, axisOffset * 2F, scaleEnd, Colors.BLUE);
+                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
+                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
+                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
             }
         }
 
@@ -988,11 +993,11 @@ public class Gizmo
 
             if (showScale)
             {
-                float scaleEnd = axisSize + axisOffset;
+                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
 
-                Draw.fillBox(builder, stack, axisSize, -axisOffset * 2F, -axisOffset * 2F, scaleEnd, axisOffset * 2F, axisOffset * 2F, STENCIL_SCALE_X / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -axisOffset * 2F, axisSize, -axisOffset * 2F, axisOffset * 2F, scaleEnd, axisOffset * 2F, STENCIL_SCALE_Y / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -axisOffset * 2F, -axisOffset * 2F, axisSize, axisOffset * 2F, axisOffset * 2F, scaleEnd, STENCIL_SCALE_Z / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
             }
 
             RenderSystem.setShader(GameRenderer::getPositionColorProgram);
