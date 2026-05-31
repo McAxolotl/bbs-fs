@@ -353,14 +353,14 @@ public class UIPropTransform extends UITransform
         if (mode == Gizmo.Mode.ROTATE.ordinal() && BBSSettings.transformHotkeys3dRay.get() && drag != null)
         {
             boolean rotating = this.editing && this.mode == mode;
-            boolean ring = !BBSSettings.rotateHideRings.get();
             boolean sphere = BBSSettings.rotate3dSphere.get();
 
             /* R walks the 3D rotation handles before falling through to the
              * per-axis rings: screen-plane ring -> trackball sphere -> X/Y/Z,
-             * each skipped when its handle is turned off. */
-            boolean wantView = ring && !rotating;
-            boolean wantSphere = sphere && (rotating ? this.rotateKind == RotateKind.VIEW : !ring);
+             * each skipped when its handle is turned off. The screen-plane ring
+             * is always available (it is excluded from "Hide rotation rings"). */
+            boolean wantView = !rotating;
+            boolean wantSphere = sphere && rotating && this.rotateKind == RotateKind.VIEW;
 
             if (wantView)
             {
