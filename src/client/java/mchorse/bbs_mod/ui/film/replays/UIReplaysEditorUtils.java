@@ -21,6 +21,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.ui.film.ICursor;
@@ -846,6 +847,46 @@ public class UIReplaysEditorUtils
     }
 
     /* Offer bone hierarchy options */
+
+    /** Leaf bone pick for {@link #pickFormWithOffers}; {@code insert}
+     *  distinguishes a left-click select from a middle-click insert. */
+    public interface FormPicker
+    {
+        void pick(Form form, String bone, boolean insert);
+    }
+
+    /**
+     * Shared viewport bone-pick gesture for the film, replay and animation
+     * state editors: left / Ctrl+right select, middle inserts, Ctrl offers
+     * adjacent bones, Shift offers the hierarchy. The leaf {@code picker}
+     * supplies the editor-specific selection. Returns whether the click
+     * was consumed.
+     */
+    public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker)
+    {
+        boolean select = context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed());
+        boolean insert = context.mouseButton == 1;
+
+        if (!select && !insert)
+        {
+            return false;
+        }
+
+        if (Window.isCtrlPressed())
+        {
+            offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
+        }
+        else if (Window.isShiftPressed())
+        {
+            offerHierarchy(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
+        }
+        else
+        {
+            picker.pick(pair.a, pair.b, insert);
+        }
+
+        return true;
+    }
 
     public static void offerAdjacent(UIContext context, Form form, String bone, Consumer<String> consumer)
     {

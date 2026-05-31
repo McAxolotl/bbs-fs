@@ -352,45 +352,24 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
     {
-        if (this.statesEditor.isVisible() && this.statesKeyframes.clickViewport(context, stencil))
+        if (this.renderer.getGizmoInteraction().mouseClicked(context))
         {
             return true;
         }
-        else if (stencil.hasPicked() && (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed())))
+
+        if (this.statesEditor.isVisible())
+        {
+            return this.statesKeyframes.clickViewport(context, stencil);
+        }
+
+        if (stencil.hasPicked() && (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed())))
         {
             Pair<Form, String> pair = stencil.getPicked();
 
             if (pair != null)
             {
-                int index = stencil.getIndex();
-
-                if (index >= Gizmo.STENCIL_X && index <= Gizmo.STENCIL_VIEW)
-                {
-                    UIPropTransform transform = this.editor.getEditableTransform();
-                    GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
-
-                    if (Gizmo.INSTANCE.start(index, context.mouseX, context.mouseY, transform, drag))
-                    {
-                        return true;
-                    }
-                }
-
-                if (context.mouseButton == 0 && this.renderer.isSphereHovered() && Gizmo.INSTANCE.isSphereInteractive())
-                {
-                    this.renderer.beginPendingSpherePick(context, pair);
-
-                    return true;
-                }
-
                 this.pickFormFromRenderer(pair);
 
-                return true;
-            }
-        }
-        else if (!stencil.hasPicked() && context.mouseButton == 0 && this.renderer.isSphereHovered() && Gizmo.INSTANCE.isSphereInteractive())
-        {
-            if (this.startSphereGizmo(context))
-            {
                 return true;
             }
         }
@@ -398,12 +377,17 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         return false;
     }
 
-    public boolean startSphereGizmo(UIContext context)
+    public boolean startGizmo(UIContext context, int stencilIndex)
     {
+        if (this.statesEditor.isVisible())
+        {
+            return this.statesKeyframes.startGizmo(context, stencilIndex);
+        }
+
         UIPropTransform transform = this.editor.getEditableTransform();
         GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
 
-        return Gizmo.INSTANCE.start(Gizmo.STENCIL_XYZ, context.mouseX, context.mouseY, transform, drag);
+        return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
     }
 
     private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)

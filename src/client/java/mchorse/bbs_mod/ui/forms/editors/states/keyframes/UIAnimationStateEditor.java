@@ -11,7 +11,6 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.states.AnimationState;
-import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
@@ -297,54 +296,22 @@ public class UIAnimationStateEditor extends UIElement
         {
             Pair<Form, String> pair = stencil.getPicked();
 
-            if (pair != null && context.mouseButton < 2)
+            if (pair != null)
             {
-                UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
-                GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
-
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, transform, drag))
-                {
-                    return true;
-                }
-
-                if (context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed()))
-                {
-                    if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));
-                    else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));
-                    else this.pickForm(pair.a, pair.b);
-
-                    return true;
-                }
-                else if (context.mouseButton == 1)
-                {
-                    if (Window.isCtrlPressed())
-                    {
-                        UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, bone, true));
-
-                        return true;
-                    }
-                    else if (Window.isShiftPressed())
-                    {
-                        UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, bone, true));
-
-                        return true;
-                    }
-                    else
-                    {
-                        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, pair.b, true);
-
-                        return true;
-                    }
-                }
+                return UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
+                    UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, insert));
             }
         }
 
         return false;
     }
 
-    public void pickForm(Form form, String bone)
+    public boolean startGizmo(UIContext context, int stencilIndex)
     {
-        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, false);
+        UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
+        GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
+
+        return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
     }
 
     private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)

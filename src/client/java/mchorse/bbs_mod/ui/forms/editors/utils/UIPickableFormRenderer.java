@@ -16,6 +16,9 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoInteraction;
+import mchorse.bbs_mod.ui.utils.GizmoViewport;
+import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -27,15 +30,11 @@ import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
-import org.joml.Vector2f;
 
 import java.util.function.Supplier;
 
-public class UIPickableFormRenderer extends UIFormRenderer
+public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewport
 {
-    private static final int SPHERE_PICK_MIN_RADIUS_PX = 12;
-    private static final int BONE_VS_SPHERE_DRAG_THRESHOLD_PX = 4;
-
     public UIFormEditor formEditor;
 
     private boolean update;
@@ -43,16 +42,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
     private StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private StencilMap stencilMap = new StencilMap();
 
-    private boolean sphereHovered;
-    private final Vector2f sphereScreenCenter = new Vector2f();
-    /** Deferred bone-vs-sphere click. Non-null form means a press is
-     *  in flight on a bone inside the sphere's pick disc — drag past
-     *  {@link #BONE_VS_SPHERE_DRAG_THRESHOLD_PX} → trackball, release
-     *  without drag → bone pick. */
-    private int pendingDownX;
-    private int pendingDownY;
-    private Form pendingPickForm;
-    private String pendingPickBone;
+    private final GizmoInteraction gizmo = new GizmoInteraction(this);
 
     private IEntity target;
     private Supplier<Boolean> renderForm;
@@ -115,78 +105,47 @@ public class UIPickableFormRenderer extends UIFormRenderer
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.pendingPickForm != null && context.mouseButton == 0)
+        if (this.gizmo.mouseReleased(context))
         {
-            Form form = this.pendingPickForm;
-            String bone = this.pendingPickBone;
-
-            this.pendingPickForm = null;
-            this.pendingPickBone = null;
-
-            this.formEditor.pickFormFromRenderer(new Pair<>(form, bone));
-
             return true;
         }
 
         return super.subMouseReleased(context);
     }
 
-    public boolean isSphereHovered()
+    public GizmoInteraction getGizmoInteraction()
     {
-        return this.sphereHovered;
-    }
-
-    public void beginPendingSpherePick(UIContext context, Pair<Form, String> pair)
-    {
-        this.pendingDownX = context.mouseX;
-        this.pendingDownY = context.mouseY;
-        this.pendingPickForm = pair.a;
-        this.pendingPickBone = pair.b == null ? "" : pair.b;
+        return this.gizmo;
     }
 
     @Override
-    protected void processInputs(UIContext context)
+    public StencilFormFramebuffer getGizmoStencil()
     {
-        super.processInputs(context);
-
-        if (this.pendingPickForm != null)
-        {
-            int dx = context.mouseX - this.pendingDownX;
-            int dy = context.mouseY - this.pendingDownY;
-
-            if (dx * dx + dy * dy > BONE_VS_SPHERE_DRAG_THRESHOLD_PX * BONE_VS_SPHERE_DRAG_THRESHOLD_PX)
-            {
-                this.pendingPickForm = null;
-                this.pendingPickBone = null;
-                this.formEditor.startSphereGizmo(context);
-            }
-        }
+        return this.stencil;
     }
 
-    private void updateSphereHover(UIContext context)
+    @Override
+    public Matrix4f getGizmoProjection()
     {
-        boolean hover = false;
-
-        if (Gizmo.INSTANCE.isSphereInteractive() && !this.stencilWouldWinSpherePick()
-            && Gizmo.INSTANCE.computeScreenCenter(this.camera.projection, this.area.x, this.area.y, this.area.w, this.area.h, this.sphereScreenCenter))
-        {
-            float radius = Math.max(SPHERE_PICK_MIN_RADIUS_PX, Gizmo.INSTANCE.computeScreenRadius(this.camera.projection, this.area.x, this.area.y, this.area.w, this.area.h));
-            float dx = context.mouseX - this.sphereScreenCenter.x;
-            float dy = context.mouseY - this.sphereScreenCenter.y;
-
-            hover = dx * dx + dy * dy <= radius * radius;
-        }
-
-        this.sphereHovered = hover;
+        return this.camera.projection;
     }
 
-    private boolean stencilWouldWinSpherePick()
+    @Override
+    public Area getGizmoArea()
     {
-        if (!this.stencil.hasPicked()) return false;
+        return this.area;
+    }
 
-        int idx = this.stencil.getIndex();
+    @Override
+    public boolean startGizmo(UIContext context, int stencilIndex)
+    {
+        return this.formEditor.startGizmo(context, stencilIndex);
+    }
 
-        return idx >= Gizmo.STENCIL_X && idx <= Gizmo.STENCIL_VIEW;
+    @Override
+    public void pickGizmoForm(UIContext context, Form form, String bone)
+    {
+        this.formEditor.pickFormFromRenderer(new Pair<>(form, bone));
     }
 
     @Override
@@ -245,15 +204,13 @@ public class UIPickableFormRenderer extends UIFormRenderer
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
 
             GlStateManager._enableScissorTest();
-
-            this.updateSphereHover(context);
         }
         else
         {
             this.stencil.clearPicking();
-
-            this.sphereHovered = false;
         }
+
+        this.gizmo.update(context);
     }
 
     private void renderAxes(UIContext context)

@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
@@ -66,7 +67,8 @@ import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
-import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.GizmoInteraction;
+import mchorse.bbs_mod.ui.utils.GizmoViewport;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -92,7 +94,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.World;
 
-public class UIFilmController extends UIElement
+public class UIFilmController extends UIElement implements GizmoViewport
 {
     public static final int CAMERA_MODE_CAMERA = 0;
     public static final int CAMERA_MODE_FREE = 1;
@@ -101,8 +103,6 @@ public class UIFilmController extends UIElement
     public static final int CAMERA_MODE_THIRD_PERSON_BACK = 4;
     public static final int CAMERA_MODE_THIRD_PERSON_FRONT = 5;
     private static final int REPLAY_STENCIL_OFFSET = Gizmo.STENCIL_VIEW + 1;
-    private static final int SPHERE_PICK_MIN_RADIUS_PX = 12;
-    private static final int BONE_VS_SPHERE_DRAG_THRESHOLD_PX = 4;
 
     public final UIFilmPanel panel;
 
@@ -129,17 +129,7 @@ public class UIFilmController extends UIElement
     private int hoveredReplayIndex = -1;
     private StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private StencilMap stencilMap = new StencilMap();
-    private boolean gizmoActive;
-    private boolean sphereHovered;
-    private final Vector2f sphereScreenCenter = new Vector2f();
-    /** Deferred bone-vs-sphere click. Non-null form means a press is
-     *  in flight on a bone inside the sphere's pick disc — drag past
-     *  {@link #BONE_VS_SPHERE_DRAG_THRESHOLD_PX} → trackball, release
-     *  without drag → bone pick. */
-    private int pendingDownX;
-    private int pendingDownY;
-    private Form pendingPickForm;
-    private String pendingPickBone;
+    private final GizmoInteraction gizmo = new GizmoInteraction(this);
 
     public final OrbitFilmCameraController orbit = new OrbitFilmCameraController(this);
     private int pov;
@@ -637,100 +627,52 @@ public class UIFilmController extends UIElement
             return true;
         }
 
-        if (this.stencil.hasPicked())
+        if (this.gizmo.mouseClicked(context))
         {
-            float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
-
-            if (UIReplaysEditorUtils.startFilmGizmo(this.panel, context, this.stencil.getIndex(), gizmoTransition))
-            {
-                this.gizmoActive = true;
-                return true;
-            }
+            return true;
         }
 
-        if (context.mouseButton == 0)
+        /* Alt pick the replay */
+        if (context.mouseButton == 0 && this.hoveredReplayIndex >= 0)
         {
-            /* Alt pick the replay */
-            if (this.hoveredReplayIndex >= 0)
-            {
-                this.pickReplay(this.hoveredReplayIndex);
+            this.pickReplay(this.hoveredReplayIndex);
 
-                return true;
-            }
-
-            if (this.sphereHovered && Gizmo.INSTANCE.isSphereInteractive())
-            {
-                if (this.stencil.hasPicked())
-                {
-                    Pair<Form, String> pair = this.stencil.getPicked();
-
-                    if (pair != null && pair.a != null)
-                    {
-                        this.pendingDownX = context.mouseX;
-                        this.pendingDownY = context.mouseY;
-                        this.pendingPickForm = pair.a;
-                        this.pendingPickBone = pair.b == null ? "" : pair.b;
-
-                        return true;
-                    }
-                }
-                else if (this.startGizmo(context, Gizmo.STENCIL_XYZ))
-                {
-                    return true;
-                }
-            }
+            return true;
         }
 
         return super.subMouseClicked(context);
     }
-    private boolean startGizmo(UIContext context, int stencilIndex)
+
+    @Override
+    public StencilFormFramebuffer getGizmoStencil()
+    {
+        return this.stencil;
+    }
+
+    @Override
+    public Matrix4f getGizmoProjection()
+    {
+        return this.panel.lastProjection;
+    }
+
+    @Override
+    public Area getGizmoArea()
+    {
+        return this.panel.preview.getViewport();
+    }
+
+    @Override
+    public boolean startGizmo(UIContext context, int stencilIndex)
     {
         float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
 
-        if (UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition))
-        {
-            this.gizmoActive = true;
-            return true;
-        }
-
-        return false;
+        return UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition);
     }
 
-    private void updateSphereHover(UIContext context, Area area)
+    @Override
+    public void pickGizmoForm(UIContext context, Form form, String bone)
     {
-        boolean hover = false;
-
-        if (Gizmo.INSTANCE.isSphereInteractive())
-        {
-            if (this.gizmoActive)
-            {
-                hover = true;
-            }
-            else if (this.stencilWouldWinSpherePick())
-            {
-                hover = false;
-            }
-            else if (Gizmo.INSTANCE.computeScreenCenter(this.panel.lastProjection, area.x, area.y, area.w, area.h, this.sphereScreenCenter))
-            {
-                float radius = Math.max(SPHERE_PICK_MIN_RADIUS_PX, Gizmo.INSTANCE.computeScreenRadius(this.panel.lastProjection, area.x, area.y, area.w, area.h));
-                float dx = context.mouseX - this.sphereScreenCenter.x;
-                float dy = context.mouseY - this.sphereScreenCenter.y;
-
-                hover = dx * dx + dy * dy <= radius * radius;
-            }
-        }
-
-        this.sphereHovered = hover;
-        Gizmo.INSTANCE.setSphereHovered(hover);
-    }
-
-    private boolean stencilWouldWinSpherePick()
-    {
-        if (!this.stencil.hasPicked()) return false;
-
-        int idx = this.stencil.getIndex();
-
-        return idx >= Gizmo.STENCIL_X && idx <= Gizmo.STENCIL_VIEW;
+        this.panel.replayEditor.pickForm(form, bone);
     }
 
     private void pickReplay(int index)
@@ -745,13 +687,7 @@ public class UIFilmController extends UIElement
 
     public void stopGizmoInteraction()
     {
-        if (!this.gizmoActive)
-        {
-            return;
-        }
-
-        Gizmo.INSTANCE.stop();
-        this.gizmoActive = false;
+        this.gizmo.stop();
     }
 
     @Override
@@ -762,6 +698,8 @@ public class UIFilmController extends UIElement
             return true;
         }
 
+        boolean consumed = this.gizmo.mouseReleased(context);
+
         this.stopGizmoInteraction();
 
         this.orbit.stop();
@@ -771,20 +709,7 @@ public class UIFilmController extends UIElement
             this.panel.dashboard.orbit.release();
         }
 
-        if (this.pendingPickForm != null && context.mouseButton == 0)
-        {
-            Form form = this.pendingPickForm;
-            String bone = this.pendingPickBone;
-
-            this.pendingPickForm = null;
-            this.pendingPickBone = null;
-
-            this.panel.replayEditor.pickForm(form, bone);
-
-            return true;
-        }
-
-        return super.subMouseReleased(context);
+        return consumed || super.subMouseReleased(context);
     }
 
     @Override
@@ -1299,19 +1224,6 @@ public class UIFilmController extends UIElement
             return;
         }
 
-        if (this.pendingPickForm != null)
-        {
-            int dx = context.mouseX - this.pendingDownX;
-            int dy = context.mouseY - this.pendingDownY;
-
-            if (dx * dx + dy * dy > BONE_VS_SPHERE_DRAG_THRESHOLD_PX * BONE_VS_SPHERE_DRAG_THRESHOLD_PX)
-            {
-                this.pendingPickForm = null;
-                this.pendingPickBone = null;
-                this.startGizmo(context, Gizmo.STENCIL_XYZ);
-            }
-        }
-
         boolean altPressed = Window.isAltPressed();
 
         RenderSystem.depthFunc(GL11.GL_LESS);
@@ -1337,7 +1249,7 @@ public class UIFilmController extends UIElement
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
         this.hoveredReplayIndex = -1;
-        this.updateSphereHover(context, area);
+        this.gizmo.update(context);
 
         if (!this.stencil.hasPicked())
         {
