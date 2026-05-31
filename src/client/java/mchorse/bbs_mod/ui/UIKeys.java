@@ -999,6 +999,7 @@ public class UIKeys
     public static final IKey TEXTURES_LAYERS_DEFAULT_NAME = L10n.lang("bbs.ui.textures.layers.default_name");
     public static final IKey TEXTURES_LAYERS_CONTEXT_MOVE_UP = L10n.lang("bbs.ui.textures.layers.context.move_up");
     public static final IKey TEXTURES_LAYERS_CONTEXT_MOVE_DOWN = L10n.lang("bbs.ui.textures.layers.context.move_down");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_MERGE_DOWN = L10n.lang("bbs.ui.textures.layers.context.merge_down");
     public static final IKey TEXTURES_LAYERS_CONTEXT_DUPE = L10n.lang("bbs.ui.textures.layers.context.dupe");
     public static final IKey TEXTURES_LAYERS_CONTEXT_REMOVE = L10n.lang("bbs.ui.textures.layers.context.remove");
     public static final IKey TEXTURES_LAYERS_CONTEXT_RENAME = L10n.lang("bbs.ui.textures.layers.context.rename");

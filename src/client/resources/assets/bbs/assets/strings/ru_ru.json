@@ -1265,6 +1265,7 @@
 	"bbs.ui.textures.layers.default_name": "Слой %s",
 	"bbs.ui.textures.layers.context.move_up": "Переместить вверх",
 	"bbs.ui.textures.layers.context.move_down": "Переместить вниз",
+	"bbs.ui.textures.layers.context.merge_down": "Объединить с нижним",
 	"bbs.ui.textures.layers.context.dupe": "Дублировать",
 	"bbs.ui.textures.layers.context.remove": "Удалить",
 	"bbs.ui.textures.layers.context.rename": "Переименовать",

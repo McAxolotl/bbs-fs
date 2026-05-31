@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.dashboard.textures.layers;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
 import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -103,6 +104,32 @@ public class UILayerElement extends UIElement
                 }
 
                 this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
+                this.panel.updateLayers();
+                this.panel.currentEditor.dirty();
+            }));
+
+            menu.action(Icons.DOWNLOAD, UIKeys.TEXTURES_LAYERS_CONTEXT_MERGE_DOWN, () -> this.panel.currentEditor.recordLayerChange(null, () ->
+            {
+                Document document = this.panel.currentEditor.getDocument();
+                TextureLayer current = document.layers.get(this.index);
+                TextureLayer below = document.layers.get(this.index - 1);
+
+                /* Composite both layers into a fresh document-sized layer (offset 0,0), drawing each
+                 * at its own offset and opacity so the merge matches the on-canvas result. */
+                Pixels merged = Pixels.fromSize(document.width, document.height);
+
+                merged.draw(below.pixels, below.offsetX, below.offsetY, below.opacity);
+                merged.draw(current.pixels, current.offsetX, current.offsetY, current.opacity);
+
+                TextureLayer mergedLayer = new TextureLayer(below.name, merged);
+
+                document.layers.remove(this.index);
+                current.delete();
+                document.layers.remove(this.index - 1);
+                below.delete();
+                document.layers.add(this.index - 1, mergedLayer);
+
+                this.panel.currentEditor.setActiveLayer(this.index - 1);
                 this.panel.updateLayers();
                 this.panel.currentEditor.dirty();
             }));

@@ -1272,6 +1272,7 @@
 	"bbs.ui.textures.layers.default_name": "Layer %s",
 	"bbs.ui.textures.layers.context.move_up": "Move Up",
 	"bbs.ui.textures.layers.context.move_down": "Move Down",
+	"bbs.ui.textures.layers.context.merge_down": "Merge with below",
 	"bbs.ui.textures.layers.context.dupe": "Duplicate",
 	"bbs.ui.textures.layers.context.remove": "Remove",
 	"bbs.ui.textures.layers.context.rename": "Rename",
