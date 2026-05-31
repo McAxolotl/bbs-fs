@@ -550,21 +550,52 @@ public class UIReplaysEditorUtils
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
         UIKeyframeSheet sheet = graph.getSheet(boneKey);
 
-        if (sheet != null)
+        if (sheet == null)
         {
-            return sheet;
-        }
-
-        /* Fallback: match by id ignoring case (stencil may return "head", sheet id may be "pose.bones.Head") */
-        for (UIKeyframeSheet s : graph.getSheets())
-        {
-            if (s.id != null && s.id.equalsIgnoreCase(boneKey))
+            /* Fallback: match by id ignoring case (stencil may return "head", sheet id may be "pose.bones.Head") */
+            for (UIKeyframeSheet s : graph.getSheets())
             {
-                return s;
+                if (s.id != null && s.id.equalsIgnoreCase(boneKey))
+                {
+                    sheet = s;
+                    break;
+                }
             }
         }
 
+        if (sheet != null)
+        {
+            /* Per-limb bone tracks are optional and frequently empty; when the matched track has no
+             * keyframes, fall back to the form's main pose track so the click still selects the
+             * closest pose keyframe (as a non-per-limb bone like the torso already does) instead of
+             * doing nothing unless a pose keyframe happens to be selected already. */
+            if (sheet.channel.isEmpty())
+            {
+                UIKeyframeSheet poseSheet = getPoseSheet(graph, formPath);
+
+                if (poseSheet != null)
+                {
+                    return poseSheet;
+                }
+            }
+
+            return sheet;
+        }
+
         return getActivePoseSheet(keyframeEditor, formPath);
+    }
+
+    private static UIKeyframeSheet getPoseSheet(IUIKeyframeGraph graph, String formPath)
+    {
+        for (UIKeyframeSheet sheet : graph.getSheets())
+        {
+            if (isPoseSheet(sheet, formPath))
+            {
+                return sheet;
+            }
+        }
+
+        return null;
     }
 
     private static UIKeyframeSheet getActivePoseSheet(UIKeyframeEditor keyframeEditor, String formPath)

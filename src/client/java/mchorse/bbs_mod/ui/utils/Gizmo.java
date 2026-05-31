@@ -320,7 +320,7 @@ public class Gizmo
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_XY) transform.enableMode(this.mode.ordinal(), Axis.X, Axis.Y, drag);
                 else if ((this.mode == Mode.TRANSLATE || this.mode == Mode.SCALE) && this.index == STENCIL_ZY) transform.enableMode(this.mode.ordinal(), Axis.Z, Axis.Y, drag);
                 else if (this.mode == Mode.ROTATE && BBSSettings.rotate3dSphere.get() && this.index == STENCIL_XYZ) transform.enableTrackball(drag);
-                else if (this.mode == Mode.ROTATE && !BBSSettings.rotateHideRings.get() && this.index == STENCIL_VIEW) transform.enableViewRotate(drag);
+                else if (this.mode == Mode.ROTATE && this.index == STENCIL_VIEW) transform.enableViewRotate(drag);
             }
 
             return true;
@@ -741,13 +741,15 @@ public class Gizmo
                 if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
                 if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
                 if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            }
 
-                if (!editing || viewActive)
-                {
-                    int color = Colors.LIGHTEST_GRAY;
+            /* The screen-space (billboard) view-rotation ring is intentionally excluded from the
+             * "Hide rotation rings" option, so it is always drawn regardless of that setting. */
+            if (!editing || viewActive)
+            {
+                int color = Colors.LIGHTEST_GRAY;
 
-                    this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-                }
+                this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
             }
 
             if (editing && activeAxis != null)
@@ -863,9 +865,10 @@ public class Gizmo
                 if (!editing || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_Z / 255F, 0F, 0F, 1F);
                 if (!editing || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_X / 255F, 0F, 0F, 1F);
                 if (!editing || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_Y / 255F, 0F, 0F, 1F);
-
-                if (!editing || viewActive) this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
             }
+
+            /* View ring stays pickable even when the rings are hidden (see drawAxes visual pass). */
+            if (!editing || viewActive) this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
             
             RenderSystem.enableDepthTest();
             return;

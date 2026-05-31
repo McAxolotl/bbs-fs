@@ -438,6 +438,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     public void pickFormFromRenderer(Pair<Form, String> pair)
     {
+        if (this.statesEditor.isVisible())
+        {
+            this.statesKeyframes.pickFormFromRenderer(pair);
+
+            return;
+        }
+
         if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
         else if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
@@ -895,6 +902,37 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
 
         return this.editor.getOriginMatrix(transition);
+    }
+
+    /**
+     * Tick at which the previewed form is currently posed, matching {@link #preFormRender}.
+     */
+    public float getSamplingTick()
+    {
+        UIContext context = this.getContext();
+
+        return this.cursor + (this.playing && context != null ? context.getTransition() : 0F);
+    }
+
+    /**
+     * Re-applies the active animation state to the previewed form at {@code tick}. Gizmo sampling
+     * (see {@link mchorse.bbs_mod.ui.utils.GizmoDrag#computeRotateAxes}) perturbs a keyframe
+     * transform, which only reaches the bone matrices once the state is re-applied &mdash; the same
+     * pose {@link #preFormRender} performs each frame for rendering.
+     */
+    public void applyStateForSampling(float tick)
+    {
+        if (!this.statesEditor.isVisible())
+        {
+            return;
+        }
+
+        AnimationState state = this.statesKeyframes.getState();
+
+        if (state != null && this.renderer.form != null)
+        {
+            state.properties.applyProperties(this.renderer.form, tick);
+        }
     }
 
     @Override
