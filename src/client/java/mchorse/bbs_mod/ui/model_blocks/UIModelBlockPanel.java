@@ -106,7 +106,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             UIFormPalette palette = UIFormPalette.open(this, editing, this.modelBlock.getProperties().getForm(), (f) ->
             {
                 this.pickEdit.setForm(f);
-                this.modelBlock.getProperties().setForm(f);
+
+                if (this.modelBlock != null)
+                {
+                    this.modelBlock.getProperties().setForm(f);
+                }
             });
 
             palette.immersive();
