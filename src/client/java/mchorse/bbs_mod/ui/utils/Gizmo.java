@@ -63,7 +63,7 @@ public class Gizmo
     /** Half-size of the scale handle's end cube, in gizmo-local units (× axes scale × thickness).
      *  Based on scale/thickness rather than the per-pass line offset, so the cube is the same
      *  size in the visual and stencil passes and its hitbox matches the drawn cube exactly. */
-    private final static float SCALE_CUBE_HALF = 0.064F;
+    private final static float SCALE_CUBE_HALF = 0.032F;
 
     public final static Gizmo INSTANCE = new Gizmo();
 
@@ -534,7 +534,7 @@ public class Gizmo
             BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
             float radius = 0.22F * scale;
-            float thicknessRing = 0.015F * scale * thickness;
+            float thicknessRing = 0.02F * scale * thickness;
             float outlinePad = 0.015F * scale * thickness;
             float thicknessStencil = 0.05F * scale * thickness + outlinePad;
 
@@ -857,7 +857,7 @@ public class Gizmo
             Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
 
             float planeStart = axisSize * 0.2F;
-            float planeEnd = axisSize * 0.6F;
+            float planeEnd = planeStart + axisSize * 0.4F * thickness;
             float planeThickness = axisOffset * 0.5F;
 
             Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, Colors.PLANE_XZ);
@@ -984,7 +984,7 @@ public class Gizmo
             Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
 
             float planeStart = axisSize * 0.2F;
-            float planeEnd = axisSize * 0.6F;
+            float planeEnd = planeStart + axisSize * 0.4F * thickness;
             float planeThickness = axisOffset * 0.5F;
 
             Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ / 255F, 0F, 0F);
