@@ -104,6 +104,11 @@ public class UIKeyframeEditor extends UIElement
         }
 
         this.resize();
+
+        if (this.editor != null)
+        {
+            this.editor.restoreScroll();
+        }
     }
 
     public void setTimelineVisible(boolean visible)
