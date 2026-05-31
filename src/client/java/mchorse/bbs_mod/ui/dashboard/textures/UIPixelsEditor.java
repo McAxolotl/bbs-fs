@@ -397,6 +397,25 @@ public class UIPixelsEditor extends UICanvasEditor
         return t == TexturePaintTool.BRUSH || t == TexturePaintTool.ERASER;
     }
 
+    /**
+     * Move-tool offset of the active layer. Tools work in document/canvas coordinates, but the
+     * layer's pixel buffer is indexed in layer-local space &mdash; subtract this offset to convert
+     * a document coordinate into the active layer's buffer coordinate.
+     */
+    protected int getActiveOffsetX()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+        return layer == null ? 0 : layer.offsetX;
+    }
+
+    protected int getActiveOffsetY()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+        return layer == null ? 0 : layer.offsetY;
+    }
+
     private void paint(int x, int y)
     {
         int left = (this.brushSize - 1) / 2;
@@ -419,24 +438,29 @@ public class UIPixelsEditor extends UICanvasEditor
 
     private void paintPixel(int x, int y, float strength)
     {
-        if (x < 0 || y < 0 || x >= this.pixels.width || y >= this.pixels.height)
+        if (strength <= 0F)
         {
             return;
         }
 
+        /* x,y are document coordinates: the selection is checked in document space, while the
+         * active layer's buffer is indexed in layer-local space (shifted by the move-tool offset). */
         if (!this.isInsideSelection(x, y))
         {
             return;
         }
 
-        if (strength <= 0F)
+        int lx = x - this.getActiveOffsetX();
+        int ly = y - this.getActiveOffsetY();
+
+        if (lx < 0 || ly < 0 || lx >= this.pixels.width || ly >= this.pixels.height)
         {
             return;
         }
 
         if (!this.isStrokeBuildUpEnabled())
         {
-            int index = this.pixels.toIndex(x, y);
+            int index = this.pixels.toIndex(lx, ly);
             float previousStrength = this.strokeStrengths.getOrDefault(index, 0F);
 
             if (strength <= previousStrength)
@@ -452,22 +476,22 @@ public class UIPixelsEditor extends UICanvasEditor
         if (this.isStrokePaintTool() && this.getActivePaintTool() == TexturePaintTool.ERASER)
         {
             float opacity = this.eraserOpacitySupplier.get() * strength;
-            
+
             if (opacity < 1.0F)
             {
                 Color destination;
 
                 if (this.isStrokeBuildUpEnabled())
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
                 else
                 {
-                    destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                    destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                     if (destination == null)
                     {
-                        destination = this.pixels.getColor(x, y);
+                        destination = this.pixels.getColor(lx, ly);
                     }
                 }
 
@@ -485,15 +509,15 @@ public class UIPixelsEditor extends UICanvasEditor
 
             if (this.isStrokeBuildUpEnabled())
             {
-                destination = this.pixels.getColor(x, y);
+                destination = this.pixels.getColor(lx, ly);
             }
             else
             {
-                destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                 if (destination == null)
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
             }
 
@@ -506,15 +530,15 @@ public class UIPixelsEditor extends UICanvasEditor
 
             if (this.isStrokeBuildUpEnabled())
             {
-                destination = this.pixels.getColor(x, y);
+                destination = this.pixels.getColor(lx, ly);
             }
             else
             {
-                destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                 if (destination == null)
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
             }
 
@@ -531,7 +555,7 @@ public class UIPixelsEditor extends UICanvasEditor
             color.a = destination.a;
         }
 
-        this.pixelsUndo.setColor(this.pixels, x, y, color);
+        this.pixelsUndo.setColor(this.pixels, lx, ly, color);
     }
 
     private Color getWeightedStrokeColor(Color source, float strength)
@@ -1002,7 +1026,7 @@ public class UIPixelsEditor extends UICanvasEditor
         UIContext context = this.getContext();
         int pixelX = (int) Math.floor(this.scaleX.from(context.mouseX)) + this.w / 2;
         int pixelY = (int) Math.floor(this.scaleY.from(context.mouseY)) + this.h / 2;
-        Color color = this.pixels.getColor(pixelX, pixelY);
+        Color color = this.pixels.getColor(pixelX - this.getActiveOffsetX(), pixelY - this.getActiveOffsetY());
 
         if (color != null)
         {
@@ -1184,7 +1208,7 @@ public class UIPixelsEditor extends UICanvasEditor
         if (tool == TexturePaintTool.PIPETTE)
         {
             Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-            Color color = this.pixels.getColor(pixel.x, pixel.y);
+            Color color = this.pixels.getColor(pixel.x - this.getActiveOffsetX(), pixel.y - this.getActiveOffsetY());
 
             if (color != null)
             {

@@ -929,7 +929,10 @@ public class UITexturePainter extends UIElement
         int th = pixels.height;
         int px = tw <= 0 ? 0 : MathUtils.clamp(hover.x, 0, tw - 1);
         int py = th <= 0 ? 0 : MathUtils.clamp(hover.y, 0, th - 1);
-        Color color = pixels.getColor(px, py);
+        /* Sample the active layer at the cursor in the layer's own (offset) space. */
+        int lx = tw <= 0 ? 0 : MathUtils.clamp(hover.x - editor.getActiveOffsetX(), 0, tw - 1);
+        int ly = th <= 0 ? 0 : MathUtils.clamp(hover.y - editor.getActiveOffsetY(), 0, th - 1);
+        Color color = pixels.getColor(lx, ly);
 
         int r = 0;
         int g = 0;

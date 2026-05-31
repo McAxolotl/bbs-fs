@@ -171,10 +171,15 @@ public class UITextureEditor extends UIPixelsEditor
 
     public void fillColor(Vector2i pixel, Color color, boolean colorReplace)
     {
+        /* pixel is in document space; the active layer's buffer is shifted by its move-tool offset,
+         * so subtract the offset to index the layer and add it back for document-space checks. */
+        int ox = this.getActiveOffsetX();
+        int oy = this.getActiveOffsetY();
+
         PixelsUndo pixelsUndo = new PixelsUndo();
         pixelsUndo.layerIndex = this.document == null ? -1 : this.document.activeLayerIndex;
         Pixels pixels = this.getPixels();
-        Color target = pixels.getColor(pixel.x, pixel.y);
+        Color target = pixels.getColor(pixel.x - ox, pixel.y - oy);
 
         if (target == null)
         {
@@ -189,7 +194,7 @@ public class UITextureEditor extends UIPixelsEditor
             {
                 for (int y = 0; y < pixels.height; y++)
                 {
-                    if (!this.isInsideSelection(x, y))
+                    if (!this.isInsideSelection(x + ox, y + oy))
                     {
                         continue;
                     }
@@ -217,14 +222,14 @@ public class UITextureEditor extends UIPixelsEditor
         }
         else
         {
-            this.floodFill(pixelsUndo, pixels, pixel.x, pixel.y, target.getARGBColor(), color.getARGBColor());
+            this.floodFill(pixelsUndo, pixels, pixel.x - ox, pixel.y - oy, target.getARGBColor(), color.getARGBColor(), ox, oy);
         }
 
         this.undoManager.pushUndo(pixelsUndo);
         this.updateTexture();
     }
 
-    private void floodFill(PixelsUndo undo, Pixels pixels, int x, int y, int targetColor, int replacementColor)
+    private void floodFill(PixelsUndo undo, Pixels pixels, int x, int y, int targetColor, int replacementColor, int ox, int oy)
     {
         if (targetColor == replacementColor)
         {
@@ -245,7 +250,7 @@ public class UITextureEditor extends UIPixelsEditor
                 continue;
             }
 
-            if (!this.isInsideSelection(px, py))
+            if (!this.isInsideSelection(px + ox, py + oy))
             {
                 continue;
             }
