@@ -72,6 +72,7 @@ public class ModelInstance implements IModelInstance
     public List<ArmorSlot> itemsOff = new ArrayList<>();
     public List<String> disabledBones = new ArrayList<>();
     public Map<String, String> flippedParts = new HashMap<>();
+    public Map<String, String> pickingOverrides = new HashMap<>();
     public Map<ArmorType, ArmorSlot> armorSlots = new HashMap<>();
 
     public ArmorSlot fpMain;
@@ -198,6 +199,20 @@ public class ModelInstance implements IModelInstance
                 }
             }
         }
+        if (config.has("picking_overrides"))
+        {
+            MapType map = config.getMap("picking_overrides");
+
+            for (String key : map.keys())
+            {
+                String string = map.getString(key);
+
+                if (!string.trim().isEmpty())
+                {
+                    this.pickingOverrides.put(key, string);
+                }
+            }
+        }
         if (config.has("armor_slots"))
         {
             MapType map = config.getMap("armor_slots");
@@ -281,16 +296,26 @@ public class ModelInstance implements IModelInstance
         {
             for (ModelGroup group : model.getOrderedGroups())
             {
-                stencilMap.addPicking(form, group.id);
+                stencilMap.addPicking(form, this.getPickingBone(group.id));
             }
         }
         else if (this.model instanceof BOBJModel model)
         {
             for (BOBJBone orderedBone : model.getArmature().orderedBones)
             {
-                stencilMap.addPicking(form, orderedBone.name);
+                stencilMap.addPicking(form, this.getPickingBone(orderedBone.name));
             }
         }
+    }
+
+    /**
+     * Resolve a bone's name for stencil picking, redirecting it to another bone when the model's
+     * config declares an override (e.g. clicking "torso" selecting "low_body" instead). The bone's
+     * own geometry still owns the stencil index — only the bone the click resolves to changes.
+     */
+    private String getPickingBone(String bone)
+    {
+        return this.pickingOverrides.getOrDefault(bone, bone);
     }
 
     public void captureMatrices(MatrixCache bones)

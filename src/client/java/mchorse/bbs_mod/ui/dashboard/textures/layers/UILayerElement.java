@@ -3,6 +3,8 @@ package mchorse.bbs_mod.ui.dashboard.textures.layers;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
+import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -34,9 +36,12 @@ public class UILayerElement extends UIElement
         
         this.visible = new UIIcon(layer.visible ? Icons.VISIBLE : Icons.INVISIBLE, (b) ->
         {
-            this.layer.visible = !this.layer.visible;
-            this.visible.both(this.layer.visible ? Icons.VISIBLE : Icons.INVISIBLE);
-            this.panel.currentEditor.dirty();
+            this.panel.currentEditor.recordLayerChange(null, () ->
+            {
+                this.layer.visible = !this.layer.visible;
+                this.visible.both(this.layer.visible ? Icons.VISIBLE : Icons.INVISIBLE);
+                this.panel.currentEditor.dirty();
+            });
         });
         this.visible.w(20);
 
@@ -55,53 +60,79 @@ public class UILayerElement extends UIElement
     {
         if (this.panel.currentEditor == null) return;
 
-        boolean canMoveUp = this.index < this.panel.currentEditor.layers.size() - 1;
+        boolean canMoveUp = this.index < this.panel.currentEditor.getDocument().layers.size() - 1;
         boolean canMoveDown = this.index > 0;
-        boolean canDelete = this.panel.currentEditor.layers.size() > 1;
+        boolean canDelete = this.panel.currentEditor.getDocument().layers.size() > 1;
 
         if (canMoveUp)
         {
-            menu.action(Icons.MOVE_UP, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_UP, () ->
+            menu.action(Icons.MOVE_UP, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_UP, () -> this.panel.currentEditor.recordLayerChange(null, () ->
             {
-                TextureLayer current = this.panel.currentEditor.layers.remove(this.index);
-                this.panel.currentEditor.layers.add(this.index + 1, current);
+                TextureLayer current = this.panel.currentEditor.getDocument().layers.remove(this.index);
+                this.panel.currentEditor.getDocument().layers.add(this.index + 1, current);
 
-                if (this.panel.currentEditor.activeLayerIndex == this.index)
+                if (this.panel.currentEditor.getDocument().activeLayerIndex == this.index)
                 {
-                    this.panel.currentEditor.activeLayerIndex++;
+                    this.panel.currentEditor.getDocument().activeLayerIndex++;
                 }
-                else if (this.panel.currentEditor.activeLayerIndex == this.index + 1)
+                else if (this.panel.currentEditor.getDocument().activeLayerIndex == this.index + 1)
                 {
-                    this.panel.currentEditor.activeLayerIndex--;
+                    this.panel.currentEditor.getDocument().activeLayerIndex--;
                 }
 
-                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.activeLayerIndex);
+                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
                 this.panel.updateLayers();
                 this.panel.currentEditor.dirty();
-            });
+            }));
         }
 
         if (canMoveDown)
         {
-            menu.action(Icons.MOVE_DOWN, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_DOWN, () ->
+            menu.action(Icons.MOVE_DOWN, UIKeys.TEXTURES_LAYERS_CONTEXT_MOVE_DOWN, () -> this.panel.currentEditor.recordLayerChange(null, () ->
             {
-                TextureLayer current = this.panel.currentEditor.layers.remove(this.index);
+                TextureLayer current = this.panel.currentEditor.getDocument().layers.remove(this.index);
 
-                this.panel.currentEditor.layers.add(this.index - 1, current);
+                this.panel.currentEditor.getDocument().layers.add(this.index - 1, current);
 
-                if (this.panel.currentEditor.activeLayerIndex == this.index)
+                if (this.panel.currentEditor.getDocument().activeLayerIndex == this.index)
                 {
-                    this.panel.currentEditor.activeLayerIndex--;
+                    this.panel.currentEditor.getDocument().activeLayerIndex--;
                 }
-                else if (this.panel.currentEditor.activeLayerIndex == this.index - 1)
+                else if (this.panel.currentEditor.getDocument().activeLayerIndex == this.index - 1)
                 {
-                    this.panel.currentEditor.activeLayerIndex++;
+                    this.panel.currentEditor.getDocument().activeLayerIndex++;
                 }
 
-                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.activeLayerIndex);
+                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
                 this.panel.updateLayers();
                 this.panel.currentEditor.dirty();
-            });
+            }));
+
+            menu.action(Icons.DOWNLOAD, UIKeys.TEXTURES_LAYERS_CONTEXT_MERGE_DOWN, () -> this.panel.currentEditor.recordLayerChange(null, () ->
+            {
+                Document document = this.panel.currentEditor.getDocument();
+                TextureLayer current = document.layers.get(this.index);
+                TextureLayer below = document.layers.get(this.index - 1);
+
+                /* Composite both layers into a fresh document-sized layer (offset 0,0), drawing each
+                 * at its own offset and opacity so the merge matches the on-canvas result. */
+                Pixels merged = Pixels.fromSize(document.width, document.height);
+
+                merged.draw(below.pixels, below.offsetX, below.offsetY, below.opacity);
+                merged.draw(current.pixels, current.offsetX, current.offsetY, current.opacity);
+
+                TextureLayer mergedLayer = new TextureLayer(below.name, merged);
+
+                document.layers.remove(this.index);
+                current.delete();
+                document.layers.remove(this.index - 1);
+                below.delete();
+                document.layers.add(this.index - 1, mergedLayer);
+
+                this.panel.currentEditor.setActiveLayer(this.index - 1);
+                this.panel.updateLayers();
+                this.panel.currentEditor.dirty();
+            }));
         }
 
         menu.action(Icons.OUTLINE, UIKeys.TEXTURES_LAYERS_CONTEXT_SELECT, () ->
@@ -121,9 +152,12 @@ public class UILayerElement extends UIElement
                 {
                     if (!str.trim().isEmpty())
                     {
-                        this.layer.name = str.trim();
-                        this.name.label = IKey.raw(this.layer.name);
-                        this.panel.currentEditor.dirty();
+                        this.panel.currentEditor.recordLayerChange(null, () ->
+                        {
+                            this.layer.name = str.trim();
+                            this.name.label = IKey.raw(this.layer.name);
+                            this.panel.currentEditor.dirty();
+                        });
                     }
                 }
             );
@@ -132,35 +166,36 @@ public class UILayerElement extends UIElement
             UIOverlay.addOverlay(this.getContext(), prompt);
         });
 
-        menu.action(Icons.DUPE, UIKeys.TEXTURES_LAYERS_CONTEXT_DUPE, () -> {
+        menu.action(Icons.DUPE, UIKeys.TEXTURES_LAYERS_CONTEXT_DUPE, () -> this.panel.currentEditor.recordLayerChange(null, () ->
+        {
             Pixels newPixels = Pixels.fromSize(this.layer.pixels.width, this.layer.pixels.height);
 
             newPixels.draw(this.layer.pixels, 0, 0);
 
             TextureLayer duplicatedLayer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DUPE_SUFFIX.format(this.layer.name).get(), newPixels);
-            
-            this.panel.currentEditor.layers.add(this.index + 1, duplicatedLayer);
+
+            this.panel.currentEditor.getDocument().layers.add(this.index + 1, duplicatedLayer);
             this.panel.currentEditor.setActiveLayer(this.index + 1);
             this.panel.updateLayers();
             this.panel.currentEditor.dirty();
-        });
+        }));
 
         if (canDelete)
         {
-            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, Colors.NEGATIVE, () ->
+            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, Colors.NEGATIVE, () -> this.panel.currentEditor.recordLayerChange(null, () ->
             {
-                this.panel.currentEditor.layers.remove(this.index);
+                this.panel.currentEditor.getDocument().layers.remove(this.index);
                 this.layer.delete();
 
-                if (this.panel.currentEditor.activeLayerIndex >= this.panel.currentEditor.layers.size())
+                if (this.panel.currentEditor.getDocument().activeLayerIndex >= this.panel.currentEditor.getDocument().layers.size())
                 {
-                    this.panel.currentEditor.activeLayerIndex = this.panel.currentEditor.layers.size() - 1;
+                    this.panel.currentEditor.getDocument().activeLayerIndex = this.panel.currentEditor.getDocument().layers.size() - 1;
                 }
 
-                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.activeLayerIndex);
+                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
                 this.panel.updateLayers();
                 this.panel.currentEditor.dirty();
-            });
+            }));
         }
     }
 
@@ -186,7 +221,7 @@ public class UILayerElement extends UIElement
     @Override
     public void render(UIContext context)
     {
-        boolean active = this.panel.currentEditor.activeLayerIndex == this.index;
+        boolean active = this.panel.currentEditor.getDocument().activeLayerIndex == this.index;
         int color = active ? BBSSettings.primaryColor(Colors.A50) : Colors.A25;
         
         if (this.area.isInside(context))

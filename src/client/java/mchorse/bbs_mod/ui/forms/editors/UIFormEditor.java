@@ -453,12 +453,16 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     private void pickFormBone(Form form, String bone)
     {
+        /* Captured before pickForm rebuilds the editor, so the bone can be routed back to the tab
+         * that was open when the body part was clicked. */
+        Class<?> activePanel = this.editor == null ? null : this.editor.getActivePanelClass();
+
         this.formsList.setCurrentForm(form);
         this.pickForm(this.formsList.getCurrentFirst());
 
         if (!bone.isEmpty())
         {
-            this.editor.pickBone(bone);
+            this.editor.pickBoneFromViewport(bone, activePanel);
         }
     }
 
@@ -732,6 +736,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         editor.setUndoId("form_panel");
 
+        Class<?> activePanel = this.editor == null ? null : this.editor.getActivePanelClass();
+
         if (this.editor != null)
         {
             this.editor.removeFromParent();
@@ -742,7 +748,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.formEditor.prepend(this.editor);
 
         this.editor.setEditor(this);
-        this.editor.startEdit(form);
+        this.editor.startEdit(form, activePanel);
         this.editor.full(this.formEditor).resize();
         this.refillState();
 

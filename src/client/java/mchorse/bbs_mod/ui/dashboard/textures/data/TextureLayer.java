@@ -1,4 +1,4 @@
-package mchorse.bbs_mod.ui.dashboard.textures.layers;
+package mchorse.bbs_mod.ui.dashboard.textures.data;
 
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.utils.resources.Pixels;
@@ -11,6 +11,10 @@ public class TextureLayer
     public Texture texture;
     public boolean visible = true;
     public float opacity = 1.0F;
+
+    /** Pixel offset of this layer within the document, applied by the move tool and baked in on flatten. */
+    public int offsetX;
+    public int offsetY;
 
     public TextureLayer(String name, Pixels pixels)
     {

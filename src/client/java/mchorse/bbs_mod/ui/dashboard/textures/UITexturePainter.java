@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.textures;
 
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -9,6 +10,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
+import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
 import mchorse.bbs_mod.ui.dashboard.textures.layers.UILayersPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
@@ -40,6 +42,7 @@ import mchorse.bbs_mod.utils.resources.Pixels;
 import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,7 +70,7 @@ import java.util.function.Consumer;
  */
 public class UITexturePainter extends UIElement
 {
-    private List<Document> documents = new ArrayList<>();
+    private List<UITextureEditor> editors = new ArrayList<>();
     private int currentIndex = -1;
 
     /** Persisted fractional width of the tool options column, keyed by panel class. */
@@ -78,20 +81,6 @@ public class UITexturePainter extends UIElement
     private static final float DEFAULT_OPTIONS_WIDTH = 0F;
     private static final int MIN_OPTIONS_WIDTH = 140;
     private static final int MAX_BRUSH_SIZE = 1024;
-
-    public static final class Document
-    {
-        public Link link;
-        public final Pixels pixels;
-        public final UITextureEditor editor;
-
-        public Document(Link link, Pixels pixels, UITextureEditor editor)
-        {
-            this.link = link;
-            this.pixels = pixels;
-            this.editor = editor;
-        }
-    }
 
     public UITrackpad brightness;
     public UITrackpad brushSize;
@@ -131,6 +120,7 @@ public class UITexturePainter extends UIElement
 
     private UIIcon toolIconBrush;
     private UIIcon toolIconEraser;
+    private UIIcon toolIconMove;
     private UIIcon toolIconFill;
     private UIIcon toolIconPipette;
     private UIIcon toolIconSelection;
@@ -205,6 +195,7 @@ public class UITexturePainter extends UIElement
 
         this.toolIconBrush = this.createToolIcon(Icons.BRUSH, UIKeys.TEXTURES_TOOLS_BRUSH, TexturePaintTool.BRUSH);
         this.toolIconEraser = this.createToolIcon(Icons.ERASER, UIKeys.TEXTURES_TOOLS_ERASER, TexturePaintTool.ERASER);
+        this.toolIconMove = this.createToolIcon(Icons.ALL_DIRECTIONS, UIKeys.TEXTURES_TOOLS_MOVE, TexturePaintTool.MOVE);
         this.toolIconFill = this.createToolIcon(Icons.BUCKET, UIKeys.TEXTURES_TOOLS_FILL, TexturePaintTool.FILL);
         this.toolIconPipette = this.createToolIcon(Icons.EYEDROPPER, UIKeys.TEXTURES_TOOLS_EYEDROPPER, TexturePaintTool.PIPETTE);
         this.toolIconSelection = this.createToolIcon(Icons.OUTLINE, UIKeys.TEXTURES_TOOLS_SELECTION, TexturePaintTool.SELECTION);
@@ -213,7 +204,7 @@ public class UITexturePainter extends UIElement
 
         this.iconBar.add(this.saveIcon, this.resizeIcon, this.extractIcon,
             this.toolIconBrush.marginTop(TOOL_SEPARATOR_GAP),
-            this.toolIconEraser, this.toolIconFill, this.toolIconPipette,
+            this.toolIconEraser, this.toolIconMove, this.toolIconFill, this.toolIconPipette,
             this.toolIconSelection,
             this.modelPreviewIcon.marginTop(TOOL_SEPARATOR_GAP));
     }
@@ -342,6 +333,7 @@ public class UITexturePainter extends UIElement
         this.keys().register(Keys.PIXEL_SWAP, this::swapColors).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_BRUSH, () -> this.userSelectTool(TexturePaintTool.BRUSH)).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_ERASER, () -> this.userSelectTool(TexturePaintTool.ERASER)).inside().category(category);
+        this.keys().register(Keys.PIXEL_TOOL_MOVE, () -> this.userSelectTool(TexturePaintTool.MOVE)).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_FILL, () -> this.userSelectTool(TexturePaintTool.FILL)).inside().category(category);
         this.keys().register(Keys.PIXEL_TOOL_SELECTION, () -> this.userSelectTool(TexturePaintTool.SELECTION)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_DEC, () -> this.adjustBrushSize(-1)).inside().category(category);
@@ -383,6 +375,7 @@ public class UITexturePainter extends UIElement
         {
             case BRUSH -> this.toolIconBrush;
             case ERASER -> this.toolIconEraser;
+            case MOVE -> this.toolIconMove;
             case FILL -> this.toolIconFill;
             case PIPETTE -> this.toolIconPipette;
             case SELECTION -> this.toolIconSelection;
@@ -550,19 +543,19 @@ public class UITexturePainter extends UIElement
 
     private void cycleTabs()
     {
-        if (documents.size() <= 1)
+        if (editors.size() <= 1)
         {
             return;
         }
 
-        this.switchTab(MathUtils.cycler(currentIndex + (Window.isShiftPressed() ? -1 : 1), documents));
+        this.switchTab(MathUtils.cycler(currentIndex + (Window.isShiftPressed() ? -1 : 1), editors));
 
         UIUtils.playClick();
     }
 
     public int getTabCount()
     {
-        return documents.size();
+        return editors.size();
     }
 
     public int getCurrentTabIndex()
@@ -572,12 +565,12 @@ public class UITexturePainter extends UIElement
 
     public IKey getTabLabel(int index)
     {
-        return IKey.raw(StringUtils.fileName(documents.get(index).link.path));
+        return IKey.raw(StringUtils.fileName(editors.get(index).getTexture().path));
     }
 
     public IKey getTabTooltip(int index)
     {
-        return IKey.raw(documents.get(index).link.path);
+        return IKey.raw(editors.get(index).getTexture().path);
     }
 
     public Icon getTabIcon(int index)
@@ -587,12 +580,12 @@ public class UITexturePainter extends UIElement
 
     public boolean canCloseTab(int index)
     {
-        return documents.size() > 1 && index >= 0 && index < documents.size();
+        return editors.size() > 1 && index >= 0 && index < editors.size();
     }
 
     public void switchTab(int index)
     {
-        if (index < 0 || index >= documents.size() || currentIndex == index)
+        if (index < 0 || index >= editors.size() || currentIndex == index)
         {
             return;
         }
@@ -607,7 +600,7 @@ public class UITexturePainter extends UIElement
         }
     }
 
-    private UITextureEditor createEditor(Link link, Pixels pixels)
+    private UITextureEditor createEditor(Document document)
     {
         UITextureEditor editor = new UITextureEditor().saveCallback(this.saveCallback);
         editor.renameCallback((newLink) -> this.renameDocument(editor, newLink));
@@ -621,31 +614,38 @@ public class UITexturePainter extends UIElement
         editor.brushSoftnessSupplier(() -> (float) this.brushSoftness.getValue() / 100.0F);
         editor.eraserOpacitySupplier(() -> (float) this.eraserOpacity.getValue() / 100.0F);
         editor.secondaryEraserToggle(this::setSecondaryEraser);
+        editor.layersChangedCallback(() ->
+        {
+            if (this.layersPanel != null && this.getCurrentEditor() == editor)
+            {
+                this.layersPanel.updateLayers();
+            }
+        });
         editor.setBrushSize((int) this.brushSize.getValue());
-        editor.setDocument(link, pixels);
+        editor.setDocument(document);
         editor.full(this.editorHost);
         return editor;
     }
 
     /**
-     * Reassigns {@code editor}'s document to {@code newLink} after a Save As, closing any
-     * pre-existing tab that already referenced {@code newLink} (its contents are discarded
-     * since the file on disk was just overwritten).
+     * After a Save As changed {@code editor}'s document link, close any pre-existing tab that
+     * already referenced the new link (its contents are discarded since the file on disk was just
+     * overwritten) and refresh the tab strip.
      */
     private void renameDocument(UITextureEditor editor, Link newLink)
     {
         int editorIndex = -1;
         int duplicateIndex = -1;
 
-        for (int i = 0; i < documents.size(); i++)
+        for (int i = 0; i < editors.size(); i++)
         {
-            Document doc = documents.get(i);
+            UITextureEditor other = editors.get(i);
 
-            if (doc.editor == editor)
+            if (other == editor)
             {
                 editorIndex = i;
             }
-            else if (doc.link.equals(newLink))
+            else if (newLink.equals(other.getTexture()))
             {
                 duplicateIndex = i;
             }
@@ -659,20 +659,14 @@ public class UITexturePainter extends UIElement
         if (duplicateIndex >= 0)
         {
             this.removeTab(duplicateIndex);
-
-            if (duplicateIndex < editorIndex)
-            {
-                editorIndex -= 1;
-            }
         }
 
-        documents.get(editorIndex).link = newLink;
         this.finishTabMutation();
     }
 
     private void showCurrentEditor()
     {
-        if (documents.isEmpty())
+        if (editors.isEmpty())
         {
             return;
         }
@@ -684,7 +678,7 @@ public class UITexturePainter extends UIElement
             this.editorHost.remove(currentInHost);
         }
 
-        UITextureEditor toShow = documents.get(currentIndex).editor;
+        UITextureEditor toShow = editors.get(currentIndex);
 
         toShow.removeFromParent();
         this.editorHost.prepend(toShow);
@@ -696,9 +690,9 @@ public class UITexturePainter extends UIElement
 
     public UITextureEditor getCurrentEditor()
     {
-        return documents.isEmpty() || currentIndex < 0 || currentIndex >= documents.size()
+        return editors.isEmpty() || currentIndex < 0 || currentIndex >= editors.size()
             ? null
-            : documents.get(currentIndex).editor;
+            : editors.get(currentIndex);
     }
 
     private void addTabFromPath(String path)
@@ -719,12 +713,12 @@ public class UITexturePainter extends UIElement
 
     public void closeOtherTabs(int index)
     {
-        if (index < 0 || index >= documents.size() || documents.size() <= 1)
+        if (index < 0 || index >= editors.size() || editors.size() <= 1)
         {
             return;
         }
 
-        for (int i = documents.size() - 1; i >= 0; i--)
+        for (int i = editors.size() - 1; i >= 0; i--)
         {
             if (i != index)
             {
@@ -737,7 +731,7 @@ public class UITexturePainter extends UIElement
 
     public void closeTabsLeft(int index)
     {
-        if (index <= 0 || index >= documents.size())
+        if (index <= 0 || index >= editors.size())
         {
             return;
         }
@@ -752,12 +746,12 @@ public class UITexturePainter extends UIElement
 
     public void closeTabsRight(int index)
     {
-        if (index < 0 || index >= documents.size() - 1)
+        if (index < 0 || index >= editors.size() - 1)
         {
             return;
         }
 
-        for (int i = documents.size() - 1; i > index; i--)
+        for (int i = editors.size() - 1; i > index; i--)
         {
             this.removeTab(i);
         }
@@ -775,18 +769,17 @@ public class UITexturePainter extends UIElement
 
     private void removeTab(int index)
     {
-        if (index < 0 || index >= documents.size())
+        if (index < 0 || index >= editors.size())
         {
             return;
         }
 
-        Document doc = documents.remove(index);
+        UITextureEditor editor = editors.remove(index);
 
-        doc.editor.removeFromParent();
-        doc.pixels.delete();
-        doc.editor.deleteTexture();
+        editor.removeFromParent();
+        editor.deleteTexture();
 
-        if (documents.isEmpty())
+        if (editors.isEmpty())
         {
             currentIndex = -1;
         }
@@ -794,15 +787,15 @@ public class UITexturePainter extends UIElement
         {
             currentIndex -= 1;
         }
-        else if (currentIndex >= documents.size())
+        else if (currentIndex >= editors.size())
         {
-            currentIndex = documents.size() - 1;
+            currentIndex = editors.size() - 1;
         }
     }
 
     private void finishTabMutation()
     {
-        if (currentIndex >= 0 && currentIndex < documents.size())
+        if (currentIndex >= 0 && currentIndex < editors.size())
         {
             this.showCurrentEditor();
         }
@@ -856,9 +849,9 @@ public class UITexturePainter extends UIElement
     {
         String path = link.toString();
 
-        for (int i = 0; i < documents.size(); i++)
+        for (int i = 0; i < editors.size(); i++)
         {
-            if (documents.get(i).link.toString().equals(path))
+            if (editors.get(i).getTexture().toString().equals(path))
             {
                 this.switchTab(i);
 
@@ -871,22 +864,47 @@ public class UITexturePainter extends UIElement
             }
         }
 
-        Texture t = BBSModClient.getTextures().getTexture(link);
-        Pixels pixels = Texture.pixelsFromTexture(t);
+        Document document = this.loadDocument(link);
 
-        if (pixels == null)
+        if (document == null)
         {
             return;
         }
 
-        UITextureEditor editor = this.createEditor(link, pixels);
-        documents.add(new Document(link, pixels, editor));
-        this.switchTab(documents.size() - 1);
+        UITextureEditor editor = this.createEditor(document);
+
+        editors.add(editor);
+        this.switchTab(editors.size() - 1);
 
         if (setEditing)
         {
             editor.setEditing(true);
         }
+    }
+
+    /**
+     * Loads the editable document for {@code link}: deserializes the {@code NAME_INCLUDING_EXTENSION.dat}
+     * sidecar next to the texture when present, otherwise builds a fresh single-layer document from
+     * the texture's pixels.
+     */
+    private Document loadDocument(Link link)
+    {
+        File datFile = Document.datFile(BBSMod.getAssetsPath(link.path));
+
+        if (datFile.isFile())
+        {
+            Document document = Document.read(link, datFile);
+
+            if (document != null)
+            {
+                return document;
+            }
+        }
+
+        Texture texture = BBSModClient.getTextures().getTexture(link);
+        Pixels pixels = Texture.pixelsFromTexture(texture);
+
+        return pixels == null ? null : Document.fromPixels(link, pixels);
     }
 
     @Override
@@ -912,7 +930,10 @@ public class UITexturePainter extends UIElement
         int th = pixels.height;
         int px = tw <= 0 ? 0 : MathUtils.clamp(hover.x, 0, tw - 1);
         int py = th <= 0 ? 0 : MathUtils.clamp(hover.y, 0, th - 1);
-        Color color = pixels.getColor(px, py);
+        /* Sample the active layer at the cursor in the layer's own (offset) space. */
+        int lx = tw <= 0 ? 0 : MathUtils.clamp(hover.x - editor.getActiveOffsetX(), 0, tw - 1);
+        int ly = th <= 0 ? 0 : MathUtils.clamp(hover.y - editor.getActiveOffsetY(), 0, th - 1);
+        Color color = pixels.getColor(lx, ly);
 
         int r = 0;
         int g = 0;

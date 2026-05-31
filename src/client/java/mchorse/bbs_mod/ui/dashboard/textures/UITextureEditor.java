@@ -5,6 +5,7 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
 import mchorse.bbs_mod.ui.dashboard.textures.undo.PixelsUndo;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageFolderOverlayPanel;
@@ -24,7 +25,6 @@ import java.util.function.Consumer;
 
 public class UITextureEditor extends UIPixelsEditor
 {
-    private Link texture;
     private boolean dirty;
 
     private Consumer<Link> saveCallback;
@@ -41,12 +41,14 @@ public class UITextureEditor extends UIPixelsEditor
      */
     public void saveCurrentTexture()
     {
-        if (this.texture == null)
+        Link link = this.getTexture();
+
+        if (link == null)
         {
             return;
         }
 
-        File file = this.writeTexture(this.texture);
+        File file = this.writeTexture(link);
 
         if (file != null)
         {
@@ -68,14 +70,14 @@ public class UITextureEditor extends UIPixelsEditor
 
         UIOverlay.addOverlay(this.getContext(), panel);
 
-        panel.text.setText(this.texture.toString());
+        panel.text.setText(this.getTexture().toString());
         panel.text.textbox.selectFilename();
     }
 
     /** Called from UITexturePainter resize icon. Opens the resize overlay. */
     public void openResizeOverlay()
     {
-        if (this.layers.isEmpty())
+        if (this.document == null || this.document.layers.isEmpty())
         {
             return;
         }
@@ -132,7 +134,7 @@ public class UITextureEditor extends UIPixelsEditor
 
     public Link getTexture()
     {
-        return this.texture;
+        return this.document == null ? null : this.document.link;
     }
 
     public boolean isDirty()
@@ -169,9 +171,15 @@ public class UITextureEditor extends UIPixelsEditor
 
     public void fillColor(Vector2i pixel, Color color, boolean colorReplace)
     {
+        /* pixel is in document space; the active layer's buffer is shifted by its move-tool offset,
+         * so subtract the offset to index the layer and add it back for document-space checks. */
+        int ox = this.getActiveOffsetX();
+        int oy = this.getActiveOffsetY();
+
         PixelsUndo pixelsUndo = new PixelsUndo();
+        pixelsUndo.layerIndex = this.document == null ? -1 : this.document.activeLayerIndex;
         Pixels pixels = this.getPixels();
-        Color target = pixels.getColor(pixel.x, pixel.y);
+        Color target = pixels.getColor(pixel.x - ox, pixel.y - oy);
 
         if (target == null)
         {
@@ -186,7 +194,7 @@ public class UITextureEditor extends UIPixelsEditor
             {
                 for (int y = 0; y < pixels.height; y++)
                 {
-                    if (!this.isInsideSelection(x, y))
+                    if (!this.isInsideSelection(x + ox, y + oy))
                     {
                         continue;
                     }
@@ -214,14 +222,14 @@ public class UITextureEditor extends UIPixelsEditor
         }
         else
         {
-            this.floodFill(pixelsUndo, pixels, pixel.x, pixel.y, target.getARGBColor(), color.getARGBColor());
+            this.floodFill(pixelsUndo, pixels, pixel.x - ox, pixel.y - oy, target.getARGBColor(), color.getARGBColor(), ox, oy);
         }
 
         this.undoManager.pushUndo(pixelsUndo);
         this.updateTexture();
     }
 
-    private void floodFill(PixelsUndo undo, Pixels pixels, int x, int y, int targetColor, int replacementColor)
+    private void floodFill(PixelsUndo undo, Pixels pixels, int x, int y, int targetColor, int replacementColor, int ox, int oy)
     {
         if (targetColor == replacementColor)
         {
@@ -242,7 +250,7 @@ public class UITextureEditor extends UIPixelsEditor
                 continue;
             }
 
-            if (!this.isInsideSelection(px, py))
+            if (!this.isInsideSelection(px + ox, py + oy))
             {
                 continue;
             }
@@ -322,15 +330,19 @@ public class UITextureEditor extends UIPixelsEditor
 
             this.setDirty(false);
 
-            if (!link.equals(this.texture))
+            if (!link.equals(this.document.link))
             {
-                this.texture = link;
+                this.document.link = link;
 
                 if (this.renameCallback != null)
                 {
                     this.renameCallback.accept(link);
                 }
             }
+
+            /* Persist the editable document (layers, opacity, etc.) next to the texture as
+             * NAME_INCLUDING_EXTENSION.dat so re-opening restores the full layer stack. */
+            this.document.write(Document.datFile(file));
 
             if (this.saveCallback != null)
             {
@@ -357,13 +369,14 @@ public class UITextureEditor extends UIPixelsEditor
     }
 
     /**
-     * Set the document from existing link and pixels. Caller keeps ownership of pixels (no delete).
+     * Adopt the document to edit. The editor takes ownership of the document and its layer
+     * resources (freed on {@link #deleteTexture()}); the document already carries its link.
      */
-    public void setDocument(Link link, Pixels pixels)
+    @Override
+    public void setDocument(Document document)
     {
-        this.texture = link;
+        super.setDocument(document);
 
-        this.fillPixels(pixels);
         this.setDirty(false);
         this.setEditing(true);
     }
@@ -374,8 +387,8 @@ public class UITextureEditor extends UIPixelsEditor
         if (this.isEditing()) {
             return super.getRenderTexture(context);
         }
-        
-        Texture original = context.render.getTextures().getTexture(this.texture);
+
+        Texture original = context.render.getTextures().getTexture(this.getTexture());
         
         if (!this.isDirty()) {
             return original;

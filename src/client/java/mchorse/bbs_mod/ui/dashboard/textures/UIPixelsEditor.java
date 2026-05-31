@@ -5,6 +5,9 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
+import mchorse.bbs_mod.ui.dashboard.textures.undo.LayerStateUndo;
 import mchorse.bbs_mod.ui.dashboard.textures.undo.PixelsUndo;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -20,10 +23,9 @@ import mchorse.bbs_mod.utils.interps.rasterizers.LineRasterizer;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import mchorse.bbs_mod.utils.undo.IUndo;
 import mchorse.bbs_mod.utils.undo.UndoManager;
-import mchorse.bbs_mod.ui.dashboard.textures.layers.TextureLayer;
+import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
 import org.joml.Vector2d;
 import org.joml.Vector2i;
-import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,8 +44,7 @@ public class UIPixelsEditor extends UICanvasEditor
 
     private int brushSize = 1;
 
-    public List<TextureLayer> layers = new ArrayList<>();
-    public int activeLayerIndex = -1;
+    protected Document document;
 
     private Texture temporary;
     private Pixels pixels;
@@ -84,8 +85,14 @@ public class UIPixelsEditor extends UICanvasEditor
         }
     }
 
-    protected UndoManager<Pixels> undoManager;
+    protected UndoManager<Document> undoManager;
     private PixelsUndo pixelsUndo;
+
+    /** Notified after an undo/redo rebuilds or reorders layers, so the owning UI can refresh. */
+    private Runnable layersChangedCallback = () -> {};
+
+    /** Document snapshot captured at the start of a move-tool drag (one undo per move gesture). */
+    private MapType moveUndoBefore;
 
     private Supplier<Float> backgroundSupplier = () -> 0.7F;
     private Supplier<Color> colorSupplier = Color::white;
@@ -102,6 +109,10 @@ public class UIPixelsEditor extends UICanvasEditor
 
     /** True while the current stroke is the right-mouse-button temporary eraser. */
     private boolean secondaryEraser;
+
+    /** Active layer's pixel offset captured at the start of a move-tool drag. */
+    private int moveStartOffsetX;
+    private int moveStartOffsetY;
 
     public UIPixelsEditor()
     {
@@ -132,6 +143,72 @@ public class UIPixelsEditor extends UICanvasEditor
             this.selections.clear();
             this.currentSelection = null;
         }
+    }
+
+    /** Whether there is a non-empty pixel selection (a real region, not the implicit whole-canvas). */
+    public boolean hasSelection()
+    {
+        return this.hasSelection && !this.selections.isEmpty();
+    }
+
+    /**
+     * Cuts the current selection out of the active layer and moves it onto a new layer above it.
+     * The new layer is document-sized with a zero offset, so the lifted pixels keep their on-canvas
+     * position. Recorded as a single undo step (the cut and the new layer are captured together).
+     */
+    public void createLayerFromSelection()
+    {
+        TextureLayer source = this.document == null ? null : this.document.getActiveLayer();
+
+        if (source == null || !this.hasSelection())
+        {
+            return;
+        }
+
+        this.recordLayerChange(null, () ->
+        {
+            int ox = source.offsetX;
+            int oy = source.offsetY;
+            int w = this.document.width;
+            int h = this.document.height;
+            Pixels lifted = Pixels.fromSize(w, h);
+            Color transparent = new Color(0F, 0F, 0F, 0F);
+
+            for (int dx = 0; dx < w; dx++)
+            {
+                for (int dy = 0; dy < h; dy++)
+                {
+                    if (!this.isInsideSelection(dx, dy))
+                    {
+                        continue;
+                    }
+
+                    int lx = dx - ox;
+                    int ly = dy - oy;
+
+                    if (lx < 0 || ly < 0 || lx >= source.pixels.width || ly >= source.pixels.height)
+                    {
+                        continue;
+                    }
+
+                    Color color = source.pixels.getColor(lx, ly);
+
+                    if (color != null)
+                    {
+                        lifted.setColor(dx, dy, color);
+                        source.pixels.setColor(lx, ly, transparent);
+                    }
+                }
+            }
+
+            source.updateTexture();
+
+            int index = this.document.activeLayerIndex + 1;
+
+            this.document.layers.add(index, new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format(String.valueOf(this.document.layers.size() + 1)).get(), lifted));
+            this.setActiveLayer(index);
+            this.clearSelection();
+        });
     }
 
     public boolean isInsideSelection(int x, int y)
@@ -233,23 +310,28 @@ public class UIPixelsEditor extends UICanvasEditor
         return this;
     }
 
+    public Document getDocument()
+    {
+        return this.document;
+    }
+
     public void setActiveLayer(int index)
     {
-        if (index >= 0 && index < this.layers.size())
+        if (this.document != null && index >= 0 && index < this.document.layers.size())
         {
-            this.activeLayerIndex = index;
-            this.pixels = this.layers.get(index).pixels;
-            this.temporary = this.layers.get(index).texture;
+            this.document.activeLayerIndex = index;
+            this.pixels = this.document.layers.get(index).pixels;
+            this.temporary = this.document.layers.get(index).texture;
         }
     }
 
     public Texture getTemporaryTexture()
     {
-        if (this.layers.isEmpty())
+        if (this.document == null || this.document.layers.isEmpty())
         {
             return this.temporary;
         }
-        
+
         Pixels flat = this.flattenLayers();
         if (flat != null)
         {
@@ -381,6 +463,25 @@ public class UIPixelsEditor extends UICanvasEditor
         return t == TexturePaintTool.BRUSH || t == TexturePaintTool.ERASER;
     }
 
+    /**
+     * Move-tool offset of the active layer. Tools work in document/canvas coordinates, but the
+     * layer's pixel buffer is indexed in layer-local space &mdash; subtract this offset to convert
+     * a document coordinate into the active layer's buffer coordinate.
+     */
+    protected int getActiveOffsetX()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+        return layer == null ? 0 : layer.offsetX;
+    }
+
+    protected int getActiveOffsetY()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+        return layer == null ? 0 : layer.offsetY;
+    }
+
     private void paint(int x, int y)
     {
         int left = (this.brushSize - 1) / 2;
@@ -403,24 +504,29 @@ public class UIPixelsEditor extends UICanvasEditor
 
     private void paintPixel(int x, int y, float strength)
     {
-        if (x < 0 || y < 0 || x >= this.pixels.width || y >= this.pixels.height)
+        if (strength <= 0F)
         {
             return;
         }
 
+        /* x,y are document coordinates: the selection is checked in document space, while the
+         * active layer's buffer is indexed in layer-local space (shifted by the move-tool offset). */
         if (!this.isInsideSelection(x, y))
         {
             return;
         }
 
-        if (strength <= 0F)
+        int lx = x - this.getActiveOffsetX();
+        int ly = y - this.getActiveOffsetY();
+
+        if (lx < 0 || ly < 0 || lx >= this.pixels.width || ly >= this.pixels.height)
         {
             return;
         }
 
         if (!this.isStrokeBuildUpEnabled())
         {
-            int index = this.pixels.toIndex(x, y);
+            int index = this.pixels.toIndex(lx, ly);
             float previousStrength = this.strokeStrengths.getOrDefault(index, 0F);
 
             if (strength <= previousStrength)
@@ -436,22 +542,22 @@ public class UIPixelsEditor extends UICanvasEditor
         if (this.isStrokePaintTool() && this.getActivePaintTool() == TexturePaintTool.ERASER)
         {
             float opacity = this.eraserOpacitySupplier.get() * strength;
-            
+
             if (opacity < 1.0F)
             {
                 Color destination;
 
                 if (this.isStrokeBuildUpEnabled())
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
                 else
                 {
-                    destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                    destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                     if (destination == null)
                     {
-                        destination = this.pixels.getColor(x, y);
+                        destination = this.pixels.getColor(lx, ly);
                     }
                 }
 
@@ -469,15 +575,15 @@ public class UIPixelsEditor extends UICanvasEditor
 
             if (this.isStrokeBuildUpEnabled())
             {
-                destination = this.pixels.getColor(x, y);
+                destination = this.pixels.getColor(lx, ly);
             }
             else
             {
-                destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                 if (destination == null)
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
             }
 
@@ -490,15 +596,15 @@ public class UIPixelsEditor extends UICanvasEditor
 
             if (this.isStrokeBuildUpEnabled())
             {
-                destination = this.pixels.getColor(x, y);
+                destination = this.pixels.getColor(lx, ly);
             }
             else
             {
-                destination = this.pixelsUndo.getOriginalColor(this.pixels, x, y);
+                destination = this.pixelsUndo.getOriginalColor(this.pixels, lx, ly);
 
                 if (destination == null)
                 {
-                    destination = this.pixels.getColor(x, y);
+                    destination = this.pixels.getColor(lx, ly);
                 }
             }
 
@@ -515,7 +621,7 @@ public class UIPixelsEditor extends UICanvasEditor
             color.a = destination.a;
         }
 
-        this.pixelsUndo.setColor(this.pixels, x, y, color);
+        this.pixelsUndo.setColor(this.pixels, lx, ly, color);
     }
 
     private Color getWeightedStrokeColor(Color source, float strength)
@@ -925,12 +1031,60 @@ public class UIPixelsEditor extends UICanvasEditor
         this.pixelsUndo = null;
     }
 
-    private void handleUndo(IUndo<Pixels> pixelsIUndo, boolean redo)
+    private void handleUndo(IUndo<Document> undo, boolean redo)
     {
-        for (TextureLayer layer : this.layers)
+        if (this.document == null)
+        {
+            return;
+        }
+
+        /* A structural undo (LayerStateUndo) may have rebuilt the layer list, invalidating the
+         * cached active layer; re-sync it, refresh every layer's GPU texture and notify the UI. */
+        if (this.document.layers.isEmpty())
+        {
+            this.pixels = null;
+            this.temporary = null;
+        }
+        else
+        {
+            this.setActiveLayer(MathUtils.clamp(this.document.activeLayerIndex, 0, this.document.layers.size() - 1));
+        }
+
+        for (TextureLayer layer : this.document.layers)
         {
             layer.updateTexture();
         }
+
+        this.wasChanged();
+        this.layersChangedCallback.run();
+    }
+
+    public UIPixelsEditor layersChangedCallback(Runnable callback)
+    {
+        this.layersChangedCallback = callback != null ? callback : () -> {};
+
+        return this;
+    }
+
+    /**
+     * Runs a layer-management mutation and records it as a single undoable step by snapshotting the
+     * document before and after. {@code mergeTag} (nullable) lets consecutive changes of the same
+     * kind &mdash; e.g. an opacity drag &mdash; collapse into one undo entry.
+     */
+    public void recordLayerChange(String mergeTag, Runnable mutation)
+    {
+        if (this.undoManager == null || this.document == null)
+        {
+            mutation.run();
+
+            return;
+        }
+
+        MapType before = this.document.toData();
+
+        mutation.run();
+
+        this.undoManager.pushUndo(new LayerStateUndo(before, this.document.toData(), mergeTag));
     }
 
     private void copyPixel()
@@ -938,7 +1092,7 @@ public class UIPixelsEditor extends UICanvasEditor
         UIContext context = this.getContext();
         int pixelX = (int) Math.floor(this.scaleX.from(context.mouseX)) + this.w / 2;
         int pixelY = (int) Math.floor(this.scaleY.from(context.mouseY)) + this.h / 2;
-        Color color = this.pixels.getColor(pixelX, pixelY);
+        Color color = this.pixels.getColor(pixelX - this.getActiveOffsetX(), pixelY - this.getActiveOffsetY());
 
         if (color != null)
         {
@@ -950,14 +1104,17 @@ public class UIPixelsEditor extends UICanvasEditor
 
     protected void updateTexture()
     {
-        if (this.activeLayerIndex >= 0 && this.activeLayerIndex < this.layers.size()) {
-            this.layers.get(this.activeLayerIndex).updateTexture();
+        TextureLayer active = this.document == null ? null : this.document.getActiveLayer();
+
+        if (active != null)
+        {
+            active.updateTexture();
         }
     }
 
     public void undo()
     {
-        if (this.undoManager != null && this.undoManager.undo(this.pixels))
+        if (this.undoManager != null && this.undoManager.undo(this.document))
         {
             UIUtils.playClick();
         }
@@ -965,7 +1122,7 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void redo()
     {
-        if (this.undoManager != null && this.undoManager.redo(this.pixels))
+        if (this.undoManager != null && this.undoManager.redo(this.document))
         {
             UIUtils.playClick();
         }
@@ -973,14 +1130,14 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void deleteTexture()
     {
-        for (TextureLayer layer : this.layers)
+        if (this.document != null)
         {
-            layer.delete();
+            this.document.delete();
         }
-        this.layers.clear();
+
         this.temporary = null;
         this.pixels = null;
-        
+
         if (this.temporaryFlat != null)
         {
             this.temporaryFlat.delete();
@@ -988,22 +1145,23 @@ public class UIPixelsEditor extends UICanvasEditor
         }
     }
 
-    public void fillPixels(Pixels pixels)
+    /**
+     * Adopt {@code document} as the edited model, disposing whatever was open before. The active
+     * layer's pixels/texture are cached for the painting hot-path and the canvas is sized to it.
+     */
+    public void setDocument(Document document)
     {
         this.lastPixel = null;
 
         this.deleteTexture();
         this.setEditing(false);
 
-        if (pixels != null)
-        {
-            TextureLayer layer = new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format("1").get(), pixels);
-            this.layers.add(layer);
-            this.activeLayerIndex = 0;
-            this.pixels = layer.pixels;
-            this.temporary = layer.texture;
+        this.document = document;
 
-            this.setSize(pixels.width, pixels.height);
+        if (document != null && !document.layers.isEmpty())
+        {
+            this.setActiveLayer(MathUtils.clamp(document.activeLayerIndex < 0 ? 0 : document.activeLayerIndex, 0, document.layers.size() - 1));
+            this.setSize(document.width, document.height);
         }
     }
 
@@ -1011,23 +1169,18 @@ public class UIPixelsEditor extends UICanvasEditor
     public void setSize(int w, int h)
     {
         super.setSize(w, h);
-        
-        for (TextureLayer layer : this.layers)
+
+        if (this.document != null)
         {
-            if (layer.pixels != null && (layer.pixels.width != w || layer.pixels.height != h))
+            this.document.resize(w, h);
+
+            TextureLayer active = this.document.getActiveLayer();
+
+            if (active != null)
             {
-                Pixels newPixels = Pixels.fromSize(w, h);
-                newPixels.draw(layer.pixels, 0, 0);
-                layer.pixels.delete();
-                layer.pixels = newPixels;
-                layer.updateTexture();
+                this.pixels = active.pixels;
+                this.temporary = active.texture;
             }
-        }
-        
-        if (this.activeLayerIndex >= 0 && this.activeLayerIndex < this.layers.size())
-        {
-            this.pixels = this.layers.get(this.activeLayerIndex).pixels;
-            this.temporary = this.layers.get(this.activeLayerIndex).texture;
         }
     }
 
@@ -1121,7 +1274,7 @@ public class UIPixelsEditor extends UICanvasEditor
         if (tool == TexturePaintTool.PIPETTE)
         {
             Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-            Color color = this.pixels.getColor(pixel.x, pixel.y);
+            Color color = this.pixels.getColor(pixel.x - this.getActiveOffsetX(), pixel.y - this.getActiveOffsetY());
 
             if (color != null)
             {
@@ -1131,9 +1284,29 @@ public class UIPixelsEditor extends UICanvasEditor
             return;
         }
 
+        if (tool == TexturePaintTool.MOVE)
+        {
+            TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+            if (layer != null)
+            {
+                /* Anchor the drag to the layer's current offset and the press position; the offset
+                 * is recomputed as startOffset + (currentPixel - startPixel) each frame so slow
+                 * sub-pixel drags accumulate correctly without drift. */
+                this.moveStartOffsetX = layer.offsetX;
+                this.moveStartOffsetY = layer.offsetY;
+
+                /* Snapshot the document so the whole move gesture becomes one undo entry on release. */
+                this.moveUndoBefore = this.document.toData();
+            }
+
+            return;
+        }
+
         if (this.isStrokePaintTool())
         {
             this.pixelsUndo = new PixelsUndo();
+            this.pixelsUndo.layerIndex = this.document == null ? -1 : this.document.activeLayerIndex;
             this.strokeStrengths.clear();
             this.blendStroke = tool == TexturePaintTool.BRUSH;
             this.drawColor = tool == TexturePaintTool.ERASER ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
@@ -1197,6 +1370,20 @@ public class UIPixelsEditor extends UICanvasEditor
             this.secondaryEraserToggle.accept(false);
         }
 
+        /* Commit the move gesture as a single undo entry if the layer offset actually changed. */
+        if (this.moveUndoBefore != null)
+        {
+            TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+            boolean moved = layer != null && (layer.offsetX != this.moveStartOffsetX || layer.offsetY != this.moveStartOffsetY);
+
+            if (moved && this.undoManager != null)
+            {
+                this.undoManager.pushUndo(new LayerStateUndo(this.moveUndoBefore, this.document.toData()));
+            }
+
+            this.moveUndoBefore = null;
+        }
+
         return super.subMouseReleased(context);
     }
 
@@ -1216,14 +1403,17 @@ public class UIPixelsEditor extends UICanvasEditor
             Texture texture = this.getRenderTexture(context);
             context.batcher.fullTexturedBox(texture, area.x, area.y, area.w, area.h);
         }
-        else
+        else if (this.document != null)
         {
-            for (TextureLayer layer : this.layers)
+            for (TextureLayer layer : this.document.layers)
             {
                 if (layer.visible && layer.texture != null)
                 {
+                    /* Shift the layer quad by its pixel offset (move tool); the canvas clip keeps it
+                     * within the editor, and flattening crops it to the document bounds. */
+                    Area layerArea = this.calculate(x + layer.offsetX, y + layer.offsetY, x + layer.offsetX + this.w, y + layer.offsetY + this.h);
                     int color = Colors.setA(Colors.WHITE, layer.opacity);
-                    context.batcher.texturedBox(layer.texture, color, area.x, area.y, area.w, area.h, 0, 0, layer.texture.width, layer.texture.height, layer.texture.width, layer.texture.height);
+                    context.batcher.texturedBox(layer.texture, color, layerArea.x, layerArea.y, layerArea.w, layerArea.h, 0, 0, layer.texture.width, layer.texture.height, layer.texture.width, layer.texture.height);
                 }
             }
         }
@@ -1262,6 +1452,26 @@ public class UIPixelsEditor extends UICanvasEditor
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
             }
+            else if (this.getActivePaintTool() == TexturePaintTool.MOVE)
+            {
+                TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+                if (layer != null)
+                {
+                    /* lastX/lastY stay pinned to the drag origin so the offset tracks the total drag. */
+                    Vector2i start = this.getHoverPixel(this.lastX, this.lastY);
+                    Vector2i current = this.getHoverPixel(context.mouseX, context.mouseY);
+                    int newX = this.moveStartOffsetX + (current.x - start.x);
+                    int newY = this.moveStartOffsetY + (current.y - start.y);
+
+                    if (newX != layer.offsetX || newY != layer.offsetY)
+                    {
+                        layer.offsetX = newX;
+                        layer.offsetY = newY;
+                        this.wasChanged();
+                    }
+                }
+            }
             else if (this.isStrokePaintTool())
             {
                 Vector2i last = this.getHoverPixel(this.lastX, this.lastY);
@@ -1288,30 +1498,14 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public Pixels flattenLayers()
     {
-        if (this.layers.isEmpty())
-        {
-            return null;
-        }
-
-        Pixels output = Pixels.fromSize(this.w, this.h);
-
-        for (TextureLayer layer : this.layers)
-        {
-            if (layer.visible && layer.pixels != null && layer.opacity > 0F)
-            {
-                output.draw(layer.pixels, 0, 0, layer.opacity);
-            }
-        }
-
-        output.rewindBuffer();
-        return output;
+        return this.document == null ? null : this.document.flatten();
     }
 
     private Texture temporaryFlat;
 
     protected Texture getRenderTexture(UIContext context)
     {
-        if (this.layers.isEmpty() || this.editing)
+        if (this.document == null || this.document.layers.isEmpty() || this.editing)
         {
             return this.temporary;
         }

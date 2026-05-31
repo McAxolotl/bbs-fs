@@ -130,17 +130,20 @@ public abstract class UIClip <T extends Clip> extends UIElement
         }
     }
 
+    /**
+     * Restore the scroll saved for this clip type. Must be called after the panel
+     * was laid out, otherwise the scroll gets clamped to 0 against an empty area.
+     */
+    public void restoreScroll()
+    {
+        this.panels.scroll.setScroll(SCROLLS.getOrDefault(this.clip.getClass(), 0));
+    }
+
     public static UIClip createPanel(Clip clip, IUIClipsDelegate delegate)
     {
         IUIClipFactory factory = FACTORIES.get(clip.getClass());
-        UIClip clipEditor = factory == null ? null : factory.create(clip, delegate);
 
-        if (clipEditor != null)
-        {
-            clipEditor.panels.scroll.setScroll(SCROLLS.getOrDefault(clip.getClass(), 0));
-        }
-
-        return clipEditor;
+        return factory == null ? null : factory.create(clip, delegate);
     }
 
     public static UILabel label(IKey key)

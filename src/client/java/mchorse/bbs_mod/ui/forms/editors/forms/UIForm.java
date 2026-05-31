@@ -101,6 +101,16 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     public void startEdit(T form)
     {
+        this.startEdit(form, null);
+    }
+
+    /**
+     * Switching the form rebuilds the editor from scratch, so {@code preferredPanel} carries the tab
+     * that was open before the rebuild. When a panel of that class still exists here it stays active;
+     * otherwise the editor opens on its default panel.
+     */
+    public void startEdit(T form, Class<?> preferredPanel)
+    {
         this.form = form;
 
         for (UIFormPanel<T> panel : this.panels)
@@ -108,7 +118,23 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
             panel.startEdit(form);
         }
 
-        this.setPanel(this.defaultPanel);
+        this.setPanel(this.findPanel(preferredPanel));
+    }
+
+    private UIFormPanel<T> findPanel(Class<?> panelClass)
+    {
+        if (panelClass != null)
+        {
+            for (UIFormPanel<T> panel : this.panels)
+            {
+                if (panel.getClass() == panelClass)
+                {
+                    return panel;
+                }
+            }
+        }
+
+        return this.defaultPanel;
     }
 
     public void finishEdit()
@@ -125,6 +151,41 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         {
             this.view.pickBone(bone);
         }
+    }
+
+    public Class<?> getActivePanelClass()
+    {
+        return this.view == null ? null : this.view.getClass();
+    }
+
+    /**
+     * Pick a bone that was selected in the 3D viewport. {@code preferredPanel} carries the tab that was
+     * open before the form was switched: when it's a bone-list panel (IK/physics/constraints) that
+     * actually contains the bone, keep the user on it and select the bone there; otherwise fall back to
+     * the pose editor and select the bone in its transform.
+     */
+    public void pickBoneFromViewport(String bone, Class<?> preferredPanel)
+    {
+        if (preferredPanel != null)
+        {
+            for (UIFormPanel<T> panel : this.panels)
+            {
+                if (panel.getClass() == preferredPanel)
+                {
+                    if (panel.pickBoneInList(bone))
+                    {
+                        this.setPanel(panel);
+
+                        return;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        this.setPanel(this.defaultPanel);
+        this.pickBone(bone);
     }
 
     @Override
