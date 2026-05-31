@@ -8,8 +8,8 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.textures.layers.UILayersPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
+import mchorse.bbs_mod.ui.dashboard.textures.layers.UILayersPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -19,8 +19,8 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -34,9 +34,9 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.glfw.GLFW;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import org.joml.Vector2i;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +73,7 @@ public class UITexturePainter extends UIElement
 
     private static final int ICON_BAR_W = 20;
     private static final int TOOL_SEPARATOR_GAP = 9;
-    private static final float DEFAULT_OPTIONS_WIDTH = 0.22F;
+    private static final float DEFAULT_OPTIONS_WIDTH = 0F;
     private static final int MIN_OPTIONS_WIDTH = 140;
     private static final int MAX_BRUSH_SIZE = 1024;
 
@@ -167,7 +167,7 @@ public class UITexturePainter extends UIElement
 
         this.content.add(new UIRenderable(this::renderPanelBackground),
             this.iconBar, this.optionsHost, this.editorHost, this.modelPreviewHost, this.optionsDraggable, this.modelPreviewDraggable);
-        this.add(this.tabs, this.content, this.brightness, this.alphaLockToggle);
+        this.add(this.tabs, this.content);
 
         this.syncTabs();
         this.showCurrentEditor();
@@ -257,11 +257,20 @@ public class UITexturePainter extends UIElement
         this.primary = new UIColor((c) -> {}).noLabel().withAlpha();
         this.primary.direction(Direction.LEFT).h(UIConstants.CONTROL_HEIGHT);
         this.primary.setColor(Colors.A100);
+        this.primary.tooltip(UIKeys.TEXTURES_COLOR_PRIMARY);
         this.secondary = new UIColor((c) -> {}).noLabel().withAlpha();
         this.secondary.direction(Direction.LEFT).h(UIConstants.CONTROL_HEIGHT);
         this.secondary.setColor(Colors.WHITE);
+        this.secondary.tooltip(UIKeys.TEXTURES_COLOR_SECONDARY);
         this.colorPickersRow = UI.row(UIConstants.MARGIN, this.primary, this.secondary);
         this.colorPickersRow.row().preferred(0).height(UIConstants.CONTROL_HEIGHT);
+
+        this.alphaLockToggle = new UIToggle(UIKeys.TEXTURES_ALPHA_LOCK, false, (b) -> {});
+        this.alphaLockToggle.h(UIConstants.CONTROL_HEIGHT);
+
+        this.brightness = new UITrackpad();
+        this.brightness.limit(0, 1).setValue(0.7);
+        this.brightness.tooltip(UIKeys.TEXTURES_VIEWER_BRIGHTNESS);
 
         this.brushSize = new UITrackpad((v) -> this.setBrushSize(v.intValue()));
         this.brushSize.integer().limit(1, MAX_BRUSH_SIZE, true).setValue(1);
@@ -270,11 +279,9 @@ public class UITexturePainter extends UIElement
 
         this.brushSizeLabel = UI.label(UIKeys.TEXTURES_BRUSH_SIZE);
         this.brushSoftnessLabel = UI.label(UIKeys.TEXTURES_BRUSH_SOFTNESS);
-        this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE,
-            this.activeStrokeShape == TextureStrokeShape.CIRCLE,
-            (b) -> this.setRoundBrushEnabled(b.getValue()));
+        this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE, this.activeStrokeShape == TextureStrokeShape.CIRCLE, (b) -> this.setRoundBrushEnabled(b.getValue()));
         this.roundBrushToggle.h(UIConstants.CONTROL_HEIGHT);
-        this.brushBuildUpToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_BUILD_UP, this.brushBuildUp, (b) -> this.brushBuildUp = b.getValue());
+        this.brushBuildUpToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_ACCUMULATIVE, this.brushBuildUp, (b) -> this.brushBuildUp = b.getValue());
         this.brushBuildUpToggle.h(UIConstants.CONTROL_HEIGHT);
 
         this.eraserOpacityLabel = UI.label(UIKeys.TEXTURES_ERASER_OPACITY);
@@ -282,12 +289,15 @@ public class UITexturePainter extends UIElement
         this.eraserOpacity.limit(0, 100).setValue(100);
 
         this.options.add(
-            UI.label(UIKeys.TEXTURES_COLOR_PRIMARY), this.colorPickersRow,
+            this.colorPickersRow,
+            this.alphaLockToggle,
+            this.brightness,
             this.brushSizeLabel, this.brushSize,
             this.brushSoftnessLabel, this.brushSoftness,
             this.roundBrushToggle,
             this.brushBuildUpToggle,
-            this.eraserOpacityLabel, this.eraserOpacity);
+            this.eraserOpacityLabel, this.eraserOpacity
+        );
     }
 
     private void buildModelPreviewHost()
@@ -318,14 +328,6 @@ public class UITexturePainter extends UIElement
         this.editorHost = new UIElement();
         this.editorHost.relative(this.optionsHost).x(1F, UIConstants.MARGIN).h(1F)
             .wTo(this.iconBar.area, 0F, -UIConstants.MARGIN);
-
-        this.brightness = new UITrackpad();
-        this.brightness.limit(0, 1).setValue(0.7);
-        this.brightness.tooltip(UIKeys.TEXTURES_VIEWER_BRIGHTNESS, Direction.TOP);
-        this.brightness.relative(this.editorHost).x(1F, -10).y(1F, -10).w(130).anchor(1F, 1F);
-        
-        this.alphaLockToggle = new UIToggle(UIKeys.TEXTURES_ALPHA_LOCK, false, (b) -> {});
-        this.alphaLockToggle.relative(this.brightness).x(0F).y(-5).w(1F).anchorY(1F);
     }
 
     private void registerShortcuts()

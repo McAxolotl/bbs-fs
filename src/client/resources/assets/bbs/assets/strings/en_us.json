@@ -1300,7 +1300,7 @@
 	"bbs.ui.textures.brush_shape": "Brush shape",
 	"bbs.ui.textures.brush_shape.square": "Square brush",
 	"bbs.ui.textures.brush_shape.circle": "Circle brush",
-	"bbs.ui.textures.brush_build_up": "Brush Build-up",
+	"bbs.ui.textures.brush_accumulative": "Accumulative",
 	"bbs.ui.textures.alpha_lock": "Alpha Lock",
 	"bbs.ui.textures.eraser_opacity": "Opacity",
 	"bbs.ui.textures.color.primary": "Primary color",
