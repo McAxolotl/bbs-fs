@@ -34,7 +34,13 @@ public class Film extends ValueGroup
     public final ValueFloat hunger = new ValueFloat("hunger", 20F);
     public final ValueInt xpLevel = new ValueInt("xp_level", 0);
     public final ValueFloat xpProgress = new ValueFloat("xp_progress", 0F);
-    
+
+    /**
+     * Radius (in blocks) around the player within which nearby mobs are captured
+     * into separate replays when recording a player replay (Right Alt). {@code 0} disables it.
+     */
+    public final ValueFloat mobRecordingRadius = new ValueFloat("mob_recording_radius", 0F);
+
     public final ValueString description = new ValueString("description", "");
     /** UTC instant as ISO-8601 ({@link Instant#toString()}), set when the film is first created. */
     public final ValueString createdAt = new ValueString("created_at", "");
@@ -54,7 +60,8 @@ public class Film extends ValueGroup
         this.add(this.hunger);
         this.add(this.xpLevel);
         this.add(this.xpProgress);
-        
+        this.add(this.mobRecordingRadius);
+
         this.add(this.description);
         this.add(this.createdAt);
         this.add(this.timeSpentActive);

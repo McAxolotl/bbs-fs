@@ -32,26 +32,40 @@ public class Morph
         if (hitResult.getType() == HitResult.Type.ENTITY)
         {
             Entity target = ((EntityHitResult) hitResult).getEntity();
-            Optional<RegistryKey<EntityType<?>>> key = Registries.ENTITY_TYPE.getKey(target.getType());
 
-            if (key.isPresent())
-            {
-                MobForm form = new MobForm();
-                NbtCompound compound = target.writeNbt(new NbtCompound());
-
-                for (String s : Arrays.asList("Pos", "Motion", "Rotation", "FallDistance", "Fire", "Air", "OnGround", "Invulnerable", "PortalCooldown", "UUID"))
-                {
-                    compound.remove(s);
-                }
-
-                form.mobID.set(key.get().getValue().toString());
-                form.mobNBT.set(compound.toString());
-
-                return form;
-            }
+            return createMobForm(target);
         }
 
         return null;
+    }
+
+    /**
+     * Build a {@link MobForm} snapshotting the given entity's type and NBT, stripping
+     * transient world-state keys (position, motion, UUID, etc.) so the form is reusable.
+     *
+     * @return the form, or {@code null} if the entity's type isn't registered.
+     */
+    public static MobForm createMobForm(Entity target)
+    {
+        Optional<RegistryKey<EntityType<?>>> key = Registries.ENTITY_TYPE.getKey(target.getType());
+
+        if (key.isEmpty())
+        {
+            return null;
+        }
+
+        MobForm form = new MobForm();
+        NbtCompound compound = target.writeNbt(new NbtCompound());
+
+        for (String s : Arrays.asList("Pos", "Motion", "Rotation", "FallDistance", "Fire", "Air", "OnGround", "Invulnerable", "PortalCooldown", "UUID"))
+        {
+            compound.remove(s);
+        }
+
+        form.mobID.set(key.get().getValue().toString());
+        form.mobNBT.set(compound.toString());
+
+        return form;
     }
 
     public static Morph getMorph(Entity entity)

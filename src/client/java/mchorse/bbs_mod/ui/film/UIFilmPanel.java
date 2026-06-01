@@ -2384,6 +2384,35 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 f.xpProgress.set(recorder.xpProgress);
             });
         }
+
+        this.applyRecordedMobs(recorder, film);
+    }
+
+    /**
+     * Turn every mob captured during recording into its own replay (with a mob form
+     * and the recorded position/rotation keyframes), then refresh the replay list.
+     */
+    private void applyRecordedMobs(Recorder recorder, Film film)
+    {
+        if (recorder.mobs.isEmpty())
+        {
+            return;
+        }
+
+        BaseValue.edit(film, (f) ->
+        {
+            for (Recorder.RecordedMob mob : recorder.mobs)
+            {
+                Replay replay = f.replays.addReplay();
+
+                replay.category.set("");
+                replay.form.set(mob.form);
+                replay.keyframes.copyOver(mob.keyframes, 0);
+            }
+        });
+
+        this.replayEditor.replaysList.replays.refreshReplayList();
+        this.controller.createEntities();
     }
 
     @Override

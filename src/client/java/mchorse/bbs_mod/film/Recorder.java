@@ -9,7 +9,9 @@ import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.Inventory;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
@@ -28,15 +30,28 @@ import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.math.Box;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Recorder extends WorldFilmController
 {
     public ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
     public FormProperties properties = new FormProperties("properties");
     public Inventory inventory = new Inventory("inventory");
+
+    /**
+     * Mobs captured within {@link Film#mobRecordingRadius} when recording started.
+     * Their base attributes are recorded each tick and turned into replays on stop.
+     */
+    public final List<RecordedMob> mobs = new ArrayList<>();
+
     public float hp;
     public float hunger;
     public int xpLevel;
@@ -145,6 +160,8 @@ public class Recorder extends WorldFilmController
             this.hunger = player.getHungerManager().getFoodLevel();
             this.xpLevel = player.experienceLevel;
             this.xpProgress = player.experienceProgress;
+
+            this.captureMobs(player);
         }
 
         if (this.tick >= 0)
@@ -152,9 +169,65 @@ public class Recorder extends WorldFilmController
             Morph morph = Morph.getMorph(player);
 
             this.keyframes.record(this.tick, morph.entity, null);
+            this.recordMobs();
         }
 
         super.update();
+    }
+
+    /**
+     * Snapshot every living entity (except the recording player) within
+     * {@link Film#mobRecordingRadius} into {@link #mobs}. A radius of {@code 0} disables it.
+     */
+    private void captureMobs(ClientPlayerEntity player)
+    {
+        float radius = this.film.mobRecordingRadius.get();
+
+        if (radius <= 0)
+        {
+            return;
+        }
+
+        Box box = player.getBoundingBox().expand(radius);
+        double radiusSq = radius * radius;
+
+        for (LivingEntity entity : player.getWorld().getEntitiesByClass(LivingEntity.class, box, (e) -> e != player && e.isAlive() && e.squaredDistanceTo(player) <= radiusSq))
+        {
+            MobForm form = Morph.createMobForm(entity);
+
+            if (form != null)
+            {
+                this.mobs.add(new RecordedMob(form, entity));
+            }
+        }
+    }
+
+    private void recordMobs()
+    {
+        for (RecordedMob mob : this.mobs)
+        {
+            if (mob.entity.getMcEntity().isAlive())
+            {
+                mob.keyframes.record(this.tick, mob.entity, null);
+            }
+        }
+    }
+
+    /**
+     * A mob captured at recording start: its snapshotted {@link MobForm} plus the
+     * keyframes recorded each tick from the live entity it wraps.
+     */
+    public static class RecordedMob
+    {
+        public final MobForm form;
+        public final MCEntity entity;
+        public final ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
+
+        public RecordedMob(MobForm form, Entity mcEntity)
+        {
+            this.form = form;
+            this.entity = new MCEntity(mcEntity);
+        }
     }
 
     public void render(WorldRenderContext context)
