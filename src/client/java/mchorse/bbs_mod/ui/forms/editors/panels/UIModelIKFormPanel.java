@@ -17,7 +17,6 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.ModelIKManager;
 
 import java.util.ArrayList;
@@ -31,11 +30,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public UIStringList bones;
 
     public UIToggle enabled;
-    public UIButton locator;
-    public UIButton root;
-    public UITrackpad poleX;
-    public UITrackpad poleY;
-    public UITrackpad poleZ;
+    public UIButton target;
+    public UITrackpad chainLength;
+    public UIButton pole;
+    public UITrackpad poleAngle;
     public UITrackpad weight;
 
     private String selectedBone = "";
@@ -45,20 +43,17 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private static class IKData
     {
-        public String locator = "";
-        public String root = "";
-        public boolean enabled = true;
-        public float poleX;
-        public float poleY;
-        public float poleZ;
+        public String target = "";
+        public int chainLength = ModelIKConfig.DEFAULT_CHAIN_LENGTH;
+        public String pole = "";
+        public float poleAngle = ModelIKConfig.DEFAULT_POLE_ANGLE;
         public float weight = ModelIKConfig.DEFAULT_WEIGHT;
+        public boolean enabled = true;
     }
 
     public UIModelIKFormPanel(UIForm editor)
     {
         super(editor);
-
-        IKey raw = IKey.constant("%s (%s)");
 
         this.bones = new UIStringList((l) ->
         {
@@ -87,33 +82,47 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         });
 
-        this.locator = new UIButton(IKey.EMPTY, (b) ->
+        this.target = new UIButton(IKey.EMPTY, (b) ->
         {
             if (this.selectedBone.isEmpty()) return;
-            
+
             IKData data = this.getOrCreateData(this.selectedBone);
-            this.openBoneMenu(data.locator, (bone) ->
+            this.openBoneMenu(data.target, (bone) ->
             {
-                data.locator = bone;
+                data.target = bone;
                 this.updateLabels();
                 this.commitChanges();
             });
         });
 
-        this.root = new UIButton(IKey.EMPTY, (b) ->
+        this.chainLength = new UITrackpad((v) ->
+        {
+            if (this.syncingUI || this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.chainLength = Math.max(0, (int) v.floatValue());
+            this.commitChanges();
+        });
+        this.chainLength.limit(0).integer();
+        this.chainLength.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH);
+
+        this.pole = new UIButton(IKey.EMPTY, (b) ->
         {
             if (this.selectedBone.isEmpty()) return;
 
             IKData data = this.getOrCreateData(this.selectedBone);
-            this.openBoneMenu(data.root, (bone) ->
+            this.openBoneMenu(data.pole, (bone) ->
             {
-                data.root = bone;
+                data.pole = bone;
                 this.updateLabels();
                 this.commitChanges();
             });
         });
 
-        this.poleX = new UITrackpad((v) ->
+        this.poleAngle = new UITrackpad((v) ->
         {
             if (this.syncingUI || this.selectedBone.isEmpty())
             {
@@ -121,40 +130,11 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             }
 
             IKData data = this.getOrCreateData(this.selectedBone);
-            data.poleX = v.floatValue();
+            data.poleAngle = v.floatValue();
             this.commitChanges();
         });
-        this.poleX.block().onlyNumbers();
-        this.poleX.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_X));
-        this.poleX.textbox.setColor(Colors.RED);
-        this.poleY = new UITrackpad((v) ->
-        {
-            if (this.syncingUI || this.selectedBone.isEmpty())
-            {
-                return;
-            }
-
-            IKData data = this.getOrCreateData(this.selectedBone);
-            data.poleY = v.floatValue();
-            this.commitChanges();
-        });
-        this.poleY.block().onlyNumbers();
-        this.poleY.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Y));
-        this.poleY.textbox.setColor(Colors.GREEN);
-        this.poleZ = new UITrackpad((v) ->
-        {
-            if (this.syncingUI || this.selectedBone.isEmpty())
-            {
-                return;
-            }
-
-            IKData data = this.getOrCreateData(this.selectedBone);
-            data.poleZ = v.floatValue();
-            this.commitChanges();
-        });
-        this.poleZ.block().onlyNumbers();
-        this.poleZ.tooltip(raw.format(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, UIKeys.GENERAL_Z));
-        this.poleZ.textbox.setColor(Colors.BLUE);
+        this.poleAngle.increment(5D).values(1D, 0.5D, 5D);
+        this.poleAngle.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE);
 
         this.weight = new UITrackpad((v) ->
         {
@@ -175,12 +155,14 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.bones,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
             this.enabled,
-            this.root,
-            this.locator,
+            this.target,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH).marginTop(UIConstants.SECTION_GAP),
+            this.chainLength,
+            this.pole,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE).marginTop(UIConstants.SECTION_GAP),
+            this.poleAngle,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT).marginTop(UIConstants.SECTION_GAP),
-            this.weight,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE).marginTop(UIConstants.SECTION_GAP),
-            UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.poleX, this.poleY, this.poleZ)
+            this.weight
         );
     }
 
@@ -220,11 +202,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     {
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
-        this.locator.setEnabled(enabled);
-        this.root.setEnabled(enabled);
-        this.poleX.setEnabled(enabled);
-        this.poleY.setEnabled(enabled);
-        this.poleZ.setEnabled(enabled);
+        this.target.setEnabled(enabled);
+        this.chainLength.setEnabled(enabled);
+        this.pole.setEnabled(enabled);
+        this.poleAngle.setEnabled(enabled);
         this.weight.setEnabled(enabled);
     }
 
@@ -267,15 +248,15 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private void updateLabels()
     {
-        if (this.locator == null || this.root == null || this.enabled == null)
+        if (this.target == null || this.pole == null || this.enabled == null)
         {
             return;
         }
 
         IKData data = this.ikData.get(this.selectedBone);
-        
-        String locatorLabel = data == null ? "" : data.locator;
-        String rootLabel = data == null ? "" : data.root;
+
+        String targetLabel = data == null ? "" : data.target;
+        String poleLabel = data == null ? "" : data.pole;
         boolean active = data != null && data.enabled;
         boolean canEdit = !this.selectedBone.isEmpty() && this.bones.isEnabled() && active;
 
@@ -283,11 +264,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         try
         {
-            this.locator.label = UIKeys.FORMS_EDITORS_MODEL_IK_LOCATOR.format(this.formatBone(locatorLabel));
-            this.root.label = UIKeys.FORMS_EDITORS_MODEL_IK_ROOT.format(this.formatBone(rootLabel));
-            this.poleX.setValue(data == null ? 0F : data.poleX);
-            this.poleY.setValue(data == null ? 0F : data.poleY);
-            this.poleZ.setValue(data == null ? 0F : data.poleZ);
+            this.target.label = UIKeys.FORMS_EDITORS_MODEL_IK_TARGET.format(this.formatBone(targetLabel));
+            this.pole.label = UIKeys.FORMS_EDITORS_MODEL_IK_POLE.format(this.formatBone(poleLabel));
+            this.chainLength.setValue(data == null ? ModelIKConfig.DEFAULT_CHAIN_LENGTH : data.chainLength);
+            this.poleAngle.setValue(data == null ? ModelIKConfig.DEFAULT_POLE_ANGLE : data.poleAngle);
             this.weight.setValue(data == null ? ModelIKConfig.DEFAULT_WEIGHT : data.weight);
             this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
             this.enabled.setValue(active);
@@ -297,11 +277,10 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.syncingUI = false;
         }
 
-        this.locator.setEnabled(canEdit);
-        this.root.setEnabled(canEdit);
-        this.poleX.setEnabled(canEdit);
-        this.poleY.setEnabled(canEdit);
-        this.poleZ.setEnabled(canEdit);
+        this.target.setEnabled(canEdit);
+        this.chainLength.setEnabled(canEdit);
+        this.pole.setEnabled(canEdit);
+        this.poleAngle.setEnabled(canEdit);
         this.weight.setEnabled(canEdit);
     }
 
@@ -340,25 +319,24 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         for (ModelIKConfig.Chain chain : config.chains())
         {
-            if (chain == null || chain.controller() == null || chain.controller().isEmpty())
+            if (chain == null || chain.tip() == null || chain.tip().isEmpty())
             {
                 continue;
             }
 
-            if (filterByBones && (!bones.contains(chain.controller()) || !bones.contains(chain.locator()) || !bones.contains(chain.root())))
+            if (filterByBones && !bones.contains(chain.tip()))
             {
                 continue;
             }
 
             IKData data = new IKData();
-            data.locator = chain.locator();
-            data.root = chain.root();
-            data.enabled = chain.enabled();
-            data.poleX = chain.poleX();
-            data.poleY = chain.poleY();
-            data.poleZ = chain.poleZ();
+            data.target = chain.target();
+            data.chainLength = chain.chainLength();
+            data.pole = chain.pole();
+            data.poleAngle = chain.poleAngle();
             data.weight = chain.weight();
-            this.ikData.put(chain.controller(), data);
+            data.enabled = chain.enabled();
+            this.ikData.put(chain.tip(), data);
         }
     }
 
@@ -370,25 +348,25 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         for (Map.Entry<String, IKData> entry : this.ikData.entrySet())
         {
-            String controller = entry.getKey();
+            String tip = entry.getKey();
             IKData data = entry.getValue();
 
-            if (controller == null || controller.isEmpty() || data == null)
+            if (tip == null || tip.isEmpty() || data == null)
             {
                 continue;
             }
 
-            if (data.locator == null || data.locator.isEmpty() || data.root == null || data.root.isEmpty())
+            if (data.target == null || data.target.isEmpty())
             {
                 continue;
             }
 
-            if (filterByBones && (!bones.contains(controller) || !bones.contains(data.locator) || !bones.contains(data.root)))
+            if (filterByBones && (!bones.contains(tip) || !bones.contains(data.target)))
             {
                 continue;
             }
 
-            out.add(new ModelIKConfig.Chain(controller, data.locator, data.root, data.enabled, data.poleX, data.poleY, data.poleZ, ModelIKConfig.PoleSpace.ROOT, data.weight));
+            out.add(new ModelIKConfig.Chain(tip, data.target, data.chainLength, data.pole, data.poleAngle, data.weight, data.enabled));
         }
 
         if (out.isEmpty())

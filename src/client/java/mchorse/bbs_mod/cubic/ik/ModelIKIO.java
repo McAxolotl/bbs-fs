@@ -8,17 +8,14 @@ import java.util.List;
 
 public final class ModelIKIO
 {
-    private static final String KEY_LOCATOR = "locator";
-    private static final String KEY_ROOT = "root";
-    private static final String KEY_ENABLED = "enabled";
-    private static final String KEY_POLE_X = "pole_x";
-    private static final String KEY_POLE_Y = "pole_y";
-    private static final String KEY_POLE_Z = "pole_z";
-    private static final String KEY_POLE_SPACE = "pole_space";
+    private static final String KEY_TARGET = "target";
+    private static final String KEY_CHAIN_LENGTH = "chain_length";
+    private static final String KEY_POLE = "pole";
+    private static final String KEY_POLE_ANGLE = "pole_angle";
     private static final String KEY_WEIGHT = "weight";
+    private static final String KEY_ENABLED = "enabled";
 
     private static final boolean DEFAULT_ENABLED = true;
-    private static final float DEFAULT_POLE = 0F;
 
     private ModelIKIO()
     {
@@ -32,31 +29,29 @@ public final class ModelIKIO
         }
 
         List<ModelIKConfig.Chain> chains = new ArrayList<>();
-        List<String> controllers = new ArrayList<>(map.keys());
 
-        for (String controller : controllers)
+        for (String tip : new ArrayList<>(map.keys()))
         {
-            if (!map.has(controller, BaseType.TYPE_MAP))
+            if (!map.has(tip, BaseType.TYPE_MAP))
             {
                 continue;
             }
 
-            MapType entry = map.getMap(controller);
-            String locator = entry.getString(KEY_LOCATOR);
-            String root = entry.getString(KEY_ROOT);
-            boolean enabled = entry.getBool(KEY_ENABLED, DEFAULT_ENABLED);
-            float poleX = (float) entry.getDouble(KEY_POLE_X, DEFAULT_POLE);
-            float poleY = (float) entry.getDouble(KEY_POLE_Y, DEFAULT_POLE);
-            float poleZ = (float) entry.getDouble(KEY_POLE_Z, DEFAULT_POLE);
-            ModelIKConfig.PoleSpace poleSpace = parsePoleSpace(entry.getString(KEY_POLE_SPACE, "root"));
+            MapType entry = map.getMap(tip);
+            String target = entry.getString(KEY_TARGET);
+
+            if (target.isEmpty())
+            {
+                continue;
+            }
+
+            int chainLength = entry.getInt(KEY_CHAIN_LENGTH, ModelIKConfig.DEFAULT_CHAIN_LENGTH);
+            String pole = entry.getString(KEY_POLE);
+            float poleAngle = (float) entry.getDouble(KEY_POLE_ANGLE, ModelIKConfig.DEFAULT_POLE_ANGLE);
             float weight = (float) entry.getDouble(KEY_WEIGHT, ModelIKConfig.DEFAULT_WEIGHT);
+            boolean enabled = entry.getBool(KEY_ENABLED, DEFAULT_ENABLED);
 
-            if (locator.isEmpty() || root.isEmpty())
-            {
-                continue;
-            }
-
-            chains.add(new ModelIKConfig.Chain(controller, locator, root, enabled, poleX, poleY, poleZ, poleSpace, weight));
+            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleAngle, weight, enabled));
         }
 
         return chains.isEmpty() ? null : new ModelIKConfig(chains);
@@ -70,69 +65,44 @@ public final class ModelIKIO
         {
             for (ModelIKConfig.Chain chain : config.chains())
             {
-                if (chain == null || chain.controller() == null || chain.controller().isEmpty())
+                if (chain == null || chain.tip() == null || chain.tip().isEmpty())
                 {
                     continue;
                 }
 
-                String locator = chain.locator();
-                String root = chain.root();
-
-                if (locator == null || locator.isEmpty() || root == null || root.isEmpty())
+                if (chain.target() == null || chain.target().isEmpty())
                 {
                     continue;
                 }
 
-                MapType boneData = new MapType();
-                boneData.putString(KEY_LOCATOR, locator);
-                boneData.putString(KEY_ROOT, root);
-                boneData.putBool(KEY_ENABLED, chain.enabled());
-                if (chain.poleX() != DEFAULT_POLE) boneData.putDouble(KEY_POLE_X, chain.poleX());
-                if (chain.poleY() != DEFAULT_POLE) boneData.putDouble(KEY_POLE_Y, chain.poleY());
-                if (chain.poleZ() != DEFAULT_POLE) boneData.putDouble(KEY_POLE_Z, chain.poleZ());
-                if (chain.poleSpace() != null && chain.poleSpace() != ModelIKConfig.PoleSpace.ROOT)
+                MapType entry = new MapType();
+                entry.putString(KEY_TARGET, chain.target());
+                entry.putBool(KEY_ENABLED, chain.enabled());
+
+                if (chain.chainLength() != ModelIKConfig.DEFAULT_CHAIN_LENGTH)
                 {
-                    boneData.putString(KEY_POLE_SPACE, poleSpaceToString(chain.poleSpace()));
+                    entry.putInt(KEY_CHAIN_LENGTH, chain.chainLength());
+                }
+
+                if (chain.pole() != null && !chain.pole().isEmpty())
+                {
+                    entry.putString(KEY_POLE, chain.pole());
+                }
+
+                if (chain.poleAngle() != ModelIKConfig.DEFAULT_POLE_ANGLE)
+                {
+                    entry.putDouble(KEY_POLE_ANGLE, chain.poleAngle());
                 }
 
                 if (chain.weight() != ModelIKConfig.DEFAULT_WEIGHT)
                 {
-                    boneData.putDouble(KEY_WEIGHT, chain.weight());
+                    entry.putDouble(KEY_WEIGHT, chain.weight());
                 }
-                ik.put(chain.controller(), boneData);
+
+                ik.put(chain.tip(), entry);
             }
         }
 
         return ik;
-    }
-
-    private static ModelIKConfig.PoleSpace parsePoleSpace(String value)
-    {
-        if (value == null || value.isEmpty())
-        {
-            return ModelIKConfig.PoleSpace.ROOT;
-        }
-
-        if ("world".equalsIgnoreCase(value))
-        {
-            return ModelIKConfig.PoleSpace.WORLD;
-        }
-
-        if ("controller".equalsIgnoreCase(value))
-        {
-            return ModelIKConfig.PoleSpace.CONTROLLER;
-        }
-
-        return ModelIKConfig.PoleSpace.ROOT;
-    }
-
-    private static String poleSpaceToString(ModelIKConfig.PoleSpace value)
-    {
-        if (value == null)
-        {
-            return "root";
-        }
-
-        return value == ModelIKConfig.PoleSpace.WORLD ? "world" : (value == ModelIKConfig.PoleSpace.CONTROLLER ? "controller" : "root");
     }
 }

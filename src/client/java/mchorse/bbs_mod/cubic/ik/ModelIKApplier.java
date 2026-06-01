@@ -34,8 +34,13 @@ final class ModelIKApplier
 
         for (ModelIKCache.CompiledChain chain : chains)
         {
-            wanted.add(chain.controller());
+            wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
+
+            if (!chain.pole().isEmpty())
+            {
+                wanted.add(chain.pole());
+            }
         }
 
         if (wanted.isEmpty())
@@ -62,9 +67,9 @@ final class ModelIKApplier
             return;
         }
 
-        PivotFrame controllerFrame = frames.get(chain.controller());
+        PivotFrame targetFrame = frames.get(chain.target());
 
-        if (controllerFrame == null)
+        if (targetFrame == null)
         {
             return;
         }
@@ -90,31 +95,15 @@ final class ModelIKApplier
             }
         }
 
-        Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.controller());
-        Vector3f controllerPos = override != null ? new Vector3f(override) : new Vector3f(controllerFrame.position());
-        Vector3f target = controllerPos;
+        Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
+        Vector3f target = override != null ? new Vector3f(override) : new Vector3f(targetFrame.position());
 
-        Vector3f pole = null;
-        if (chain.poleX() != 0F || chain.poleY() != 0F || chain.poleZ() != 0F)
-        {
-            pole = new Vector3f(chain.poleX(), chain.poleY(), chain.poleZ()).mul(1F / 16F);
-            if (chain.poleSpace() == ModelIKConfig.PoleSpace.CONTROLLER)
-            {
-                Quaternionf controllerRotation = new Quaternionf(controllerFrame.worldRotation());
-                controllerRotation.transform(pole);
-            }
-            else if (chain.poleSpace() == ModelIKConfig.PoleSpace.ROOT)
-            {
-                if (rootParentRotation != null)
-                {
-                    Quaternionf rootSpace = new Quaternionf(rootParentRotation);
-                    rootSpace.transform(pole);
-                }
-            }
-            pole.add(controllerPos);
-        }
+        PivotFrame poleFrame = chain.pole().isEmpty() ? null : frames.get(chain.pole());
+        Vector3f pole = poleFrame == null ? null : new Vector3f(poleFrame.position());
 
-        List<Vector3f> solved = FabrikSolver.solve(currentPositions, target, pole, MAX_ITERATIONS, TOLERANCE);
+        float poleAngleRad = (float) Math.toRadians(chain.poleAngle());
+
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, poleAngleRad, MAX_ITERATIONS, TOLERANCE);
         if (rootParentRotation == null)
         {
             return;
@@ -131,7 +120,7 @@ final class ModelIKApplier
             return 0F;
         }
 
-        float maxFix = getFix(poseFixByBone, chain.controller());
+        float maxFix = getFix(poseFixByBone, chain.target());
 
         for (String bone : chain.chainRootToEffector())
         {

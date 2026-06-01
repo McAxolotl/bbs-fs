@@ -28,16 +28,6 @@ public final class ModelIKRuntime
         clearCache();
     }
 
-    public static void apply(ModelInstance instance)
-    {
-        apply(instance, null, null);
-    }
-
-    public static void apply(ModelInstance instance, Map<String, Vector3f> controllerTargets)
-    {
-        apply(instance, controllerTargets, null);
-    }
-
     public static void applyWithPoseFix(ModelInstance instance, Map<String, Float> poseFixByBone)
     {
         apply(instance, null, poseFixByBone);
@@ -97,9 +87,9 @@ public final class ModelIKRuntime
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            if (chain != null && chain.controller() != null && !chain.controller().isEmpty())
+            if (chain != null && chain.target() != null && !chain.target().isEmpty())
             {
-                unique.add(chain.controller());
+                unique.add(chain.target());
             }
         }
 

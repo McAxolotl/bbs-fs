@@ -453,9 +453,10 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_BONES = L10n.lang("bbs.ui.forms.editors.model.ik.bones");
     public static final IKey FORMS_EDITORS_MODEL_IK_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.ik.settings");
     public static final IKey FORMS_EDITORS_MODEL_IK_ENABLED = L10n.lang("bbs.ui.forms.editors.model.ik.enabled");
-    public static final IKey FORMS_EDITORS_MODEL_IK_LOCATOR = L10n.lang("bbs.ui.forms.editors.model.ik.locator");
-    public static final IKey FORMS_EDITORS_MODEL_IK_ROOT = L10n.lang("bbs.ui.forms.editors.model.ik.root");
+    public static final IKey FORMS_EDITORS_MODEL_IK_TARGET = L10n.lang("bbs.ui.forms.editors.model.ik.target");
+    public static final IKey FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH = L10n.lang("bbs.ui.forms.editors.model.ik.chain_length");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole");
+    public static final IKey FORMS_EDITORS_MODEL_IK_POLE_ANGLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole_angle");
     public static final IKey FORMS_EDITORS_MODEL_IK_WEIGHT = L10n.lang("bbs.ui.forms.editors.model.ik.weight");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editors.model.ik.context.copy");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_PASTE = L10n.lang("bbs.ui.forms.editors.model.ik.context.paste");
