@@ -15,6 +15,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
@@ -371,7 +372,7 @@ public class BBSSettings {
 		defaultFilters.add("extra2_x");
 		defaultFilters.add("extra2_y");
 
-		builder.category("appearance");
+		builder.category("appearance", Icons.LAYOUT);
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", true);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", true);
@@ -394,7 +395,7 @@ public class BBSSettings {
 		builder.register(disabledMorphFormCategories);
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 
-		builder.category("personalization");
+		builder.category("personalization", Icons.COLOR);
 		coloredBackground = builder.getBoolean("colored_background", false);
 		backgroundBrightness = builder.getFloat("background_brightness", DEFAULT_BACKGROUND_BRIGHTNESS, MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
@@ -403,7 +404,7 @@ public class BBSSettings {
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 
-		builder.category("transformation");
+		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);
 		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
 		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
@@ -415,24 +416,24 @@ public class BBSSettings {
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		trackballSensitivity = builder.getFloat("trackball_sensitivity", 1F, 0.05F, 2F);
 
-		builder.category("tutorials");
+		builder.category("tutorials", Icons.HELP);
 		enableCursorRendering = builder.getBoolean("cursor", false);
 		enableMouseButtonRendering = builder.getBoolean("mouse_buttons", false);
 		enableKeystrokeRendering = builder.getBoolean("keystrokes", false);
 		keystrokeOffset = builder.getInt("keystrokes_offset", 10, 0, 20);
 		keystrokeMode = builder.getInt("keystrokes_position", 1);
 
-		builder.category("background");
+		builder.category("background", Icons.IMAGE);
 		backgroundImage = builder.getRL("image", Link.assets("textures/banners/bg.png"));
 		backgroundColor = builder.getInt("color", Colors.WHITE).colorAlpha();
 
-		builder.category("chroma_sky");
+		builder.category("chroma_sky", Icons.GLOBE);
 		chromaSkyEnabled = builder.getBoolean("enabled", false);
 		chromaSkyColor = builder.getInt("color", Colors.A75).color();
 		chromaSkyTerrain = builder.getBoolean("terrain", true);
 		chromaSkyBillboard = builder.getFloat("billboard", 0F, 0F, 256F);
 
-		builder.category("scrollbars");
+		builder.category("scrollbars", Icons.VERTICAL);
 		scrollbarShadow = builder.getInt("shadow", Colors.A50).colorAlpha();
 		scrollbarWidth = builder.getInt("width", 4, 2, 10);
 		scrollingSensitivity = builder.getFloat("sensitivity", 1F, 0F, 10F);
@@ -440,17 +441,17 @@ public class BBSSettings {
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 
-		builder.category("multiskin");
+		builder.category("multiskin", Icons.USER);
 		multiskinMultiThreaded = builder.getBoolean("multithreaded", true);
 
-		builder.category("video");
+		builder.category("video", Icons.VIDEO_CAMERA);
 		videoEncoderPath = builder.getString("encoder_path", "ffmpeg");
 		videoEncoderLog = builder.getBoolean("log", true);
 		worldExportResizeWindow = builder.getBoolean("world_export_resize_window", false);
 		builder.register(videoSettings = new ValueVideoSettings("settings"));
 
 		/* Camera editor */
-		builder.category("editor");
+		builder.category("editor", Icons.EDITOR);
 		editorCameraSpeed = builder.getFloat("speed", 1F, 0.1F, 100F);
 		editorCameraAngleSpeed = builder.getFloat("angle_speed", 1F, 0.1F, 100F);
 		duration = builder.getInt("duration", 30, 1, 1000);
@@ -478,7 +479,7 @@ public class BBSSettings {
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);
 		editorPreviewResolutionScale = builder.getFloat("preview_resolution_scale", 2F, 1F, 3F);
 
-		builder.category("recording");
+		builder.category("recording", Icons.FILM);
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
@@ -486,20 +487,20 @@ public class BBSSettings {
 		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 
-		builder.category("model_blocks");
+		builder.category("model_blocks", Icons.BLOCK);
 		renderAllModelBlocks = builder.getBoolean("render_all", true);
 		clickModelBlocks = builder.getBoolean("click", true);
 
-		builder.category("entity_selectors");
+		builder.category("entity_selectors", Icons.POINTER);
 		entitySelectorsPropertyWhitelist = builder.getString("whitelist", "CustomName,Name");
 
-		builder.category("dc");
+		builder.category("dc", Icons.EXCLAMATION);
 		damageControl = builder.getBoolean("enabled", true);
 
-		builder.category("shader_curves");
+		builder.category("shader_curves", Icons.CURVES);
 		shaderCurvesEnabled = builder.getBoolean("enabled", true);
 
-		builder.category("audio");
+		builder.category("audio", Icons.SOUND);
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
 		audioWaveformVisibleInKeyframes = builder.getBoolean("waveform_visible_keyframes", true);
 		audioWaveformDensity = builder.getInt("waveform_density", 20, 10, 100);
@@ -509,7 +510,7 @@ public class BBSSettings {
 		audioWaveformTime = builder.getBoolean("waveform_time", false);
 		audioWaveformPreviewCombined = builder.getBoolean("waveform_preview_combined", false);
 
-		builder.category("cdn");
+		builder.category("cdn", Icons.SERVER);
 		cdnUrl = builder.getString("url", "");
 		cdnToken = builder.getString("token", "");
 	}
