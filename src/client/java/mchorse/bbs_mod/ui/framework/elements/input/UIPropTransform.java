@@ -844,17 +844,10 @@ public class UIPropTransform extends UITransform
 
         ray.div(distance);
 
-        float step = (float) (-context.mouseWheel * distance * DEPTH_WHEEL_FACTOR);
+        float step = (float) (context.mouseWheel * distance * DEPTH_WHEEL_FACTOR);
 
-        if (Window.isAltPressed())
-        {
-            step /= 5F;
-        }
-
-        if (Window.isCtrlPressed())
-        {
-            step *= 5F;
-        }
+        if (Window.isAltPressed()) step /= 5F;
+        if (Window.isCtrlPressed()) step *= 5F;
 
         /* Move along the camera->object ray (preserves screen position), in translate units. */
         Vector3f translateStep = this.dragScreenInverseJacobian.transform(
