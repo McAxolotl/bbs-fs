@@ -1,13 +1,9 @@
 package mchorse.bbs_mod.cubic.physics;
 
-import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
-import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.data.model.ModelGroup;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
@@ -449,6 +445,7 @@ public final class ModelPhysicsRuntime
         int iterations = chain.iterations();
         boolean collisions = chain.collisions() && world != null && chain.radius() > 0F;
         float radius = chain.radius();
+        PhysicsRig rig = PhysicsRig.of(model);
 
         computeGravityDirection(chain, parentRotation, gravity, V6);
         float gravityX = V6.x;
@@ -618,16 +615,9 @@ public final class ModelPhysicsRuntime
                     state.pos[state.pos.length - 1].set(targetPosition);
                 }
 
-                if (constraints != null && !constraints.isEmpty())
+                if (constraints != null && !constraints.isEmpty() && rig != null)
                 {
-                    if (model instanceof Model cubic)
-                    {
-                        applyAngleConstraints(cubic, ids, state.pos, lengths, constraints, chainFrames.get(0).parentRotation());
-                    }
-                    else if (model instanceof BOBJModel bobj)
-                    {
-                        applyAngleConstraintsBobj(bobj, ids, state.pos, lengths, constraints, chainFrames.get(0).parentRotation());
-                    }
+                    applyAngleConstraints(rig, ids, state.pos, lengths, constraints, chainFrames.get(0).parentRotation());
 
                     state.pos[0].set(state.anchor);
 
@@ -713,7 +703,7 @@ public final class ModelPhysicsRuntime
         return Math.min(steps, COLLISION_MAX_SUBSTEPS);
     }
 
-    private static void applyAngleConstraints(Model model, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
+    private static void applyAngleConstraints(PhysicsRig rig, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
     {
         int boneCount = ids.size();
 
@@ -727,30 +717,14 @@ public final class ModelPhysicsRuntime
         for (int i = 0; i < boneCount; i++)
         {
             String boneId = ids.get(i);
+            String childId = i + 1 < boneCount ? ids.get(i + 1) : null;
             ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
 
-            ModelGroup bone = model.getGroup(boneId);
-            ModelGroup child = i + 1 < boneCount ? model.getGroup(ids.get(i + 1)) : null;
+            Vector3f restDirLocal = rig.restDirectionLocal(boneId, childId);
 
-            if (bone == null)
+            if (restDirLocal == null)
             {
                 return;
-            }
-
-            Vector3f restDirLocal;
-
-            if (child != null)
-            {
-                restDirLocal = new Vector3f(child.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
-            }
-            else if (bone.children != null && !bone.children.isEmpty())
-            {
-                ModelGroup firstChild = bone.children.get(0);
-                restDirLocal = new Vector3f(firstChild.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
-            }
-            else
-            {
-                restDirLocal = new Vector3f(0F, -1F, 0F);
             }
 
             Vector3f desiredDirWorld = new Vector3f(pos[i + 1]).sub(pos[i]);
@@ -775,12 +749,12 @@ public final class ModelPhysicsRuntime
             desiredDirLocal.normalize();
 
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
-            Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
-
             Quaternionf applied = localRot;
 
             if (c != null && c.enabled())
             {
+                Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
+
                 float minX = c.minX();
                 float minY = c.minY();
                 float minZ = c.minZ();
@@ -827,146 +801,6 @@ public final class ModelPhysicsRuntime
 
             parentWorld.mul(applied);
         }
-    }
-
-    private static void applyAngleConstraintsBobj(BOBJModel model, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
-    {
-        int boneCount = ids.size();
-
-        if (boneCount == 0 || pos == null || pos.length < 2 || lengths == null || lengths.length < 1 || rootParentRotation == null)
-        {
-            return;
-        }
-
-        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
-
-        for (int i = 0; i < boneCount; i++)
-        {
-            String boneId = ids.get(i);
-            ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
-
-            BOBJBone bone = model.getArmature().bones.get(boneId);
-            BOBJBone child = i + 1 < boneCount ? model.getArmature().bones.get(ids.get(i + 1)) : null;
-
-            if (bone == null)
-            {
-                return;
-            }
-
-            Vector3f restDirLocal = getBobjRestDirection(model, bone, child);
-            Vector3f desiredDirWorld = new Vector3f(pos[i + 1]).sub(pos[i]);
-
-            if (restDirLocal.lengthSquared() < EPS * EPS || desiredDirWorld.lengthSquared() < EPS * EPS)
-            {
-                continue;
-            }
-
-            restDirLocal.normalize();
-            desiredDirWorld.normalize();
-
-            Quaternionf invParent = new Quaternionf(parentWorld).invert();
-            Vector3f desiredDirLocal = new Vector3f(desiredDirWorld);
-            invParent.transform(desiredDirLocal);
-
-            if (desiredDirLocal.lengthSquared() < EPS * EPS)
-            {
-                continue;
-            }
-
-            desiredDirLocal.normalize();
-
-            Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
-            Quaternionf applied = localRot;
-
-            if (c != null && c.enabled())
-            {
-                Vector3f eulerRad = new Quaternionf(localRot).normalize().getEulerAnglesZYX(new Vector3f());
-
-                float minX = (float) Math.toRadians(c.minX());
-                float minY = (float) Math.toRadians(c.minY());
-                float minZ = (float) Math.toRadians(c.minZ());
-                float maxX = (float) Math.toRadians(c.maxX());
-                float maxY = (float) Math.toRadians(c.maxY());
-                float maxZ = (float) Math.toRadians(c.maxZ());
-
-                if (minX > maxX)
-                {
-                    float t = minX;
-                    minX = maxX;
-                    maxX = t;
-                }
-
-                if (minY > maxY)
-                {
-                    float t = minY;
-                    minY = maxY;
-                    maxY = t;
-                }
-
-                if (minZ > maxZ)
-                {
-                    float t = minZ;
-                    minZ = maxZ;
-                    maxZ = t;
-                }
-
-                eulerRad.x = eulerRad.x < minX ? minX : Math.min(eulerRad.x, maxX);
-                eulerRad.y = eulerRad.y < minY ? minY : Math.min(eulerRad.y, maxY);
-                eulerRad.z = eulerRad.z < minZ ? minZ : Math.min(eulerRad.z, maxZ);
-
-                applied = new Quaternionf().rotationZYX(eulerRad.z, eulerRad.y, eulerRad.x);
-
-                Vector3f dirLocal = new Vector3f(restDirLocal);
-                applied.transform(dirLocal);
-                parentWorld.transform(dirLocal);
-
-                if (dirLocal.lengthSquared() >= EPS * EPS)
-                {
-                    dirLocal.normalize().mul(lengths[i]);
-                    pos[i + 1].set(pos[i]).add(dirLocal);
-                }
-            }
-
-            parentWorld.mul(applied);
-        }
-    }
-
-    private static Vector3f getBobjRestDirection(BOBJModel model, BOBJBone bone, BOBJBone child)
-    {
-        if (child != null)
-        {
-            Vector3f out = child.relBoneMat.getTranslation(new Vector3f());
-
-            if (out.lengthSquared() > EPS * EPS)
-            {
-                return out;
-            }
-        }
-
-        for (BOBJBone candidate : model.getArmature().orderedBones)
-        {
-            if (candidate != null && candidate.parentBone == bone)
-            {
-                Vector3f out = candidate.relBoneMat.getTranslation(new Vector3f());
-
-                if (out.lengthSquared() > EPS * EPS)
-                {
-                    return out;
-                }
-            }
-        }
-
-        if (bone.parentBone != null)
-        {
-            Vector3f out = bone.relBoneMat.getTranslation(new Vector3f());
-
-            if (out.lengthSquared() > EPS * EPS)
-            {
-                return out;
-            }
-        }
-
-        return new Vector3f(0F, -1F, 0F);
     }
 
     private static float clamp01(float v)
