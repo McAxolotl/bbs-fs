@@ -279,11 +279,18 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     if (!first.bool)
                     {
                         this.bindTexture();
-                        this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                        RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
 
                         first.bool = true;
                     }
+
+                    /* The picker shader must be (re)applied for every layer, not just the
+                     * first one. Entities like the piglin render held items (e.g. the golden
+                     * sword) through Minecraft's own item rendering, which adds extra render
+                     * layers. If those layers aren't forced onto the picker shader, they get
+                     * drawn with vanilla item shaders, leaking GL/shader state that breaks the
+                     * picking of any subsequent entity rendered into the stencil framebuffer. */
+                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
                 });
 
                 light = 0;
@@ -335,12 +342,14 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             CustomVertexConsumerProvider.clearRunnables();
 
             context.stack.pop();
+
             if (context.world != null)
             {
                 context.world.pop();
             }
 
             RenderSystem.enableDepthTest();
+            RenderSystem.getModelViewMatrix().identity();
         }
     }
 

@@ -8,6 +8,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,36 +24,56 @@ final class ModelIKApplier
     {
     }
 
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> prevNormals, float hysteresisRad, float singularityRad, Map<String, Float> poseFixByBone)
+    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
             return;
         }
 
-        Set<String> wanted = new HashSet<>();
+        /* Apply ancestor chains (shallower root) first, and re-collect frames per
+         * chain, so a child chain (e.g. an arm) sees the pose its parent chain
+         * (e.g. the body) already produced and rides along with it. */
+        List<ModelIKCache.CompiledChain> ordered = new ArrayList<>(chains);
+        ordered.sort(Comparator.comparingInt((ModelIKCache.CompiledChain chain) -> rootDepth(model, chain)));
 
-        for (ModelIKCache.CompiledChain chain : chains)
+        for (ModelIKCache.CompiledChain chain : ordered)
         {
-            wanted.add(chain.controller());
+            Set<String> wanted = new HashSet<>();
+            wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
-        }
 
-        if (wanted.isEmpty())
-        {
-            return;
-        }
+            Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
+            ModelPivotFrames.collect(model, wanted, frames);
 
-        Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-        ModelPivotFrames.collect(model, wanted, frames);
-
-        for (ModelIKCache.CompiledChain chain : chains)
-        {
-            applyChain(model, chain, frames, controllerTargets, prevNormals, hysteresisRad, singularityRad, poseFixByBone);
+            applyChain(model, chain, frames, controllerTargets, poseFixByBone);
         }
     }
 
-    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> prevNormals, float hysteresisRad, float singularityRad, Map<String, Float> poseFixByBone)
+    /** Depth of the chain's root bone from the model root, for ancestor-first ordering. */
+    private static int rootDepth(IModel model, ModelIKCache.CompiledChain chain)
+    {
+        List<String> ids = chain.chainRootToEffector();
+        String group = ids.isEmpty() ? chain.tip() : ids.get(0);
+        int depth = 0;
+
+        while (group != null && !group.isEmpty() && depth < 256)
+        {
+            String parent = model.getParentGroupKey(group);
+
+            if (parent == null || parent.equals(group))
+            {
+                break;
+            }
+
+            group = parent;
+            depth++;
+        }
+
+        return depth;
+    }
+
+    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone)
     {
         float poseFix = getChainPoseFix(chain, poseFixByBone);
         float weight = chain.weight() * (1F - poseFix);
@@ -62,9 +83,9 @@ final class ModelIKApplier
             return;
         }
 
-        PivotFrame controllerFrame = frames.get(chain.controller());
+        PivotFrame targetFrame = frames.get(chain.target());
 
-        if (controllerFrame == null)
+        if (targetFrame == null)
         {
             return;
         }
@@ -90,32 +111,13 @@ final class ModelIKApplier
             }
         }
 
-        Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.controller());
-        Vector3f controllerPos = override != null ? new Vector3f(override) : new Vector3f(controllerFrame.position());
-        Vector3f target = controllerPos;
+        Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
+        Vector3f target = override != null ? new Vector3f(override) : new Vector3f(targetFrame.position());
 
-        Vector3f pole = null;
-        if (chain.poleX() != 0F || chain.poleY() != 0F || chain.poleZ() != 0F)
-        {
-            pole = new Vector3f(chain.poleX(), chain.poleY(), chain.poleZ()).mul(1F / 16F);
-            if (chain.poleSpace() == ModelIKConfig.PoleSpace.CONTROLLER)
-            {
-                Quaternionf controllerRotation = new Quaternionf(controllerFrame.worldRotation());
-                controllerRotation.transform(pole);
-            }
-            else if (chain.poleSpace() == ModelIKConfig.PoleSpace.ROOT)
-            {
-                if (rootParentRotation != null)
-                {
-                    Quaternionf rootSpace = new Quaternionf(rootParentRotation);
-                    rootSpace.transform(pole);
-                }
-            }
-            pole.add(controllerPos);
-        }
+        float poleAngleRad = (float) Math.toRadians(chain.poleAngle());
 
-        Vector3f prevNormal = prevNormals == null ? null : prevNormals.get(chain.controller());
-        List<Vector3f> solved = FabrikSolver.solve(currentPositions, target, pole, prevNormal, hysteresisRad, singularityRad, MAX_ITERATIONS, TOLERANCE);
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, chain.pole(), poleAngleRad, chain.softness(), MAX_ITERATIONS, TOLERANCE);
+
         if (rootParentRotation == null)
         {
             return;
@@ -123,22 +125,6 @@ final class ModelIKApplier
 
         Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
         ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
-
-        if (prevNormals != null && solved.size() >= 3)
-        {
-            Vector3f a = solved.get(0);
-            Vector3f b = solved.get(1);
-            Vector3f c = solved.get(2);
-            Vector3f ba = new Vector3f(b).sub(a);
-            Vector3f cb = new Vector3f(c).sub(b);
-            Vector3f n = ba.cross(cb);
-            if (n.lengthSquared() > 1.0e-8f)
-            {
-                n.normalize();
-                Vector3f store = prevNormals.computeIfAbsent(chain.controller(), (k) -> new Vector3f());
-                store.set(n);
-            }
-        }
     }
 
     private static float getChainPoseFix(ModelIKCache.CompiledChain chain, Map<String, Float> poseFixByBone)
@@ -148,7 +134,7 @@ final class ModelIKApplier
             return 0F;
         }
 
-        float maxFix = getFix(poseFixByBone, chain.controller());
+        float maxFix = getFix(poseFixByBone, chain.target());
 
         for (String bone : chain.chainRootToEffector())
         {

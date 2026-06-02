@@ -12,6 +12,7 @@ import mchorse.bbs_mod.cubic.animation.Animator;
 import mchorse.bbs_mod.cubic.animation.IAnimator;
 import mchorse.bbs_mod.cubic.animation.ProceduralAnimator;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
@@ -342,6 +343,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.applyPhysicsOnce(target, model, transition, baseTransform);
         this.applyConstraintsOnce(model);
         model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get());
+
+        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof mchorse.bbs_mod.data.types.MapType ikMap)
+        {
+            ModelIKDebug.render(newStack, model.model, ikMap, "");
+        }
 
         gameRenderer.getLightmapTextureManager().disable();
         gameRenderer.getOverlayTexture().teardownOverlayColor();

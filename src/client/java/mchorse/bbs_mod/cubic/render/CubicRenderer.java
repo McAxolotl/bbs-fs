@@ -218,6 +218,7 @@ public class CubicRenderer
             desiredDirLocal.normalize();
 
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
+            localRot.mul(twistAround(bone.current.rotate, bone.current.rotate2, restDirLocal));
             Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
 
             float rx = bone.current.rotate.x;
@@ -232,6 +233,18 @@ public class CubicRenderer
 
             parentWorld.mul(Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z));
         }
+    }
+
+    private static Quaternionf twistAround(Vector3f rotate, Vector3f rotate2, Vector3f axisLocal)
+    {
+        Quaternionf local = Matrices.toQuaternionZYXDegrees(rotate.x, rotate.y, rotate.z);
+
+        if (rotate2.x != 0F || rotate2.y != 0F || rotate2.z != 0F)
+        {
+            local.mul(Matrices.toQuaternionZYXDegrees(rotate2.x, rotate2.y, rotate2.z));
+        }
+
+        return Matrices.twistAbout(local, axisLocal);
     }
 
     private static float wrapDegreesNear(float angle, float reference)

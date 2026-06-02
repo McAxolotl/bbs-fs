@@ -161,4 +161,22 @@ public class Matrices
 
         return new Quaternionf().setFromNormalized(rot);
     }
+
+    /**
+     * Extracts the component of {@code q} that rotates around {@code axis}
+     * (the swing-twist decomposition's twist part). {@code axis} must be
+     * normalized. Returns identity when the twist is undefined (180° swing).
+     */
+    public static Quaternionf twistAbout(Quaternionf q, Vector3f axis)
+    {
+        float dot = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+        Quaternionf twist = new Quaternionf(axis.x * dot, axis.y * dot, axis.z * dot, q.w);
+
+        if (twist.lengthSquared() < 1.0e-12f)
+        {
+            return new Quaternionf();
+        }
+
+        return twist.normalize();
+    }
 }

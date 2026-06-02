@@ -215,6 +215,7 @@ public final class ModelRotationBlender
             desiredDirLocal.normalize();
 
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
+            localRot.mul(Matrices.twistAbout(toLocalRotationRadians(bone.transform.rotate, bone.transform.rotate2), restDirLocal));
             Vector3f eulerRad = new Quaternionf(localRot).normalize().getEulerAnglesZYX(new Vector3f());
 
             eulerRad.x = wrapRadiansNear(eulerRad.x, bone.transform.rotate.x);

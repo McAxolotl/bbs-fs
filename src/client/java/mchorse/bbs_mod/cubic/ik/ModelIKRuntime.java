@@ -7,25 +7,13 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 public final class ModelIKRuntime
 {
-    private static final float HYSTERESIS_RAD = (float) Math.toRadians(20F);
-    private static final float SINGULARITY_RAD = (float) Math.toRadians(3F);
-
-    private static final class InstanceState
-    {
-        public final Map<String, Vector3f> prevNormals = new HashMap<>();
-    }
-
-    private static final WeakHashMap<ModelInstance, InstanceState> STATES = new WeakHashMap<>();
-
     private ModelIKRuntime()
     {
     }
@@ -33,22 +21,11 @@ public final class ModelIKRuntime
     public static void clearCache()
     {
         ModelIKCache.clear();
-        STATES.clear();
     }
 
     public static void invalidate(String modelId)
     {
         clearCache();
-    }
-
-    public static void apply(ModelInstance instance)
-    {
-        apply(instance, null, null);
-    }
-
-    public static void apply(ModelInstance instance, Map<String, Vector3f> controllerTargets)
-    {
-        apply(instance, controllerTargets, null);
     }
 
     public static void applyWithPoseFix(ModelInstance instance, Map<String, Float> poseFixByBone)
@@ -83,8 +60,7 @@ public final class ModelIKRuntime
             return;
         }
 
-        InstanceState state = STATES.computeIfAbsent(instance, (k) -> new InstanceState());
-        ModelIKApplier.apply(model, chains, controllerTargets, state.prevNormals, HYSTERESIS_RAD, SINGULARITY_RAD, poseFixByBone);
+        ModelIKApplier.apply(model, chains, controllerTargets, poseFixByBone);
     }
 
     public static List<String> getControllers(ModelInstance instance)
@@ -111,9 +87,9 @@ public final class ModelIKRuntime
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            if (chain != null && chain.controller() != null && !chain.controller().isEmpty())
+            if (chain != null && chain.target() != null && !chain.target().isEmpty())
             {
-                unique.add(chain.controller());
+                unique.add(chain.target());
             }
         }
 

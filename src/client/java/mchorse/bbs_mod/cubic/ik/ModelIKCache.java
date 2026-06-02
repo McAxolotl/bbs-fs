@@ -13,7 +13,7 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String controller, String locator, String root, float poleX, float poleY, float poleZ, ModelIKConfig.PoleSpace poleSpace, float weight, List<String> chainRootToEffector)
+    public record CompiledChain(String tip, String target, boolean pole, float poleAngle, float softness, float weight, List<String> chainRootToEffector)
     {
     }
 
@@ -76,37 +76,41 @@ final class ModelIKCache
                 continue;
             }
 
-            if (!model.getAllGroupKeys().contains(chain.controller()) || !model.getAllGroupKeys().contains(chain.locator()) || !model.getAllGroupKeys().contains(chain.root()))
+            if (!model.getAllGroupKeys().contains(chain.tip()) || !model.getAllGroupKeys().contains(chain.target()))
             {
                 continue;
             }
 
-            List<String> chainIds = buildChainIds(model, chain.locator(), chain.root());
+            List<String> chainIds = buildChainIds(model, chain.tip(), chain.chainLength());
 
             if (chainIds.size() < 2)
             {
                 continue;
             }
 
-            out.add(new CompiledChain(chain.controller(), chain.locator(), chain.root(), chain.poleX(), chain.poleY(), chain.poleZ(), chain.poleSpace(), ModelIKConfig.DEFAULT_WEIGHT, chainIds));
+            out.add(new CompiledChain(chain.tip(), chain.target(), chain.pole(), chain.poleAngle(), chain.softness(), chain.weight(), chainIds));
         }
 
         return out;
     }
 
-    private static List<String> buildChainIds(IModel model, String effectorId, String rootId)
+    /**
+     * Walks up the hierarchy from {@code tip}, collecting up to {@code chainLength}
+     * bones ({@code 0} = all the way to the root), and returns them ordered
+     * root-to-tip.
+     */
+    private static List<String> buildChainIds(IModel model, String tip, int chainLength)
     {
         List<String> list = new ArrayList<>();
-        String group = effectorId;
+        String group = tip;
 
         while (group != null && !group.isEmpty())
         {
             list.add(group);
 
-            if (group.equals(rootId))
+            if (chainLength > 0 && list.size() >= chainLength)
             {
-                java.util.Collections.reverse(list);
-                return list;
+                break;
             }
 
             String parent = model.getParentGroupKey(group);
@@ -119,6 +123,8 @@ final class ModelIKCache
             group = parent;
         }
 
-        return java.util.Collections.emptyList();
+        java.util.Collections.reverse(list);
+
+        return list;
     }
 }

@@ -158,6 +158,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private boolean newFilm;
     private double timelineXMin = Double.NaN;
     private double timelineXMax = Double.NaN;
+    /** Vertical timeline scroll per film, so switching film tabs restores where each one was left. */
+    private final Map<String, FilmTimelineScroll> timelineScrollByFilm = new HashMap<>();
 
     private FilmQueueExporter queueExporter;
 
@@ -2096,6 +2098,66 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
+    private void captureTimelineScroll()
+    {
+        if (this.data == null || this.data.getId() == null)
+        {
+            return;
+        }
+
+        FilmTimelineScroll scroll = this.timelineScrollByFilm.computeIfAbsent(this.data.getId(), (id) -> new FilmTimelineScroll());
+
+        scroll.camera = this.cameraEditor.clips.vertical.getScroll();
+        scroll.action = this.actionEditor.clips.vertical.getScroll();
+
+        if (this.replayEditor.keyframeEditor != null)
+        {
+            scroll.replay = this.replayEditor.keyframeEditor.view.getDopeSheet().getYAxis().getScroll();
+        }
+    }
+
+    private void restoreTimelineScroll()
+    {
+        if (this.data == null || this.data.getId() == null)
+        {
+            return;
+        }
+
+        FilmTimelineScroll scroll = this.timelineScrollByFilm.get(this.data.getId());
+
+        if (scroll == null)
+        {
+            return;
+        }
+
+        this.restoreClipsScroll(this.cameraEditor.clips, scroll.camera);
+        this.restoreClipsScroll(this.actionEditor.clips, scroll.action);
+
+        if (this.replayEditor.keyframeEditor != null)
+        {
+            this.replayEditor.keyframeEditor.view.getDopeSheet().getYAxis().setScroll(scroll.replay);
+        }
+    }
+
+    private void restoreClipsScroll(UIClips clips, double scroll)
+    {
+        if (clips.getClips() == null)
+        {
+            return;
+        }
+
+        /* Scroll size depends on the freshly loaded clips, so recompute it before clamping the restored scroll. */
+        clips.updateScrollSize();
+        clips.vertical.setScroll(scroll);
+    }
+
+    private static class FilmTimelineScroll
+    {
+        public double camera;
+        public double action;
+        public double replay;
+    }
+
     public UIFilmController getController()
     {
         return this.controller;
@@ -2444,7 +2506,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public void fill(Film data)
     {
         this.notifyServer(ActionState.STOP);
+        this.captureTimelineScroll();
         super.fill(data);
+        this.restoreTimelineScroll();
         this.notifyServer(ActionState.RESTART);
     }
 
