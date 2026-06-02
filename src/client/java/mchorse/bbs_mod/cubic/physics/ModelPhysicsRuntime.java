@@ -44,7 +44,6 @@ public final class ModelPhysicsRuntime
     private static final float COLLISION_SLEEP_EPS = 0.005f;
     private static final float COLLISION_STATIC_FRICTION_EPS = 0.02f;
     private static final float COLLISION_CONTACT_SLOP = 0.02f;
-    private static final float RENDER_SMOOTH_ALPHA = 0.35F;
 
     /* Temporary pool to avoid allocations */
     private static final Vector3f V1 = new Vector3f();
@@ -70,6 +69,8 @@ public final class ModelPhysicsRuntime
         public Vector3f anchorVelocity = new Vector3f();
         public Vector3f[] pos;
         public Vector3f[] prev;
+        public Vector3f[] settled;
+        public Vector3f[] settledPrev;
         public Vector3f[] render;
         public Vector3f[] contactNormals;
     }
@@ -205,6 +206,8 @@ public final class ModelPhysicsRuntime
         {
             state.pos = new Vector3f[pointCount];
             state.prev = new Vector3f[pointCount];
+            state.settled = new Vector3f[pointCount];
+            state.settledPrev = new Vector3f[pointCount];
             state.render = new Vector3f[pointCount];
             state.contactNormals = new Vector3f[pointCount];
 
@@ -212,6 +215,8 @@ public final class ModelPhysicsRuntime
             {
                 state.pos[i] = new Vector3f();
                 state.prev[i] = new Vector3f();
+                state.settled[i] = new Vector3f();
+                state.settledPrev[i] = new Vector3f();
                 state.render[i] = new Vector3f();
                 state.contactNormals[i] = new Vector3f();
             }
@@ -273,9 +278,7 @@ public final class ModelPhysicsRuntime
         }
 
         step(world, age, model, ids, chain, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
-        Vector3f[] positions = interpolate(state, transition);
-        applyRenderAnchorFollow(state, positions, anchor, anchorRotation, target, transition);
-        applyRenderSmoothing(state, positions, transition, chain.collisions());
+        Vector3f[] positions = renderInterpolate(state, transition, anchor, anchorRotation, target);
         ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);
     }
 
@@ -323,89 +326,51 @@ public final class ModelPhysicsRuntime
         return Math.min(value, 1F);
     }
 
-    private static Vector3f[] interpolate(ChainState state, float transition)
+    /**
+     * Interpolates the settled chain shape of the two latest simulation ticks and re-roots it onto the
+     * live anchor. The chain shape is carried relative to its own root so the root stays pinned to the
+     * anchor exactly, while the anchor's sub-tick rotation swings the whole chain.
+     */
+    private static Vector3f[] renderInterpolate(ChainState state, float transition, Vector3f liveAnchor, Quaternionf liveAnchorRotation, Vector3f target)
     {
-        if (state.prev == null || state.pos == null || state.render == null || state.prev.length != state.pos.length || state.render.length != state.pos.length)
+        Vector3f[] render = state.render;
+        Vector3f[] settled = state.settled;
+        Vector3f[] settledPrev = state.settledPrev;
+
+        if (render == null || settled == null || settledPrev == null || render.length != settled.length || settledPrev.length != settled.length)
         {
             return state.pos;
         }
 
-        float t = transition;
+        float alpha = clamp01(transition);
 
-        if (t < 0F)
+        Vector3f rootPrev = settledPrev[0];
+        Vector3f rootCurr = settled[0];
+
+        Q1.set(liveAnchorRotation).mul(Q2.set(state.anchorRotation).invert()).normalize(); // anchor sub-tick swing
+
+        for (int i = 0; i < render.length; i++)
         {
-            t = 0F;
-        }
-        else if (t > 1F)
-        {
-            t = 1F;
+            V1.set(settledPrev[i]).sub(rootPrev); // shape last tick
+            V2.set(settled[i]).sub(rootCurr); // shape this tick
+            V1.lerp(V2, alpha);
+            Q1.transform(V1);
+            render[i].set(liveAnchor).add(V1);
         }
 
-        for (int i = 0; i < state.pos.length; i++)
+        if (target != null)
         {
-            state.render[i].set(state.prev[i]).lerp(state.pos[i], t);
+            render[render.length - 1].set(target);
         }
 
-        return state.render;
+        return render;
     }
 
-    private static void applyRenderSmoothing(ChainState state, Vector3f[] positions, float transition, boolean collisions)
+    private static void copyPositions(Vector3f[] src, Vector3f[] dst)
     {
-        if (!collisions || transition > 0F || positions == null || state == null || state.pos == null || positions.length != state.pos.length)
+        for (int i = 0; i < src.length; i++)
         {
-            return;
-        }
-
-        for (int i = 0; i < positions.length; i++)
-        {
-            positions[i].lerp(state.pos[i], RENDER_SMOOTH_ALPHA);
-        }
-    }
-
-    private static void applyRenderAnchorFollow(ChainState state, Vector3f[] positions, Vector3f anchorPosition, Quaternionf anchorRotation, Vector3f targetPosition, float transition)
-    {
-        if (state.lastAge == Integer.MIN_VALUE || positions == null || positions.length == 0)
-        {
-            return;
-        }
-
-        float t = transition;
-
-        if (t <= 0F)
-        {
-            return;
-        }
-        else if (t > 1F)
-        {
-            t = 1F;
-        }
-
-        Vector3f oldAnchor = state.anchor;
-        V1.set(anchorPosition).sub(oldAnchor).mul(t); // delta
-
-        Q1.set(anchorRotation).mul(Q2.set(state.anchorRotation).invert()).normalize(); // dq
-        Q3.identity().slerp(Q1, t); // dqPartial
-
-        if (Math.abs(V1.x) < EPS && Math.abs(V1.y) < EPS && Math.abs(V1.z) < EPS && Math.abs(Q3.x) < EPS && Math.abs(Q3.y) < EPS && Math.abs(Q3.z) < EPS)
-        {
-            if (targetPosition != null)
-            {
-                positions[positions.length - 1].set(targetPosition);
-            }
-
-            return;
-        }
-
-        for (int i = 0; i < positions.length; i++)
-        {
-            V2.set(positions[i]).sub(oldAnchor); // rel
-            Q3.transform(V2);
-            positions[i].set(oldAnchor).add(V1).add(V2);
-        }
-
-        if (targetPosition != null)
-        {
-            positions[positions.length - 1].set(targetPosition);
+            dst[i].set(src[i]);
         }
     }
 
@@ -457,6 +422,9 @@ public final class ModelPhysicsRuntime
             state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(V1.mul(lengths[lengths.length - 1]));
             state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
 
+            copyPositions(state.pos, state.settled);
+            copyPositions(state.pos, state.settledPrev);
+
             state.lastAge = age;
             return;
         }
@@ -494,6 +462,8 @@ public final class ModelPhysicsRuntime
 
         for (int t = 0; t < dt; t++)
         {
+            copyPositions(state.settled, state.settledPrev);
+
             V4.set(state.anchor);
             Q4.set(state.anchorRotation);
 
@@ -678,6 +648,8 @@ public final class ModelPhysicsRuntime
                     }
                 }
             }
+
+            copyPositions(state.pos, state.settled);
 
             state.lastAge++;
         }
