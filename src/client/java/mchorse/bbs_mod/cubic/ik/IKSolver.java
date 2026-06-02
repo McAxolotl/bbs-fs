@@ -23,7 +23,7 @@ final class IKSolver
     {
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, Vector3f pole, float poleAngleRad, int maxIterations, float tolerance)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, float poleAngleRad, float softness, int maxIterations, float tolerance)
     {
         int n = positions.size();
 
@@ -47,8 +47,8 @@ final class IKSolver
         }
 
         Vector3f root = new Vector3f(positions.get(0));
-        Vector3f goal = clampReach(root, target, total);
-        Vector3f poseRef = pole == null ? captureBendReference(positions) : null;
+        Vector3f goal = clampReach(root, target, total, softness);
+        Vector3f hinge = applyPole ? captureHingeAxis(positions) : null;
 
         if (n == 3)
         {
@@ -59,25 +59,44 @@ final class IKSolver
             solveFabrik(positions, root, goal, d, maxIterations, tolerance);
         }
 
-        orientBend(positions, pole, poseRef, poleAngleRad);
+        orientBend(positions, hinge, poleAngleRad);
 
         return positions;
     }
 
-    private static Vector3f clampReach(Vector3f root, Vector3f target, float total)
+    /**
+     * Maps the target onto an effective reach distance. With {@code softness > 0}
+     * this is "soft IK": near full extension the effective distance approaches the
+     * chain length asymptotically (and C1-continuously), so the limb never snaps
+     * dead straight when the target is pulled out of reach. With softness 0 it is
+     * a hard clamp at {@code total * REACH_LIMIT}.
+     */
+    private static Vector3f clampReach(Vector3f root, Vector3f target, float total, float softness)
     {
         Vector3f goal = new Vector3f(target);
         float dist = root.distance(target);
 
-        if (dist > total * REACH_LIMIT)
+        if (dist < EPS)
         {
-            Vector3f dir = new Vector3f(target).sub(root);
+            return goal;
+        }
 
-            if (dir.lengthSquared() >= 1.0e-10f)
+        Vector3f dir = new Vector3f(target).sub(root).div(dist);
+
+        if (softness > EPS)
+        {
+            float soft = Math.min(softness, 1F) * total;
+            float da = total - soft;
+
+            if (dist > da)
             {
-                dir.normalize();
-                goal.set(root).fma(total * REACH_LIMIT, dir);
+                float eff = total - soft * (float) Math.exp(-(dist - da) / soft);
+                goal.set(root).fma(eff, dir);
             }
+        }
+        else if (dist > total * REACH_LIMIT)
+        {
+            goal.set(root).fma(total * REACH_LIMIT, dir);
         }
 
         return goal;
@@ -165,15 +184,18 @@ final class IKSolver
     }
 
     /**
-     * Rotates the whole chain about the root-to-tip axis so the bend plane aims
-     * at the pole (or keeps the posed side), then adds the pole angle. The root
-     * and tip lie on the axis, so reach is preserved.
+     * Rotates the whole chain about the root-to-tip axis so its bend plane keeps
+     * the captured hinge orientation (the limb behaves like a hinge and never
+     * inverts), then tilts it by the pole angle. Aligning the bend-plane NORMAL
+     * (the hinge axis, which stays perpendicular to the limb as it swings)
+     * instead of the bend direction is what prevents the flip. The root and tip
+     * lie on the axis, so reach is preserved.
      */
-    private static void orientBend(List<Vector3f> p, Vector3f pole, Vector3f poseRef, float poleAngleRad)
+    private static void orientBend(List<Vector3f> p, Vector3f hinge, float poleAngleRad)
     {
         int n = p.size();
 
-        if (n < 3)
+        if (n < 3 || hinge == null)
         {
             return;
         }
@@ -186,33 +208,30 @@ final class IKSolver
             return;
         }
 
-        Vector3f current = new Vector3f(p.get(1)).sub(root);
+        /* Current bend-plane normal = (elbow - root) x axis. */
+        Vector3f current = new Vector3f(p.get(1)).sub(root).cross(axis);
 
-        if (!project(current, axis))
+        if (!normalize(current))
         {
             return;
         }
 
-        float theta = poleAngleRad;
-        Vector3f desired = new Vector3f();
+        /* Desired normal = the captured hinge, projected onto the plane across
+         * the axis. Degenerate only when the limb points straight along the
+         * hinge (rare) — then we hold the current bend instead of flipping. */
+        Vector3f desired = new Vector3f(hinge);
 
-        if (pole != null)
+        if (!project(desired, axis))
         {
-            desired.set(pole).sub(root);
-        }
-        else if (poseRef != null)
-        {
-            desired.set(poseRef);
-        }
-        else
-        {
-            desired = null;
+            return;
         }
 
-        if (desired != null && project(desired, axis))
+        if (poleAngleRad != 0F)
         {
-            theta += signedAngle(current, desired, axis);
+            new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, poleAngleRad).transform(desired);
         }
+
+        float theta = signedAngle(current, desired, axis);
 
         if (Math.abs(theta) < EPS)
         {
@@ -230,14 +249,49 @@ final class IKSolver
         }
     }
 
-    private static Vector3f captureBendReference(List<Vector3f> p)
+    /**
+     * The hinge axis: the side direction the limb bends around. When the limb is
+     * posed bent, it is the normal of that bend plane, {@code (elbow-root) x
+     * (tip-root)}. When the limb is straight (no posed plane — common for rest
+     * rigs), it falls back to the limb's side axis {@code limbDir x worldForward}
+     * (or x worldUp), which is a fixed direction independent of the target, so
+     * locking the bend to it never flips. Null only for a degenerate chain.
+     */
+    private static Vector3f captureHingeAxis(List<Vector3f> p)
     {
-        if (p.size() < 3)
+        int n = p.size();
+
+        if (n < 3)
         {
             return null;
         }
 
-        return perpendicular(p.get(0), p.get(1), p.get(2));
+        Vector3f a = p.get(0);
+        Vector3f normal = new Vector3f(p.get(1)).sub(a).cross(new Vector3f(p.get(2)).sub(a));
+
+        if (normalize(normal))
+        {
+            return normal;
+        }
+
+        /* Straight limb: derive a stable side axis from the limb direction. */
+        Vector3f limb = new Vector3f(p.get(n - 1)).sub(a);
+
+        if (!normalize(limb))
+        {
+            return null;
+        }
+
+        Vector3f hinge = new Vector3f(limb).cross(0F, 0F, 1F);
+
+        if (normalize(hinge))
+        {
+            return hinge;
+        }
+
+        hinge = new Vector3f(limb).cross(0F, 1F, 0F);
+
+        return normalize(hinge) ? hinge : null;
     }
 
     private static Vector3f perpendicular(Vector3f a, Vector3f b, Vector3f c)

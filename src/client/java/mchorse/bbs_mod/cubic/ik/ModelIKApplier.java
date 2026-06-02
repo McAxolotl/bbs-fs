@@ -8,6 +8,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,31 +31,46 @@ final class ModelIKApplier
             return;
         }
 
-        Set<String> wanted = new HashSet<>();
+        /* Apply ancestor chains (shallower root) first, and re-collect frames per
+         * chain, so a child chain (e.g. an arm) sees the pose its parent chain
+         * (e.g. the body) already produced and rides along with it. */
+        List<ModelIKCache.CompiledChain> ordered = new ArrayList<>(chains);
+        ordered.sort(Comparator.comparingInt((ModelIKCache.CompiledChain chain) -> rootDepth(model, chain)));
 
-        for (ModelIKCache.CompiledChain chain : chains)
+        for (ModelIKCache.CompiledChain chain : ordered)
         {
+            Set<String> wanted = new HashSet<>();
             wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
 
-            if (!chain.pole().isEmpty())
-            {
-                wanted.add(chain.pole());
-            }
-        }
+            Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
+            ModelPivotFrames.collect(model, wanted, frames);
 
-        if (wanted.isEmpty())
-        {
-            return;
-        }
-
-        Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-        ModelPivotFrames.collect(model, wanted, frames);
-
-        for (ModelIKCache.CompiledChain chain : chains)
-        {
             applyChain(model, chain, frames, controllerTargets, poseFixByBone);
         }
+    }
+
+    /** Depth of the chain's root bone from the model root, for ancestor-first ordering. */
+    private static int rootDepth(IModel model, ModelIKCache.CompiledChain chain)
+    {
+        List<String> ids = chain.chainRootToEffector();
+        String group = ids.isEmpty() ? chain.tip() : ids.get(0);
+        int depth = 0;
+
+        while (group != null && !group.isEmpty() && depth < 256)
+        {
+            String parent = model.getParentGroupKey(group);
+
+            if (parent == null || parent.equals(group))
+            {
+                break;
+            }
+
+            group = parent;
+            depth++;
+        }
+
+        return depth;
     }
 
     private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone)
@@ -98,12 +114,10 @@ final class ModelIKApplier
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
         Vector3f target = override != null ? new Vector3f(override) : new Vector3f(targetFrame.position());
 
-        PivotFrame poleFrame = chain.pole().isEmpty() ? null : frames.get(chain.pole());
-        Vector3f pole = poleFrame == null ? null : new Vector3f(poleFrame.position());
-
         float poleAngleRad = (float) Math.toRadians(chain.poleAngle());
 
-        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, poleAngleRad, MAX_ITERATIONS, TOLERANCE);
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, chain.pole(), poleAngleRad, chain.softness(), MAX_ITERATIONS, TOLERANCE);
+
         if (rootParentRotation == null)
         {
             return;

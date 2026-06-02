@@ -12,10 +12,12 @@ public final class ModelIKIO
     private static final String KEY_CHAIN_LENGTH = "chain_length";
     private static final String KEY_POLE = "pole";
     private static final String KEY_POLE_ANGLE = "pole_angle";
+    private static final String KEY_SOFTNESS = "softness";
     private static final String KEY_WEIGHT = "weight";
     private static final String KEY_ENABLED = "enabled";
 
     private static final boolean DEFAULT_ENABLED = true;
+    private static final boolean DEFAULT_POLE = true;
 
     private ModelIKIO()
     {
@@ -46,12 +48,13 @@ public final class ModelIKIO
             }
 
             int chainLength = entry.getInt(KEY_CHAIN_LENGTH, ModelIKConfig.DEFAULT_CHAIN_LENGTH);
-            String pole = entry.getString(KEY_POLE);
+            boolean pole = entry.getBool(KEY_POLE, DEFAULT_POLE);
             float poleAngle = (float) entry.getDouble(KEY_POLE_ANGLE, ModelIKConfig.DEFAULT_POLE_ANGLE);
+            float softness = (float) entry.getDouble(KEY_SOFTNESS, ModelIKConfig.DEFAULT_SOFTNESS);
             float weight = (float) entry.getDouble(KEY_WEIGHT, ModelIKConfig.DEFAULT_WEIGHT);
             boolean enabled = entry.getBool(KEY_ENABLED, DEFAULT_ENABLED);
 
-            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleAngle, weight, enabled));
+            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleAngle, softness, weight, enabled));
         }
 
         return chains.isEmpty() ? null : new ModelIKConfig(chains);
@@ -84,14 +87,19 @@ public final class ModelIKIO
                     entry.putInt(KEY_CHAIN_LENGTH, chain.chainLength());
                 }
 
-                if (chain.pole() != null && !chain.pole().isEmpty())
+                if (chain.pole() != DEFAULT_POLE)
                 {
-                    entry.putString(KEY_POLE, chain.pole());
+                    entry.putBool(KEY_POLE, chain.pole());
                 }
 
                 if (chain.poleAngle() != ModelIKConfig.DEFAULT_POLE_ANGLE)
                 {
                     entry.putDouble(KEY_POLE_ANGLE, chain.poleAngle());
+                }
+
+                if (chain.softness() != ModelIKConfig.DEFAULT_SOFTNESS)
+                {
+                    entry.putDouble(KEY_SOFTNESS, chain.softness());
                 }
 
                 if (chain.weight() != ModelIKConfig.DEFAULT_WEIGHT)
