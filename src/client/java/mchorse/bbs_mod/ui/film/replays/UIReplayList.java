@@ -241,7 +241,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
             }
         }).inside()
             .label(UIKeys.SCENE_REPLAYS_CONTEXT_PASTE)
-            .active(() -> Window.getClipboardMap("_CopyReplay") != null && this.panel != null && this.panel.getData() != null)
+            .active(() -> this.panel != null && this.panel.getData() != null)
             .category(UIKeys.FILM_REPLAY_TITLE);
         this.keys().register(Keys.REPLAYS_DUPE, this::dupeReplay)
             .inside()

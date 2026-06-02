@@ -524,6 +524,24 @@ public class UIReplaysEditorUtils
 
         if (insert)
         {
+            UIKeyframeSheet sheet = resolveBoneSheet(keyframeEditor, boneKey, path);
+
+            if (sheet == null)
+            {
+                return;
+            }
+
+            /* When the per-limb bone track is empty/absent, resolveBoneSheet falls back
+             * to the form's pose track. Insert there instead of doing nothing: select
+             * the keyframe already at the cursor, or add a fresh one. */
+            if (isPoseSheet(sheet, path))
+            {
+                insertIntoPoseSheet(keyframeEditor, cursor, bone, sheet);
+                return;
+            }
+
+            /* Non-empty per-limb track: keep suppressing per-limb inserts while a pose
+             * keyframe of this form is the active selection. */
             IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
             Keyframe selected = graph.getSelected();
             UIKeyframeSheet currentSheet = selected != null ? graph.getSheet(selected) : null;
@@ -533,7 +551,7 @@ public class UIReplaysEditorUtils
                 return;
             }
 
-            pickProperty(keyframeEditor, cursor, bone, boneKey, true);
+            pickProperty(keyframeEditor, cursor, bone, sheet, true);
             return;
         }
 
@@ -683,6 +701,49 @@ public class UIReplaysEditorUtils
         KeyframeSegment segment = sheet.channel.find(tick);
 
         return segment != null ? segment.getClosest() : null;
+    }
+
+    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, int tick)
+    {
+        for (Object o : sheet.channel.getKeyframes())
+        {
+            Keyframe keyframe = (Keyframe) o;
+
+            if ((int) keyframe.getTick() == tick)
+            {
+                return keyframe;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Insert fallback onto the form's pose track, used when a bone's per-limb
+     * track is empty/absent: select the keyframe already sitting at the cursor
+     * (so the gesture never duplicates it), otherwise add a fresh one. Either
+     * way the bone is highlighted in the pose editor.
+     */
+    private static void insertIntoPoseSheet(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, UIKeyframeSheet poseSheet)
+    {
+        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        int tick = cursor.getCursor();
+        Keyframe existing = getKeyframeAt(poseSheet, tick);
+
+        if (existing != null)
+        {
+            if (poseSheet.selection.getSelected().size() <= 1)
+            {
+                forceSelectInSheet(graph, poseSheet, existing);
+            }
+        }
+        else
+        {
+            Keyframe keyframe = graph.addKeyframe(poseSheet, tick, null);
+            graph.selectKeyframe(keyframe);
+        }
+
+        updatePoseEditorBoneSelection(keyframeEditor, bone);
     }
 
     private static boolean isPoseSheet(UIKeyframeSheet sheet, String formPath)
