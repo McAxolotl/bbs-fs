@@ -16,7 +16,7 @@ import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.settings.ui.UIVideoSettingsOverlayPanel;
+import mchorse.bbs_mod.settings.ui.UISettingsOverlayPanel;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
@@ -221,7 +221,13 @@ public class UIFilmPreview extends UIElement
             });
 
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
-            menu.action(Icons.GEAR, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS, () -> UIOverlay.addOverlay(this.getContext(), new UIVideoSettingsOverlayPanel(BBSSettings.videoSettings)));
+            menu.action(Icons.GEAR, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS, () ->
+            {
+                UISettingsOverlayPanel panel = new UISettingsOverlayPanel();
+
+                panel.showCategory("bbs", "video");
+                UIOverlay.addOverlay(this.getContext(), panel, 430, 380);
+            });
 
             menu.action(Icons.VIDEO_CAMERA, UIKeys.FILM_RENDER_QUEUE, this::exportQueueFromTabs);
             menu.action(Icons.SOUND, UIKeys.FILM_RENDER_AUDIO, this::renderAudio);

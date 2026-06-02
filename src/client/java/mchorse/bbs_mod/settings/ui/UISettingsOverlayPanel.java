@@ -21,6 +21,9 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class UISettingsOverlayPanel extends UIOverlayPanel
 {
     private static final int SIDE_WIDTH = 130;
@@ -33,6 +36,8 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
     private ValueGroup category;
     private UIIcon currentModule;
     private String filter = "";
+
+    private final Map<String, UIIcon> moduleButtons = new HashMap<>();
 
     public UISettingsOverlayPanel()
     {
@@ -64,6 +69,7 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
 
             icon.tooltip(L10n.lang(UIValueFactory.getTitleKey(settings)), Direction.LEFT);
             this.icons.add(icon);
+            this.moduleButtons.put(settings.getId(), icon);
 
             if (defaultButton == null || settings.getId().equals("bbs"))
             {
@@ -91,6 +97,21 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
         this.search.setText("");
 
         this.buildSections();
+    }
+
+    public void showCategory(String mod, String categoryId)
+    {
+        this.selectConfig(mod, this.moduleButtons.get(mod));
+
+        if (this.settings != null)
+        {
+            ValueGroup group = this.settings.categories.get(categoryId);
+
+            if (group != null)
+            {
+                this.selectCategory(group);
+            }
+        }
     }
 
     public void selectCategory(ValueGroup category)

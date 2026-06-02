@@ -1137,6 +1137,7 @@ public class UIKeys
     public static final IKey VIDEO_SETTINGS_PRESETS_720p = L10n.lang("bbs.ui.video_settings.presets.720p");
     public static final IKey VIDEO_SETTINGS_PRESETS_SHORTS_1080P = L10n.lang("bbs.ui.video_settings.presets.shorts_1080p");
     public static final IKey VIDEO_SETTINGS_RESOLUTION = L10n.lang("bbs.ui.video_settings.resolution");
+    public static final IKey VIDEO_SETTINGS_SWAP = L10n.lang("bbs.ui.video_settings.swap");
     public static final IKey VIDEO_SETTINGS_TITLE = L10n.lang("bbs.ui.video_settings.title");
     public static final IKey VIDEO_SETTINGS_WIDTH = L10n.lang("bbs.ui.video_settings.width");
     public static final IKey WORLD_KEYS_CYCLE_PANELS = L10n.lang("bbs.ui.world.keys.cycle_panels");

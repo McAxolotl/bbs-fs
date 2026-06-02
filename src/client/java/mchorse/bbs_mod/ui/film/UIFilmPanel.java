@@ -537,8 +537,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             if (this.isVisible()) this.applyPreviewSizeToBBS();
         };
-        BBSSettings.videoSettings.width.postCallback(refreshPreviewOnVideoResolution);
-        BBSSettings.videoSettings.height.postCallback(refreshPreviewOnVideoResolution);
+        BBSSettings.videoWidth.postCallback(refreshPreviewOnVideoResolution);
+        BBSSettings.videoHeight.postCallback(refreshPreviewOnVideoResolution);
         BBSSettings.editorPreviewSizeMode.postCallback(refreshPreviewOnVideoResolution);
         BBSSettings.editorPreviewCustomWidth.postCallback(refreshPreviewOnVideoResolution);
         BBSSettings.editorPreviewCustomHeight.postCallback(refreshPreviewOnVideoResolution);
@@ -1920,8 +1920,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
      */
     public static void applyExportSizeToBBS()
     {
-        int w = Math.max(2, BBSSettings.videoSettings.width.get());
-        int h = Math.max(2, BBSSettings.videoSettings.height.get());
+        int w = Math.max(2, BBSSettings.videoWidth.get());
+        int h = Math.max(2, BBSSettings.videoHeight.get());
         if (w % 2 != 0) w++;
         if (h % 2 != 0) h++;
         BBSRendering.setCustomSize(true, w, h);
@@ -1956,8 +1956,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (previewMode == PREVIEW_MODE_EXPORT)
         {
-            w = Math.max(2, BBSSettings.videoSettings.width.get());
-            h = Math.max(2, BBSSettings.videoSettings.height.get());
+            w = Math.max(2, BBSSettings.videoWidth.get());
+            h = Math.max(2, BBSSettings.videoHeight.get());
         }
         else if (previewMode == PREVIEW_MODE_CUSTOM)
         {
@@ -1972,8 +1972,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             {
                 int previewW = Math.max(2, this.preview.area.w);
                 int previewH = Math.max(2, this.preview.area.h);
-                int exportW = Math.max(2, BBSSettings.videoSettings.width.get());
-                int exportH = Math.max(2, BBSSettings.videoSettings.height.get());
+                int exportW = Math.max(2, BBSSettings.videoWidth.get());
+                int exportH = Math.max(2, BBSSettings.videoHeight.get());
                 Vector2i resized = Vectors.resize(exportW / (float) exportH, previewW, previewH);
 
                 w = Math.max(2, (int) (resized.x * scale));

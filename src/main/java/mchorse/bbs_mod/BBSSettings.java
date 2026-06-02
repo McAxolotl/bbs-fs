@@ -14,13 +14,15 @@ import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
-import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 
 public class BBSSettings {
+
+	public static final String DEFAULT_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p %NAME%.mp4";
+	public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -i %AUDIO_TRACK% -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest %NAME%.mp4";
 
 	public static ValueColors favoriteColors;
 	public static ValueColors recentColors;
@@ -77,7 +79,18 @@ public class BBSSettings {
 	public static ValueString videoEncoderPath;
 	public static ValueBoolean videoEncoderLog;
 	public static ValueBoolean worldExportResizeWindow;
-	public static ValueVideoSettings videoSettings;
+	public static ValueInt videoWidth;
+	public static ValueInt videoHeight;
+	public static ValueInt videoFrameRate;
+	public static ValueString videoExportPath;
+	public static ValueBoolean videoExportAudio;
+	public static ValueInt videoMotionBlur;
+	public static ValueInt videoHeldFrames;
+	public static ValueFloat videoDelay;
+	public static ValueBoolean videoOpenFolderAfterExport;
+	public static ValueBoolean videoPlaySoundAfterExport;
+	public static ValueString videoArguments;
+	public static ValueString videoArgumentsAudio;
 
 	public static ValueFloat editorCameraSpeed;
 	public static ValueFloat editorCameraAngleSpeed;
@@ -448,7 +461,18 @@ public class BBSSettings {
 		videoEncoderPath = builder.getString("encoder_path", "ffmpeg");
 		videoEncoderLog = builder.getBoolean("log", true);
 		worldExportResizeWindow = builder.getBoolean("world_export_resize_window", false);
-		builder.register(videoSettings = new ValueVideoSettings("settings"));
+		videoWidth = builder.getInt("width", 1280, 2, 8096);
+		videoHeight = builder.getInt("height", 720, 2, 8096);
+		videoFrameRate = builder.getInt("frame_rate", 60, 10, 1000);
+		videoExportPath = builder.getString("export_path", "");
+		videoExportAudio = builder.getBoolean("audio", false);
+		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
+		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
+		videoDelay = builder.getFloat("delay", 0.5F, 0F, 30F);
+		videoOpenFolderAfterExport = builder.getBoolean("open_folder_after_export", false);
+		videoPlaySoundAfterExport = builder.getBoolean("play_sound_after_export", true);
+		videoArguments = builder.getString("arguments", DEFAULT_FFMPEG_ARGUMENTS);
+		videoArgumentsAudio = builder.getString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS);
 
 		/* Camera editor */
 		builder.category("editor", Icons.EDITOR);

@@ -94,8 +94,8 @@ public class VideoRecorder
             Path path = Paths.get(movies.toString());
             String movieName = StringUtils.createTimestampFilename();
             String params = audioFile == null
-                ? BBSSettings.videoSettings.arguments.get()
-                : BBSSettings.videoSettings.argumentsAudio.get();
+                ? BBSSettings.videoArguments.get()
+                : BBSSettings.videoArgumentsAudio.get();
             StringBuilder filters = new StringBuilder("vflip");
             float frameRate = (float) BBSRendering.getVideoFrameRate();
 
@@ -260,7 +260,7 @@ public class VideoRecorder
 
         this.recording = false;
 
-        if (BBSSettings.videoSettings.playSoundAfterExport.get())
+        if (BBSSettings.videoPlaySoundAfterExport.get())
         {
             if (BBSModClient.getSounds().play(RENDER_COMPLETE_SOUND) == null)
             {
@@ -268,7 +268,7 @@ public class VideoRecorder
             }
         }
 
-        if (BBSSettings.videoSettings.openFolderAfterExport.get())
+        if (BBSSettings.videoOpenFolderAfterExport.get())
         {
             File folder = BBSRendering.getVideoFolder();
             MinecraftClient.getInstance().execute(() -> UIUtils.openFolder(folder));

@@ -149,7 +149,7 @@ public class UIFilmRecorder extends UIElement
 
         try
         {
-            if (BBSSettings.videoSettings.audio.get())
+            if (BBSSettings.videoExportAudio.get())
             {
                 Clips camera = this.editor.getData().camera;
                 List<AudioClip> audioClips = camera.getClips(AudioClip.class);
@@ -177,7 +177,7 @@ public class UIFilmRecorder extends UIElement
         this.pendingWidth = w;
         this.pendingHeight = h;
 
-        float delaySeconds = Math.max(0F, BBSSettings.videoSettings.delay.get());
+        float delaySeconds = Math.max(0F, BBSSettings.videoDelay.get());
         long delayMs = (long) (delaySeconds * 1000F);
 
         if (delayMs > 0)

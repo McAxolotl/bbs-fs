@@ -805,7 +805,7 @@ public class BBSModClient implements ClientModInitializer
 
     private boolean startVideoRecording(int width, int height, boolean playFilmAndRecord)
     {
-        float delaySeconds = Math.max(0F, BBSSettings.videoSettings.delay.get());
+        float delaySeconds = Math.max(0F, BBSSettings.videoDelay.get());
         long delayMs = (long) (delaySeconds * 1000F);
 
         if (delayMs <= 0L)
@@ -930,8 +930,8 @@ public class BBSModClient implements ClientModInitializer
     {
         if (BBSSettings.worldExportResizeWindow.get())
         {
-            int width = this.getEvenVideoDimension(BBSSettings.videoSettings.width.get());
-            int height = this.getEvenVideoDimension(BBSSettings.videoSettings.height.get());
+            int width = this.getEvenVideoDimension(BBSSettings.videoWidth.get());
+            int height = this.getEvenVideoDimension(BBSSettings.videoHeight.get());
 
             return new VideoSize(width, height);
         }
