@@ -28,6 +28,7 @@ public class UIAudioRecorder extends UIElement
 
     private final OpenALRecorder recorder;
     private float volume;
+    private float[][] waveform;
 
     public UIAudioRecorder(OpenALRecorder recorder)
     {
@@ -135,6 +136,45 @@ public class UIAudioRecorder extends UIElement
         context.batcher.box(x, y + 16, x + w, y + 20, Colors.A100);
         context.batcher.box(x, y + 16, x + (int) (w * volume), y + 20, Colors.WHITE);
 
+        this.renderWaveform(context, x, y + 24, w, 28);
+
         super.render(context);
+    }
+
+    /**
+     * Live incoming microphone waveform: a mirrored peak envelope scrolling in from the
+     * right, clamped to the same width as the volume bar above it.
+     */
+    private void renderWaveform(UIContext context, int x, int top, int w, int h)
+    {
+        if (w <= 0)
+        {
+            return;
+        }
+
+        this.waveform = this.recorder.getWaveform(this.waveform);
+
+        float[] peak = this.waveform[0];
+        float[] average = this.waveform[1];
+        int n = peak.length;
+        int mid = top + h / 2;
+        int half = h / 2;
+        int averageColor = Colors.mulRGB(Colors.WHITE, 0.8F);
+
+        context.batcher.box(x, top, x + w, top + h, Colors.A50);
+
+        for (int px = 0; px < w; px++)
+        {
+            int idx = Math.min(n - 1, (int) (px / (float) w * n));
+            int cx = x + px;
+
+            /* Bright peak envelope, then the darker mean amplitude on top as an inner core,
+             * matching mchorse.bbs_mod.audio.Waveform's max/average layering. */
+            int peakAmp = (int) (Interpolations.EXP_OUT.interpolate(0F, 1F, Math.min(1F, peak[idx])) * half);
+            int avgAmp = (int) (Interpolations.EXP_OUT.interpolate(0F, 1F, Math.min(1F, average[idx])) * half);
+
+            context.batcher.box(cx, mid - peakAmp, cx + 1, mid + peakAmp + 1, Colors.WHITE);
+            context.batcher.box(cx, mid - avgAmp, cx + 1, mid + avgAmp + 1, averageColor);
+        }
     }
 }
