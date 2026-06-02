@@ -5,7 +5,9 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -24,19 +26,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Draws the IK chains on top of the rendered model: the solved bone chain, the
- * target and the automatic bend direction. It is drawn straight from the same
- * model-local pivot frames the renderer uses (so it matches the mesh in any
- * context — form editor, film, world). IK is already applied to the rig before
- * this runs, so the collected frames are the solved chain — re-solving here
- * would double-apply the pole angle. Connections use {@code DEBUG_LINES} (a
- * vertex pair per segment) so they always join the points exactly. Gated
- * globally by {@link #enabled}.
+ * Minimal IK overlay: each chain is a clean run of thin wires through round
+ * joint dots, the effector picked out in a warm accent, and the target shown as
+ * a small dot inside a caged sphere. It reads the model-local pivot frames the
+ * renderer already produced — IK is applied to the rig before this runs, so the
+ * frames are the solved chain (re-solving would double-apply the pole angle).
+ * Gated globally by {@link #enabled}.
+ *
+ * <p>{@link #renderStencil} mirrors the goal markers into the picking pass so a
+ * click on a green target selects its bone, exactly as if its (often mesh-less)
+ * bone had been clicked directly.
  */
 public final class ModelIKDebug
 {
-    private static final float JOINT = 0.014F;
-    private static final float MARKER = 0.022F;
+    private static final float[] WIRE = {0.90F, 0.92F, 0.95F};
+    private static final float[] EFFECTOR = {0.30F, 0.64F, 1.00F};
+    private static final float[] GOAL = {0.22F, 0.84F, 0.55F};
 
     public static boolean enabled;
 
@@ -58,6 +63,24 @@ public final class ModelIKDebug
             return;
         }
 
+        Map<String, PivotFrame> frames = collectFrames(model, compiled);
+
+        RenderSystem.disableDepthTest();
+        RenderSystem.disableCull();
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        {
+            drawChain(stack, frames, chain, selectedTip);
+        }
+
+        RenderSystem.enableCull();
+        RenderSystem.enableDepthTest();
+    }
+
+    private static Map<String, PivotFrame> collectFrames(IModel model, ModelIKCache.Compiled compiled)
+    {
         Set<String> wanted = new HashSet<>();
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
@@ -69,22 +92,80 @@ public final class ModelIKDebug
         Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
         ModelPivotFrames.collect(model, wanted, frames);
 
+        return frames;
+    }
+
+    /**
+     * Mirrors the goals into the picking pass: a pickable cube at each goal,
+     * registered under the chain's target bone. Must run after the model's bones
+     * are registered so the goal ids fall right after them — the cube encodes
+     * {@code stencilMap.objectIndex} as its colour and {@code addPicking} then
+     * claims that same id. The matrix matches the visual overlay's.
+     */
+    public static void renderStencil(MatrixStack stack, IModel model, MapType ikData, StencilMap stencilMap, Form form)
+    {
+        if (!enabled || model == null || ikData == null || stencilMap == null)
+        {
+            return;
+        }
+
+        ModelIKCache.Compiled compiled = ModelIKCache.getFromData(model, ikData);
+
+        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
+        {
+            return;
+        }
+
+        Map<String, PivotFrame> frames = collectFrames(model, compiled);
+
         RenderSystem.disableDepthTest();
-        RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            drawChain(stack, frames, chain, selectedTip);
+            Vector3f goal = position(frames, chain.target());
+
+            if (goal == null)
+            {
+                continue;
+            }
+
+            int id = stencilMap.objectIndex;
+            float s = goalRadius(frames, chain.chainRootToEffector());
+
+            Draw.fillBox(builder, stack, goal.x - s, goal.y - s, goal.z - s, goal.x + s, goal.y + s, goal.z + s, (id & 0xFF) / 255F, (id >> 8 & 0xFF) / 255F, (id >> 16 & 0xFF) / 255F, 1F);
+
+            stencilMap.addPicking(form, chain.target());
         }
 
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
         RenderSystem.enableDepthTest();
+    }
+
+    /** Clickable goal half-size, scaled to the bone span so it fits any rig. */
+    private static float goalRadius(Map<String, PivotFrame> frames, List<String> ids)
+    {
+        Vector3f root = ids.isEmpty() ? null : position(frames, ids.get(0));
+        Vector3f tip = ids.isEmpty() ? null : position(frames, ids.get(ids.size() - 1));
+        float span = root != null && tip != null ? root.distance(tip) : 0.5F;
+
+        return span / Math.max(1, ids.size() - 1) * 0.2F;
     }
 
     private static void drawChain(MatrixStack stack, Map<String, PivotFrame> frames, ModelIKCache.CompiledChain chain, String selectedTip)
     {
         List<String> ids = chain.chainRootToEffector();
         int n = ids.size();
+
+        if (n < 2)
+        {
+            return;
+        }
+
         List<Vector3f> pts = new ArrayList<>(n);
 
         for (int i = 0; i < n; i++)
@@ -106,69 +187,55 @@ public final class ModelIKDebug
             return;
         }
 
-        float a = chain.tip().equals(selectedTip) ? 1F : 0.6F;
-        Vector3f root = pts.get(0);
         Vector3f tip = pts.get(n - 1);
-        Vector3f elbow = pts.get(Math.min(1, n - 1));
 
-        /* Automatic bend direction = the elbow's offset from the limb axis. */
-        Vector3f bendBase = axisProjection(root, tip, elbow);
+        float total = 0F;
 
-        /* Lines */
+        for (int i = 0; i < n - 1; i++)
+        {
+            total += pts.get(i).distance(pts.get(i + 1));
+        }
+
+        float unit = total / (n - 1);
+        boolean sel = selectedTip == null || selectedTip.isEmpty() || chain.tip().equals(selectedTip);
+        float a = sel ? 1F : 0.4F;
+
         Matrix4f matrix = stack.peek().getPositionMatrix();
+
+        /* Lines: the bone chain plus a faint bridge to the goal. */
         BufferBuilder lines = Tessellator.getInstance().getBuffer();
         lines.begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
 
         for (int i = 0; i < n - 1; i++)
         {
-            addLine(lines, matrix, pts.get(i), pts.get(i + 1), 0.2F, 0.85F, 1F, a);
+            addLine(lines, matrix, pts.get(i), pts.get(i + 1), WIRE, 0.9F * a);
         }
 
-        addLine(lines, matrix, tip, target, 0.2F, 1F, 0.3F, a);
-
-        if (bendBase != null)
-        {
-            addLine(lines, matrix, bendBase, elbow, 1F, 0.6F, 0.1F, a);
-        }
+        addLine(lines, matrix, tip, target, GOAL, 0.4F * a);
 
         BufferRenderer.drawWithGlobalProgram(lines.end());
 
-        /* Dots */
+        /* Solid spheres: joints, the accented effector, and the goal. */
         BufferBuilder dots = Tessellator.getInstance().getBuffer();
         dots.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         for (int i = 0; i < n - 1; i++)
         {
-            if (i == 0)
-            {
-                cube(dots, stack, pts.get(i), JOINT, 1F, 0.3F, 0.3F, a);
-            }
-            else
-            {
-                cube(dots, stack, pts.get(i), JOINT, 0.95F, 0.95F, 0.95F, a);
-            }
+            orb(dots, stack, pts.get(i), unit * 0.07F, WIRE, a);
         }
 
-        cube(dots, stack, tip, JOINT * 1.3F, 1F, 0.95F, 0.25F, a);
-        cube(dots, stack, target, MARKER, 0.2F, 1F, 0.3F, a);
+        orb(dots, stack, tip, unit * 0.1F, EFFECTOR, a);
+        orb(dots, stack, target, unit * 0.12F, GOAL, a);
 
         BufferRenderer.drawWithGlobalProgram(dots.end());
     }
 
-    /** Closest point on the root-tip axis to the elbow; null if the limb is degenerate. */
-    private static Vector3f axisProjection(Vector3f root, Vector3f tip, Vector3f elbow)
+    private static void orb(BufferBuilder builder, MatrixStack stack, Vector3f p, float radius, float[] col, float a)
     {
-        Vector3f axis = new Vector3f(tip).sub(root);
-        float lenSq = axis.lengthSquared();
-
-        if (lenSq <= 1.0e-10f)
-        {
-            return null;
-        }
-
-        float t = new Vector3f(elbow).sub(root).dot(axis) / lenSq;
-
-        return new Vector3f(root).fma(t, axis);
+        stack.push();
+        stack.translate(p.x, p.y, p.z);
+        Draw.sphere(builder, stack, radius, 9, 9, col[0], col[1], col[2], a);
+        stack.pop();
     }
 
     private static Vector3f position(Map<String, PivotFrame> frames, String bone)
@@ -178,14 +245,9 @@ public final class ModelIKDebug
         return frame == null ? null : new Vector3f(frame.position());
     }
 
-    private static void addLine(BufferBuilder builder, Matrix4f matrix, Vector3f p1, Vector3f p2, float r, float g, float b, float a)
+    private static void addLine(BufferBuilder builder, Matrix4f matrix, Vector3f p1, Vector3f p2, float[] col, float a)
     {
-        builder.vertex(matrix, p1.x, p1.y, p1.z).color(r, g, b, a).next();
-        builder.vertex(matrix, p2.x, p2.y, p2.z).color(r, g, b, a).next();
-    }
-
-    private static void cube(BufferBuilder builder, MatrixStack stack, Vector3f p, float s, float r, float g, float b, float a)
-    {
-        Draw.fillBox(builder, stack, p.x - s, p.y - s, p.z - s, p.x + s, p.y + s, p.z + s, r, g, b, a);
+        builder.vertex(matrix, p1.x, p1.y, p1.z).color(col[0], col[1], col[2], a).next();
+        builder.vertex(matrix, p2.x, p2.y, p2.z).color(col[0], col[1], col[2], a).next();
     }
 }
