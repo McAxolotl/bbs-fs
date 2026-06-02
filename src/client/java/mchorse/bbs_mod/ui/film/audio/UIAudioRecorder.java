@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.film.audio;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
+import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -40,8 +41,8 @@ public class UIAudioRecorder extends UIElement
     public static void addOption(UIFilmPanel filmPanel, ContextMenuManager menu)
     {
         UIContext context = filmPanel.getContext();
-        String timestampFilename = StringUtils.createTimestampFilename();
-        String value = lastInput.isEmpty() ? timestampFilename : lastInput;
+        String suggestion = suggestAudioName(filmPanel);
+        String value = lastInput.isEmpty() ? suggestion : lastInput;
 
         menu.action(Icons.SOUND, UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE, () ->
         {
@@ -50,7 +51,7 @@ public class UIAudioRecorder extends UIElement
                 UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION,
                 (t) ->
                 {
-                    String newT = t.isEmpty() ? timestampFilename : t;
+                    String newT = t.isEmpty() ? suggestion : t;
 
                     UIElement overlay = context.menu.overlay;
                     OpenALRecorder recorder = new OpenALRecorder((wave) ->
@@ -93,6 +94,32 @@ public class UIAudioRecorder extends UIElement
 
             UIOverlay.addOverlay(context, panel);
         });
+    }
+
+    /**
+     * Default recording name: the film's id (which carries its folder path) followed by the
+     * first free trailing number, so repeated recordings of the same film don't clash. Falls
+     * back to a timestamp when no film is loaded or it has no id yet.
+     */
+    private static String suggestAudioName(UIFilmPanel filmPanel)
+    {
+        Film film = filmPanel.getData();
+        String base = film == null ? null : film.getId();
+
+        if (base == null || base.isEmpty())
+        {
+            return StringUtils.createTimestampFilename();
+        }
+
+        File folder = BBSMod.getAudioFolder();
+        int number = 1;
+
+        while (new File(folder, base + "/" + number + ".wav").exists())
+        {
+            number++;
+        }
+
+        return base + "/" + number;
     }
 
     @Override
