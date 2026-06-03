@@ -994,7 +994,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(group.color, 0.2F), Colors.setA(group.color, 0.04F));
         }
 
-        context.batcher.box(lx, y, lx + 2, y + (int) this.trackHeight, group.color | Colors.A100);
+        context.batcher.box(lx, y, lx + 3, y + (int) this.trackHeight, group.color | Colors.A100);
 
         FontRenderer font = context.batcher.getFont();
         String label = group.title.get();
