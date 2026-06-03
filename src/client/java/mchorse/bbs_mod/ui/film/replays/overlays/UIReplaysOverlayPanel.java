@@ -205,7 +205,6 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         super.renderBackground(context);
 
         this.content.area.render(context.batcher, BBSSettings.baseSurface());
-        this.content.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
 
         if (this.replays.getList().size() < 3)
         {

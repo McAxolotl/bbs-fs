@@ -55,7 +55,7 @@ public class GizmoInteraction
         {
             int index = stencil.getIndex();
 
-            if (index >= Gizmo.STENCIL_X && index <= Gizmo.STENCIL_VIEW)
+            if (index >= Gizmo.STENCIL_X && index <= Gizmo.STENCIL_MAX)
             {
                 return this.startGizmo(context, index);
             }
@@ -166,7 +166,7 @@ public class GizmoInteraction
                 Matrix4f projection = this.viewport.getGizmoProjection();
                 Area area = this.viewport.getGizmoArea();
 
-                if (projection != null && area != null
+                if (projection != null && area != null && area.isInside(context)
                     && Gizmo.INSTANCE.computeScreenCenter(projection, area.x, area.y, area.w, area.h, this.sphereScreenCenter))
                 {
                     float radius = Math.max(SPHERE_PICK_MIN_RADIUS_PX, Gizmo.INSTANCE.computeScreenRadius(projection, area.x, area.y, area.w, area.h));
@@ -193,7 +193,7 @@ public class GizmoInteraction
 
         int index = stencil.getIndex();
 
-        return index >= Gizmo.STENCIL_X && index <= Gizmo.STENCIL_VIEW;
+        return index >= Gizmo.STENCIL_X && index <= Gizmo.STENCIL_MAX;
     }
 
     private void clearPending()

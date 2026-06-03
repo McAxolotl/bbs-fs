@@ -152,7 +152,7 @@ public class UIDraggable extends UIElement
             }
             else
             {
-                Scroll.bar(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A50);
+                Scroll.bar(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
             }
         }
 

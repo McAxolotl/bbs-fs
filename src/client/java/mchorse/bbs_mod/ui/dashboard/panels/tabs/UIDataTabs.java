@@ -117,6 +117,5 @@ public class UIDataTabs extends UIElement
     private void renderBackground(UIContext context)
     {
         context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.chromeSurface());
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
     }
 }

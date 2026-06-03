@@ -700,7 +700,6 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
         int color = BBSSettings.primaryColor.get();
 
         context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.baseSurface());
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
         context.batcher.gradientVBox(this.area.x, this.area.ey() - this.area.h / 2, this.area.ex(), this.area.ey(), 0, Colors.A12 | color);
     }
 
@@ -711,7 +710,6 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
         context.batcher.dropShadow(area.x, area.y, area.ex(), area.ey(), 10, Colors.A50, 0);
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);
-        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A12));
         context.batcher.box(area.x, area.y, area.ex(), area.y + 1, border);
         context.batcher.box(area.x, area.ey() - 1, area.ex(), area.ey(), border);
         context.batcher.box(area.x, area.y, area.x + 1, area.ey(), border);
@@ -728,7 +726,6 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
         int bg = BBSSettings.baseSurface();
 
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);
-        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A6));
     }
 
     private void renderBanner(UIContext context, Area area)

@@ -76,14 +76,12 @@ public class TimelineRulerRenderer
 
         context.batcher.clip(area, context);
         context.batcher.box(area.x, area.y, area.ex(), rulerBottom, BBSSettings.chromeSurface());
-        context.batcher.box(area.x, area.y, area.ex(), rulerBottom, BBSSettings.backgroundTint(Colors.A6));
 
         if (visibleTimelineEx < area.ex())
         {
             int rightX = Math.max(area.x, visibleTimelineEx);
 
             context.batcher.box(rightX, area.y, area.ex(), rulerBottom, BBSSettings.chromeSurface());
-            context.batcher.box(rightX, area.y, area.ex(), rulerBottom, BBSSettings.backgroundTint(Colors.A6));
         }
 
         if (rulerDecorator != null)

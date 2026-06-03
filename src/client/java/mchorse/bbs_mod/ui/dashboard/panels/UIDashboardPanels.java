@@ -149,7 +149,6 @@ public class UIDashboardPanels extends UIElement
         Area a = this.pinned.area;
 
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
-        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A6));
         context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, 0x44ffffff);
     }
 

@@ -1,10 +1,6 @@
 package mchorse.bbs_mod.cubic.physics;
 
-import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.data.model.ModelGroup;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Quaternionf;
@@ -132,7 +128,6 @@ final class ModelPhysicsCache
     }
 
     private static final WeakHashMap<MapType, EmbeddedCompiled> EMBEDDED = new WeakHashMap<>();
-    private static final float EPS = 1.0e-6f;
 
     private record EmbeddedCompiled(IModel model, List<CompiledChain> chains)
     {
@@ -251,48 +246,23 @@ final class ModelPhysicsCache
 
     private static float[] computeRestLengths(IModel model, List<String> ids)
     {
-        if (model instanceof Model cubic)
+        PhysicsRig rig = PhysicsRig.of(model);
+
+        if (rig == null)
         {
-            return computeCubicRestLengths(cubic, ids);
+            return null;
         }
 
-        if (model instanceof BOBJModel bobj)
-        {
-            return computeBobjRestLengths(bobj, ids);
-        }
-
-        return null;
-    }
-
-    private static float[] computeCubicRestLengths(Model model, List<String> ids)
-    {
         int n = ids.size();
-
         float[] lengths = new float[n];
 
         if (n == 1)
         {
-            ModelGroup bone = model.getGroup(ids.get(0));
+            float len = rig.restLength(ids.get(0), null);
 
-            if (bone == null)
+            if (len < 0F)
             {
                 return null;
-            }
-
-            float len = 0.25F;
-
-            if (bone.children != null && !bone.children.isEmpty())
-            {
-                ModelGroup child = bone.children.get(0);
-                float dx = (child.initial.translate.x - bone.initial.translate.x) / 16F;
-                float dy = (child.initial.translate.y - bone.initial.translate.y) / 16F;
-                float dz = (child.initial.translate.z - bone.initial.translate.z) / 16F;
-                len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            }
-
-            if (len <= EPS)
-            {
-                len = EPS;
             }
 
             lengths[0] = len;
@@ -302,82 +272,11 @@ final class ModelPhysicsCache
 
         for (int i = 0; i < n - 1; i++)
         {
-            ModelGroup a = model.getGroup(ids.get(i));
-            ModelGroup b = model.getGroup(ids.get(i + 1));
+            float len = rig.restLength(ids.get(i), ids.get(i + 1));
 
-            if (a == null || b == null)
+            if (len < 0F)
             {
                 return null;
-            }
-
-            float dx = (b.initial.translate.x - a.initial.translate.x) / 16F;
-            float dy = (b.initial.translate.y - a.initial.translate.y) / 16F;
-            float dz = (b.initial.translate.z - a.initial.translate.z) / 16F;
-
-            lengths[i] = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-            if (lengths[i] <= EPS)
-            {
-                lengths[i] = EPS;
-            }
-        }
-
-        lengths[n - 1] = lengths[n - 2];
-
-        return lengths;
-    }
-
-    private static float[] computeBobjRestLengths(BOBJModel model, List<String> ids)
-    {
-        int n = ids.size();
-
-        float[] lengths = new float[n];
-
-        if (n == 1)
-        {
-            BOBJBone bone = model.getArmature().bones.get(ids.get(0));
-
-            if (bone == null)
-            {
-                return null;
-            }
-
-            float len = 0.25F;
-
-            for (BOBJBone child : model.getArmature().orderedBones)
-            {
-                if (child != null && child.parentBone == bone)
-                {
-                    len = child.relBoneMat.getTranslation(new Vector3f()).length();
-                    break;
-                }
-            }
-
-            if (len <= EPS)
-            {
-                len = EPS;
-            }
-
-            lengths[0] = len;
-
-            return lengths;
-        }
-
-        for (int i = 0; i < n - 1; i++)
-        {
-            BOBJBone a = model.getArmature().bones.get(ids.get(i));
-            BOBJBone b = model.getArmature().bones.get(ids.get(i + 1));
-
-            if (a == null || b == null)
-            {
-                return null;
-            }
-
-            float len = b.relBoneMat.getTranslation(new Vector3f()).length();
-
-            if (len <= EPS)
-            {
-                len = EPS;
             }
 
             lengths[i] = len;

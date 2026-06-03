@@ -16,7 +16,7 @@ import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.settings.ui.UIVideoSettingsOverlayPanel;
+import mchorse.bbs_mod.settings.ui.UISettingsOverlayPanel;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
@@ -221,7 +221,13 @@ public class UIFilmPreview extends UIElement
             });
 
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
-            menu.action(Icons.GEAR, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS, () -> UIOverlay.addOverlay(this.getContext(), new UIVideoSettingsOverlayPanel(BBSSettings.videoSettings)));
+            menu.action(Icons.GEAR, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS, () ->
+            {
+                UISettingsOverlayPanel panel = new UISettingsOverlayPanel();
+
+                panel.showCategory("bbs", "video");
+                UIOverlay.addOverlay(this.getContext(), panel, 430, 380);
+            });
 
             menu.action(Icons.VIDEO_CAMERA, UIKeys.FILM_RENDER_QUEUE, this::exportQueueFromTabs);
             menu.action(Icons.SOUND, UIKeys.FILM_RENDER_AUDIO, this::renderAudio);
@@ -429,7 +435,8 @@ public class UIFilmPreview extends UIElement
         Area a = this.icons.area;
 
         /* Render icon bar */
-        context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, Colors.A50);
+        int barShade = BBSSettings.isLightTheme() ? (Colors.A50 | 0xFFFFFF) : Colors.A50;
+        context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
 
         if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area);
         if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area);

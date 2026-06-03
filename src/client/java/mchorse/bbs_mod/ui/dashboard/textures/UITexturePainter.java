@@ -348,7 +348,6 @@ public class UITexturePainter extends UIElement
          * controls, matching the surfaces used across the dashboard (see UIFilmPanel). A
          * soft fade still spills off the icon bar onto the canvas, anchoring it visually. */
         this.content.area.render(context.batcher, BBSSettings.baseSurface());
-        this.content.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
 
         this.renderChromeSurface(context, this.optionsHost.area);
     }
@@ -356,7 +355,6 @@ public class UITexturePainter extends UIElement
     private void renderChromeSurface(UIContext context, Area area)
     {
         area.render(context.batcher, BBSSettings.chromeSurface());
-        area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
     }
 
     private void renderActiveToolHighlight(UIContext context)
@@ -912,7 +910,16 @@ public class UITexturePainter extends UIElement
     {
         this.updateAltPipetteHold();
 
-        super.render(context);
+        BBSSettings.lightInputs = true;
+
+        try
+        {
+            super.render(context);
+        }
+        finally
+        {
+            BBSSettings.lightInputs = false;
+        }
 
         UITextureEditor editor = this.getCurrentEditor();
 

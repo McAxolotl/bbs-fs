@@ -1470,11 +1470,12 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
 
     protected void renderBackground(UIContext context)
     {
-        int borderColor = BBSSettings.inputBorderColor(this.focused);
+        this.area.render(context.batcher, BBSSettings.inputSurface());
 
-        this.area.render(context.batcher, borderColor);
-        this.area.render(context.batcher, BBSSettings.inputSurface(), 1);
-        this.area.render(context.batcher, BBSSettings.inputSurfaceTint(), 1);
+        if (this.focused)
+        {
+            context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), BBSSettings.primaryColor.get());
+        }
     }
 
     protected void renderForeground(FontRenderer font, UIContext context)

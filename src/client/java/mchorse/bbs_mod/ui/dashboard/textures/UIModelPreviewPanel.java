@@ -52,7 +52,6 @@ public class UIModelPreviewPanel extends UIElement
     public void render(UIContext context)
     {
         this.area.render(context.batcher, BBSSettings.chromeSurface());
-        this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
 
         UITextureEditor editor = this.painter.getCurrentEditor();
         Texture temporary = editor != null ? editor.getTemporaryTexture() : null;

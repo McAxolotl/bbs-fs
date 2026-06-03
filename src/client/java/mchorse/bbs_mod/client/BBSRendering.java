@@ -82,7 +82,7 @@ public class BBSRendering
 
     public static int getMotionBlur()
     {
-        return getMotionBlur(BBSSettings.videoSettings.frameRate.get(), getMotionBlurFactor());
+        return getMotionBlur(BBSSettings.videoFrameRate.get(), getMotionBlurFactor());
     }
 
     public static int getMotionBlur(double fps, int target)
@@ -101,7 +101,7 @@ public class BBSRendering
 
     public static int getMotionBlurFactor()
     {
-        return getMotionBlurFactor(BBSSettings.videoSettings.motionBlur.get());
+        return getMotionBlurFactor(BBSSettings.videoMotionBlur.get());
     }
 
     public static int getMotionBlurFactor(int integer)
@@ -111,17 +111,17 @@ public class BBSRendering
 
     public static int getVideoWidth()
     {
-        return width == 0 ? BBSSettings.videoSettings.width.get() : width;
+        return width == 0 ? BBSSettings.videoWidth.get() : width;
     }
 
     public static int getVideoHeight()
     {
-        return height == 0 ? BBSSettings.videoSettings.height.get() : height;
+        return height == 0 ? BBSSettings.videoHeight.get() : height;
     }
 
     public static int getVideoFrameRate()
     {
-        int frameRate = BBSSettings.videoSettings.frameRate.get();
+        int frameRate = BBSSettings.videoFrameRate.get();
 
         return frameRate * (1 << getMotionBlur(frameRate, getMotionBlurFactor()));
     }
@@ -129,7 +129,7 @@ public class BBSRendering
     public static File getVideoFolder()
     {
         File movies = new File(BBSMod.getSettingsFolder().getParentFile(), "movies");
-        File exportPath = new File(BBSSettings.videoSettings.path.get());
+        File exportPath = new File(BBSSettings.videoExportPath.get());
 
         if (exportPath.isDirectory())
         {

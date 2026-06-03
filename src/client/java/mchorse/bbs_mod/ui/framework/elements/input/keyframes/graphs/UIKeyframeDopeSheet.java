@@ -927,7 +927,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             int leftEx = Math.min(startX, area.ex());
 
             context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.chromeSurface());
-            context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
 
         int endX = this.keyframes.toGraphX(this.keyframes.getDuration());
@@ -936,7 +935,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             int rightX = Math.max(endX, area.x);
 
             context.batcher.box(rightX, contentY, area.ex(), area.ey(), BBSSettings.chromeSurface());
-            context.batcher.box(rightX, contentY, area.ex(), area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
     }
 
@@ -994,7 +992,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(group.color, 0.2F), Colors.setA(group.color, 0.04F));
         }
 
-        context.batcher.box(lx, y, lx + 2, y + (int) this.trackHeight, group.color | Colors.A100);
+        context.batcher.box(lx, y, lx + 3, y + (int) this.trackHeight, group.color | Colors.A100);
 
         FontRenderer font = context.batcher.getFont();
         String label = group.title.get();
@@ -1102,7 +1100,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int surface = row % 2 == 0 ? BBSSettings.deepSurface() : BBSSettings.baseSurface();
 
         context.batcher.box(area.x, by, area.ex(), by + bh, surface);
-        context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.backgroundTint(Colors.A6));
 
         if (hover)
         {
@@ -1141,7 +1138,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int surface = row % 2 == 0 ? BBSSettings.deepSurface() : BBSSettings.baseSurface();
 
         context.batcher.box(area.x, by, area.ex(), by + bh, surface);
-        context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.backgroundTint(Colors.A6));
 
         if (hover)
         {

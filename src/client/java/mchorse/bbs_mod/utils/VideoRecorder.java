@@ -7,6 +7,8 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import net.minecraft.client.MinecraftClient;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 import sun.misc.Unsafe;
@@ -92,8 +94,8 @@ public class VideoRecorder
             Path path = Paths.get(movies.toString());
             String movieName = StringUtils.createTimestampFilename();
             String params = audioFile == null
-                ? BBSSettings.videoSettings.arguments.get()
-                : BBSSettings.videoSettings.argumentsAudio.get();
+                ? BBSSettings.videoArguments.get()
+                : BBSSettings.videoArgumentsAudio.get();
             StringBuilder filters = new StringBuilder("vflip");
             float frameRate = (float) BBSRendering.getVideoFrameRate();
 
@@ -123,18 +125,30 @@ public class VideoRecorder
 
             System.out.println("Recording video with following arguments: " + args);
 
-            this.pbos = new int[2];
-            this.pboIndex = 0;
-
-            for (int i = 0; i < 2; i++)
+            /**
+             * macOS reads the frame synchronously straight into {@link #buffer} (see
+             * {@link #recordFrameDirect()}); the asynchronous PBO pipeline below misbehaves
+             * there and produces pitch-black footage, so we only set it up off macOS.
+             */
+            if (OS.CURRENT == OS.MACOS)
             {
-                this.pbos[i] = GL30.glGenBuffers();
-
-                GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[i]);
-                GL30.glBufferData(GL30.GL_PIXEL_PACK_BUFFER, size, GL30.GL_STREAM_READ);
+                this.pbos = null;
             }
+            else
+            {
+                this.pbos = new int[2];
+                this.pboIndex = 0;
 
-            GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, 0);
+                for (int i = 0; i < 2; i++)
+                {
+                    this.pbos[i] = GL30.glGenBuffers();
+
+                    GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[i]);
+                    GL30.glBufferData(GL30.GL_PIXEL_PACK_BUFFER, size, GL30.GL_STREAM_READ);
+                }
+
+                GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, 0);
+            }
 
             ProcessBuilder builder = new ProcessBuilder(args);
             File log = path.resolve(movieName.concat(".log")).toFile();
@@ -246,7 +260,7 @@ public class VideoRecorder
 
         this.recording = false;
 
-        if (BBSSettings.videoSettings.playSoundAfterExport.get())
+        if (BBSSettings.videoPlaySoundAfterExport.get())
         {
             if (BBSModClient.getSounds().play(RENDER_COMPLETE_SOUND) == null)
             {
@@ -254,7 +268,7 @@ public class VideoRecorder
             }
         }
 
-        if (BBSSettings.videoSettings.openFolderAfterExport.get())
+        if (BBSSettings.videoOpenFolderAfterExport.get())
         {
             File folder = BBSRendering.getVideoFolder();
             MinecraftClient.getInstance().execute(() -> UIUtils.openFolder(folder));
@@ -273,6 +287,25 @@ public class VideoRecorder
             return;
         }
 
+        if (OS.CURRENT == OS.MACOS)
+        {
+            this.recordFrameDirect();
+        }
+        else
+        {
+            this.recordFramePBO();
+        }
+
+        this.counter += 1;
+    }
+
+    /**
+     * Asynchronous read-back path (Windows/Linux): {@code glGetTexImage} into a ping-pong
+     * pair of pixel pack buffers, mapping the previously filled buffer to overlap GPU
+     * read-back with the CPU-side write to ffmpeg.
+     */
+    private void recordFramePBO()
+    {
         try
         {
             int pbo = this.pboIndex;
@@ -301,8 +334,30 @@ public class VideoRecorder
         {
             e.printStackTrace();
         }
+    }
 
-        this.counter += 1;
+    /**
+     * Synchronous read-back path (macOS): {@code glGetTexImage} straight into {@link #buffer}
+     * and write it to ffmpeg. Simpler and stalls the render thread, but avoids the
+     * pixel-pack-buffer path that renders black on macOS.
+     */
+    private void recordFrameDirect()
+    {
+        this.buffer.clear();
+
+        GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureId);
+        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGR, GL11.GL_UNSIGNED_BYTE, this.buffer);
+        this.buffer.rewind();
+
+        try
+        {
+            this.channel.write(this.buffer);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     /**

@@ -100,6 +100,9 @@ public class UIClips extends UIElement
 
     private Vector3i addPreview;
     private int layers;
+    /** Set when a film is opened so the clip layers get centred vertically on the
+     *  next render — the scroll area only has a real size once laid out. */
+    private boolean centerScrollOnRender;
 
     private UIClipRenderers renderers = new UIClipRenderers();
 
@@ -973,12 +976,54 @@ public class UIClips extends UIElement
         this.clips = clips;
         this.addPreview = null;
 
-        this.vertical.scrollToEnd();
-        this.vertical.updateTarget();
+        this.centerScrollOnRender = true;
         this.clearSelection();
         this.embedView(null);
 
         this.resetView();
+    }
+
+    /**
+     * Centre the clip layers vertically in the viewport. Clip lanes are laid out
+     * from the bottom up, so the previous end-scroll could leave clips on higher
+     * layers above the visible area when a film opens — this brings the occupied
+     * layers into the middle instead.
+     */
+    private void centerScroll()
+    {
+        if (this.clips == null)
+        {
+            return;
+        }
+
+        List<Clip> list = this.clips.get();
+
+        if (list.isEmpty())
+        {
+            this.vertical.scrollToEnd();
+            this.vertical.updateTarget();
+
+            return;
+        }
+
+        int minLayer = Integer.MAX_VALUE;
+        int maxLayer = 0;
+
+        for (Clip clip : list)
+        {
+            int layer = clip.layer.get();
+
+            minLayer = Math.min(minLayer, layer);
+            maxLayer = Math.max(maxLayer, layer);
+        }
+
+        /* The on-screen Y of layer L is (bottom - (L+1)*h + scrollSize - viewportH
+         * - scroll); putting the occupied band [minLayer, maxLayer] centre at the
+         * viewport centre resolves to this scroll value (setScroll clamps it). */
+        double scroll = this.vertical.scrollSize - (this.vertical.area.h + this.getLayerHeight() * (minLayer + maxLayer + 1)) / 2.0;
+
+        this.vertical.setScroll(scroll);
+        this.vertical.updateTarget();
     }
 
     private void resetView()
@@ -1430,6 +1475,12 @@ public class UIClips extends UIElement
     {
         this.updateScrollSize();
 
+        if (this.centerScrollOnRender)
+        {
+            this.centerScrollOnRender = false;
+            this.centerScroll();
+        }
+
         if (this.clips != null && !this.hasEmbeddedView())
         {
             this.vertical.drag(context);
@@ -1720,11 +1771,9 @@ public class UIClips extends UIElement
         if (leftEdge > this.area.x)
         {
             batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.chromeSurface());
-            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
 
         area.render(batcher, BBSSettings.deepSurface());
-        area.render(batcher, BBSSettings.backgroundTint(Colors.A6));
         batcher.clip(this.vertical.area.x, rulerBottom, this.vertical.area.ex(), this.vertical.area.ey(), context);
 
         for (int i = 0; i < this.layers; i++)
@@ -1734,7 +1783,6 @@ public class UIClips extends UIElement
             if (i % 2 != 0)
             {
                 batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
-                batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.backgroundTint(Colors.A6));
             }
         }
 

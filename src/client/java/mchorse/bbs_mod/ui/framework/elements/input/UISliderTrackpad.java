@@ -518,7 +518,6 @@ public class UISliderTrackpad extends UIElement
         int handleColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, this.handleArea.isInside(context) ? HANDLE_HOVER_ALPHA : HANDLE_ALPHA);
 
         this.area.render(context.batcher, BBSSettings.inputSurface());
-        this.area.render(context.batcher, BBSSettings.inputSurfaceTint());
 
         if (this.hasSliderRange())
         {

@@ -75,43 +75,22 @@ public class Scroll
     private BooleanSupplier smoothScrolling;
     private IntSupplier wheelScrollStep;
 
-    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2, int color)
+    public static final int HANDLE_COLOR = 0xff4d525a;
+    public static final int HANDLE_ACTIVE_COLOR = 0xff6e747c;
+
+    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2)
+    {
+        bar(batcher, x1, y1, x2, y2, HANDLE_COLOR);
+    }
+
+    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2, int fill)
     {
         if (x2 - x1 == 0 || y2 - y1 == 0)
         {
             return;
         }
 
-        batcher.dropShadow(x1, y1, x2, y2, 5, color, Colors.setA(color, 0F));
-
-        batcher.box(x1, y1, x2, y2, 0xffeeeeee);
-        batcher.box(x1 + 1, y1 + 1, x2, y2, 0xff666666);
-        batcher.box(x1 + 1, y1 + 1, x2 - 1, y2 - 1, 0xffaaaaaa);
-
-        int dx = x2 - x1;
-        int dy = y2 - y1;
-
-        if (dx + dy < 30)
-        {
-            return;
-        }
-
-        int x = (x2 + x1) / 2;
-        int y = (y2 + y1) / 2;
-
-        /* Little handle */
-        if (dx > dy)
-        {
-            batcher.box(x - 3, y - 1, x - 2, y + 1, Colors.GRAY);
-            batcher.box(x, y - 1, x + 1, y + 1, Colors.GRAY);
-            batcher.box(x + 3, y - 1, x + 4, y + 1, Colors.GRAY);
-        }
-        else
-        {
-            batcher.box(x - 1, y - 3, x + 1, y - 2, Colors.GRAY);
-            batcher.box(x - 1, y, x + 1, y + 1, Colors.GRAY);
-            batcher.box(x - 1, y + 3, x + 1, y + 4, Colors.GRAY);
-        }
+        batcher.bevelBox(x1, y1, x2, y2, fill, true, false);
     }
 
     public Scroll(Area area)
@@ -570,9 +549,8 @@ public class Scroll
         if (this.scrollbar)
         {
             Area scrollbar = this.getScrollbarArea();
-            int color = BBSSettings.scrollbarShadow.get();
 
-            bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), color);
+            bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), this.dragging ? HANDLE_ACTIVE_COLOR : HANDLE_COLOR);
         }
         else if (this.direction == ScrollDirection.VERTICAL)
         {

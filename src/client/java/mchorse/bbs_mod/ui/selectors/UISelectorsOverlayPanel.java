@@ -177,6 +177,5 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
         super.renderBackground(context);
 
         this.content.area.render(context.batcher, BBSSettings.baseSurface());
-        this.content.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
     }
 }

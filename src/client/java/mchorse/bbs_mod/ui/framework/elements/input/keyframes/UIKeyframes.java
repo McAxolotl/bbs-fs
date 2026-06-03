@@ -1240,7 +1240,7 @@ public class UIKeyframes extends UIElement
         if (this.labelResizer.isVisible() && (this.labelResizer.area.isInside(context) || this.labelResizer.isDragging()))
         {
             Area a = this.labelResizer.area;
-            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey(), BBSSettings.dividerColor());
+            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey());
         }
     }
 
@@ -1317,9 +1317,7 @@ public class UIKeyframes extends UIElement
     protected void renderBackground(UIContext context)
     {
         this.area.render(context.batcher, BBSSettings.baseSurface());
-        this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
         this.graphArea.render(context.batcher, BBSSettings.deepSurface());
-        this.graphArea.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
 
         int duration = this.getDuration();
 
@@ -1332,7 +1330,6 @@ public class UIKeyframes extends UIElement
                 int leftEx = Math.min(this.graphArea.ex(), leftBorder);
 
                 context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.chromeSurface());
-                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.backgroundTint(Colors.A6));
             }
         }
 

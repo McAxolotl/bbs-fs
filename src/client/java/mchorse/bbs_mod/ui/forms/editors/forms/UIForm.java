@@ -192,7 +192,6 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     protected void renderBackground(UIContext context, int x, int y, int w, int h)
     {
         context.batcher.box(x, y, x + w, y + h, BBSSettings.baseSurface());
-        context.batcher.box(x, y, x + w, y + h, BBSSettings.backgroundTint(Colors.A6));
     }
 
     @Override

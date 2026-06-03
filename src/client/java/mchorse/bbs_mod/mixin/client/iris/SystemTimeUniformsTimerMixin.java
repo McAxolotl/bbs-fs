@@ -39,7 +39,7 @@ public class SystemTimeUniformsTimerMixin
 
             this.heldFrames += 1;
 
-            if (this.heldFrames >= BBSSettings.videoSettings.heldFrames.get())
+            if (this.heldFrames >= BBSSettings.videoHeldFrames.get())
             {
                 this.heldFrames = 0;
             }

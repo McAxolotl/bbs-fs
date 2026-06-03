@@ -12,7 +12,6 @@ import mchorse.bbs_mod.settings.values.numeric.ValueDouble;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
-import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -156,6 +155,30 @@ public class UIValueMap
 
             trackpad.w(90);
 
+            if (value == BBSSettings.videoWidth)
+            {
+                trackpad.context((menu) ->
+                {
+                    menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_720p, () -> applyVideoPreset(value, 1280, 720, ui));
+                    menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_1080P, () -> applyVideoPreset(value, 1920, 1080, ui));
+                    menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_SHORTS_1080P, () -> applyVideoPreset(value, 1080, 1920, ui));
+                    menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_1440P, () -> applyVideoPreset(value, 2560, 1440, ui));
+                    menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_4K, () -> applyVideoPreset(value, 3840, 2160, ui));
+                    menu.action(Icons.REFRESH, UIKeys.VIDEO_SETTINGS_SWAP, () ->
+                    {
+                        int w = BBSSettings.videoWidth.get();
+
+                        BBSSettings.videoWidth.set(BBSSettings.videoHeight.get());
+                        BBSSettings.videoHeight.set(w);
+
+                        if (ui instanceof UISettingsOverlayPanel panel)
+                        {
+                            panel.refresh();
+                        }
+                    });
+                });
+            }
+
             return Arrays.asList(UIValueFactory.column(trackpad, value));
         });
 
@@ -237,15 +260,19 @@ public class UIValueMap
             return Arrays.asList(UI.row(label, keybind).tooltip(value.get().label));
         });
 
-        register(ValueVideoSettings.class, (value, ui) ->
-        {
-            UIButton button = new UIButton(UIKeys.VIDEO_SETTINGS_EDIT, (b) ->
-            {
-                UIOverlay.addOverlay(ui.getContext(), new UIVideoSettingsOverlayPanel(value));
-            });
+    }
 
-            return Arrays.asList(button);
-        });
+    private static void applyVideoPreset(ValueInt width, int w, int h, UIElement ui)
+    {
+        BBSSettings.videoArguments.set(BBSSettings.DEFAULT_FFMPEG_ARGUMENTS);
+        BBSSettings.videoWidth.set(w);
+        BBSSettings.videoHeight.set(h);
+        BBSSettings.videoFrameRate.set(60);
+
+        if (ui instanceof UISettingsOverlayPanel panel)
+        {
+            panel.refresh();
+        }
     }
 
     private static KeyframeShape shapeAt(int ordinal)

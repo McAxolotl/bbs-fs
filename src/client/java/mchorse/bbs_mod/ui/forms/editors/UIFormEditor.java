@@ -212,7 +212,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             public void render(UIContext context)
             {
                 this.area.render(context.batcher, BBSSettings.chromeSurface());
-                this.area.render(context.batcher, BBSSettings.backgroundTint(Colors.A6));
             }
         };
         listToolbarBg.relative(listSection).xy(0, 0).w(1F).h(20);

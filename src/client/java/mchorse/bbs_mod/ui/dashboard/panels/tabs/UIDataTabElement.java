@@ -114,7 +114,6 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
         if (active)
         {
             context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.baseSurface());
-            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.backgroundTint(Colors.A6));
         }
         else if (hover)
         {
