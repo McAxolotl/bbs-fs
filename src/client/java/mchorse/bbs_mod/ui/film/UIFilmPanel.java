@@ -3047,7 +3047,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
             context.batcher.gradientVBox(a.x, a.y, a.ex(), a.y + 4, Colors.A25, fade);
             context.batcher.gradientHBox(a.x, a.y, a.x + 4, a.ey(), Colors.A25, fade);
-            context.batcher.outline(a.x, a.y, a.ex(), a.ey(), BBSSettings.dividerColor());
         }
     }
 
