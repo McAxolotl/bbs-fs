@@ -5,6 +5,7 @@ import mchorse.bbs_mod.audio.Wave;
 import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -31,6 +32,10 @@ public class UIAudioRecorder extends UIElement
 
     /** Count-in before the scene starts playing and the microphone is captured. */
     private static final long COUNT_IN_MS = 1000L;
+    /** How long a mouse button must be held to confirm finishing/cancelling. */
+    private static final long HOLD_MS = 500L;
+    /** Side length (px) of the hold-progress square drawn at the cursor. */
+    private static final int HOLD_SQUARE = 60;
 
     private final OpenALRecorder recorder;
     private final UIFilmPanel filmPanel;
@@ -43,6 +48,10 @@ public class UIAudioRecorder extends UIElement
     private final long startTime = System.currentTimeMillis();
     private boolean recording;
     private boolean ended;
+
+    /** Held mouse button driving the confirm gesture: 0 = LMB (finish), 1 = RMB (cancel), -1 = none. */
+    private int holdButton = -1;
+    private long holdStart;
 
     public UIAudioRecorder(UIFilmPanel filmPanel, OpenALRecorder recorder, int originCursor)
     {
@@ -195,8 +204,26 @@ public class UIAudioRecorder extends UIElement
     }
 
     @Override
+    protected boolean subMouseClicked(UIContext context)
+    {
+        /* LMB begins a finish hold, RMB a cancel hold; the gesture completes in render()
+         * once the button has been held for HOLD_MS. */
+        if (!this.ended && (context.mouseButton == 0 || context.mouseButton == 1))
+        {
+            this.holdButton = context.mouseButton;
+            this.holdStart = System.currentTimeMillis();
+
+            return true;
+        }
+
+        return super.subMouseClicked(context);
+    }
+
+    @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        /* Keep Escape as an instant cancel so the overlay never leaks the recorder if the
+         * mouse gesture is unavailable; finishing/cancelling is otherwise mouse-driven. */
         if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
             this.end(context, true);
@@ -204,14 +231,41 @@ public class UIAudioRecorder extends UIElement
             return true;
         }
 
-        if (context.isPressed(GLFW.GLFW_KEY_ENTER) || context.isPressed(GLFW.GLFW_KEY_KP_ENTER))
-        {
-            this.end(context, false);
+        return super.subKeyPressed(context);
+    }
 
-            return true;
+    /**
+     * Drive the held-button confirm gesture: bail if the button was released early,
+     * otherwise draw the centre-filling square at the cursor and complete the action once
+     * it has been held for {@link #HOLD_MS}. Green ({@link Colors#POSITIVE}) finishes,
+     * red ({@link Colors#NEGATIVE}) cancels.
+     */
+    private void renderHold(UIContext context)
+    {
+        if (!Window.isMouseButtonPressed(this.holdButton))
+        {
+            this.holdButton = -1;
+
+            return;
         }
 
-        return super.subKeyPressed(context);
+        float progress = Math.min(1F, (System.currentTimeMillis() - this.holdStart) / (float) HOLD_MS);
+        int color = this.holdButton == 1 ? Colors.NEGATIVE : Colors.POSITIVE;
+        int cx = context.mouseX;
+        int cy = context.mouseY;
+        int half = HOLD_SQUARE / 2;
+        int fill = (int) (half * progress);
+
+        context.batcher.box(cx - half, cy - half, cx + half, cy + half, Colors.A50 | color);
+        context.batcher.box(cx - fill, cy - fill, cx + fill, cy + fill, Colors.A100 | color);
+
+        if (progress >= 1F)
+        {
+            boolean cancel = this.holdButton == 1;
+
+            this.holdButton = -1;
+            this.end(context, cancel);
+        }
     }
 
     @Override
@@ -233,6 +287,11 @@ public class UIAudioRecorder extends UIElement
         else
         {
             this.renderCountdown(context, elapsed);
+        }
+
+        if (this.holdButton != -1)
+        {
+            this.renderHold(context);
         }
 
         super.render(context);

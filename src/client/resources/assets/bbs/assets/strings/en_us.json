@@ -463,7 +463,7 @@
 	"bbs.ui.camera.timeline.context.record_microphone": "Record microphone...",
 	"bbs.ui.camera.timeline.context.record_microphone-description": "Type in the filename for the recorded audio track:",
 	"bbs.ui.camera.timeline.context.record_microphone-label": "Recording... %.2f",
-	"bbs.ui.camera.timeline.context.record_microphone-sublabel": "Enter to finish, Esc to cancel",
+	"bbs.ui.camera.timeline.context.record_microphone-sublabel": "Hold LMB to finish, RMB to cancel",
 	"bbs.ui.camera.timeline.context.record_microphone-countdown": "Get ready in %.1f",
 	"bbs.ui.camera.timeline.context.record_microphone-title": "Record microphone",
 	"bbs.ui.camera.timeline.context.remove_clips": "Remove clip(s)",
