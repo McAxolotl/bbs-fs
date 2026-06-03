@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.audio;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.audio.Wave;
 import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.film.Film;
@@ -19,6 +20,7 @@ import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
@@ -27,13 +29,26 @@ public class UIAudioRecorder extends UIElement
 {
     private static String lastInput = "";
 
+    /** Count-in before the scene starts playing and the microphone is captured. */
+    private static final long COUNT_IN_MS = 1000L;
+
     private final OpenALRecorder recorder;
+    private final UIFilmPanel filmPanel;
+    /** Cursor tick the recording was started from; the scene returns here when it ends. */
+    private final int originCursor;
+
     private float volume;
     private float[][] waveform;
 
-    public UIAudioRecorder(OpenALRecorder recorder)
+    private final long startTime = System.currentTimeMillis();
+    private boolean recording;
+    private boolean ended;
+
+    public UIAudioRecorder(UIFilmPanel filmPanel, OpenALRecorder recorder, int originCursor)
     {
+        this.filmPanel = filmPanel;
         this.recorder = recorder;
+        this.originCursor = originCursor;
 
         this.eventPropagataion(EventPropagation.BLOCK);
     }
@@ -52,40 +67,20 @@ public class UIAudioRecorder extends UIElement
                 (t) ->
                 {
                     String newT = t.isEmpty() ? suggestion : t;
-
+                    int origin = filmPanel.getCursor();
                     UIElement overlay = context.menu.overlay;
+
+                    /* The wave is delivered on the recorder thread once it stops (and only when
+                     * finished, not cancelled), so bounce the clip placement onto the main thread. */
                     OpenALRecorder recorder = new OpenALRecorder((wave) ->
-                    {
-                        try
-                        {
-                            File file = new File(BBSMod.getAudioFolder(), newT + ".wav");
-                            AudioClientClip clip = new AudioClientClip();
-                            Clips clips = filmPanel.cameraEditor.clips.getClips();
+                        MinecraftClient.getInstance().execute(() -> saveRecording(filmPanel, newT, value, origin, wave))
+                    );
 
-                            file.getParentFile().mkdirs();
-                            WaveWriter.write(file, wave);
-                            clip.audio.set(Link.assets("audio/" + newT + ".wav"));
-                            clip.duration.set((int) (wave.getDuration() * 20));
-                            clip.layer.set(clips.getTopLayer() + 1);
-
-                            clips.addClip(clip);
-                            filmPanel.cameraEditor.clips.clearSelection();
-                            filmPanel.cameraEditor.clips.pickClip(clip);
-
-                            lastInput = newT.equals(value) ? "" : newT;
-                        }
-                        catch (Exception e)
-                        {}
-                    });
-                    UIAudioRecorder audioRecorder = new UIAudioRecorder(recorder);
+                    UIAudioRecorder audioRecorder = new UIAudioRecorder(filmPanel, recorder, origin);
 
                     audioRecorder.full(overlay);
                     audioRecorder.resize();
                     overlay.add(audioRecorder);
-
-                    Thread thread = new Thread(recorder, "Супер классный, я записываю твой микрофон хихихи :3");
-
-                    thread.start();
                 }
             );
 
@@ -122,13 +117,96 @@ public class UIAudioRecorder extends UIElement
         return base + "/" + number;
     }
 
+    /**
+     * Write the recorded wave and drop an audio clip onto the timeline at the tick the
+     * recording started from, on a fresh top layer. Runs on the main thread.
+     */
+    private static void saveRecording(UIFilmPanel filmPanel, String name, String defaultName, int tick, Wave wave)
+    {
+        try
+        {
+            File file = new File(BBSMod.getAudioFolder(), name + ".wav");
+            Clips clips = filmPanel.cameraEditor.clips.getClips();
+            AudioClientClip clip = new AudioClientClip();
+
+            file.getParentFile().mkdirs();
+            WaveWriter.write(file, wave);
+
+            clip.audio.set(Link.assets("audio/" + name + ".wav"));
+            clip.tick.set(tick);
+            clip.duration.set((int) (wave.getDuration() * 20));
+            clip.layer.set(clips.getTopLayer() + 1);
+
+            clips.addClip(clip);
+            filmPanel.cameraEditor.clips.clearSelection();
+            filmPanel.cameraEditor.clips.pickClip(clip);
+
+            lastInput = name.equals(defaultName) ? "" : name;
+        }
+        catch (Exception e)
+        {}
+    }
+
+    /** After the count-in: begin capturing the microphone and play the scene from the cursor. */
+    private void startRecording()
+    {
+        this.recording = true;
+
+        new Thread(this.recorder, "BBS microphone recorder").start();
+
+        if (!this.filmPanel.isRunning())
+        {
+            this.filmPanel.togglePlayback();
+        }
+    }
+
+    /**
+     * End the take. {@code cancel} discards it (no file, no clip); otherwise the recorder
+     * delivers the wave and {@link #saveRecording} places the clip. Either way playback stops
+     * and the cursor snaps back to where the recording began.
+     */
+    private void end(UIContext context, boolean cancel)
+    {
+        if (this.ended)
+        {
+            return;
+        }
+
+        this.ended = true;
+
+        /* Nothing was captured during the count-in, so an early exit is always a discard. */
+        if (this.recording && !cancel)
+        {
+            this.recorder.stop();
+        }
+        else
+        {
+            this.recorder.cancel();
+        }
+
+        if (this.filmPanel.isRunning())
+        {
+            this.filmPanel.togglePlayback();
+        }
+
+        this.filmPanel.setCursor(this.originCursor);
+
+        context.render.postRunnable(this::removeFromParent);
+    }
+
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
         if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
-            this.recorder.stop();
-            context.render.postRunnable(this::removeFromParent);
+            this.end(context, true);
+
+            return true;
+        }
+
+        if (context.isPressed(GLFW.GLFW_KEY_ENTER) || context.isPressed(GLFW.GLFW_KEY_KP_ENTER))
+        {
+            this.end(context, false);
 
             return true;
         }
@@ -138,6 +216,41 @@ public class UIAudioRecorder extends UIElement
 
     @Override
     public void render(UIContext context)
+    {
+        long elapsed = System.currentTimeMillis() - this.startTime;
+
+        if (!this.recording && !this.ended && elapsed >= COUNT_IN_MS)
+        {
+            this.startRecording();
+        }
+
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A50);
+
+        if (this.recording)
+        {
+            this.renderRecording(context);
+        }
+        else
+        {
+            this.renderCountdown(context, elapsed);
+        }
+
+        super.render(context);
+    }
+
+    private void renderCountdown(UIContext context, long elapsed)
+    {
+        float remaining = Math.max(0F, (COUNT_IN_MS - elapsed) / 1000F);
+        String label = UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_COUNTDOWN.format(remaining).get();
+        int x = this.area.mx();
+        int y = this.area.my();
+        int w = context.batcher.getFont().getWidth(label);
+
+        context.batcher.icon(Icons.SPHERE, Colors.setA(Colors.RED, 0.5F), x - w / 2 - 12, y + context.batcher.getFont().getHeight() / 2, 0.5F, 0.5F);
+        context.batcher.textShadow(label, x - w / 2, y);
+    }
+
+    private void renderRecording(UIContext context)
     {
         this.volume = Lerps.lerp(this.volume, Interpolations.CUBIC_OUT.interpolate(0F, 1F, this.recorder.getVolume()), 0.5F);
 
@@ -149,7 +262,6 @@ public class UIAudioRecorder extends UIElement
         int w = context.batcher.getFont().getWidth(label);
         double volume = Interpolations.EXP_OUT.interpolate(0F, 1F, this.volume);
 
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A50);
         context.batcher.icon(Icons.SPHERE, Colors.RED | Colors.A100, x - w / 2 - 12, y + context.batcher.getFont().getHeight() / 2, 0.5F, 0.5F);
         context.batcher.textShadow(label, x - w / 2, y);
 
@@ -164,8 +276,6 @@ public class UIAudioRecorder extends UIElement
         context.batcher.box(x, y + 16, x + (int) (w * volume), y + 20, Colors.WHITE);
 
         this.renderWaveform(context, x, y + 24, w, 28);
-
-        super.render(context);
     }
 
     /**

@@ -24,6 +24,7 @@ public class OpenALRecorder implements Runnable
     private long captureDevice;
     private ByteBuffer buffer;
     private boolean running = true;
+    private boolean cancelled;
     private Consumer<Wave> consumer;
     private long startTime;
     private float volume;
@@ -39,6 +40,13 @@ public class OpenALRecorder implements Runnable
 
     public void stop()
     {
+        this.running = false;
+    }
+
+    /** Stop recording and discard the take — the wave is never delivered to the consumer. */
+    public void cancel()
+    {
+        this.cancelled = true;
         this.running = false;
     }
 
@@ -171,17 +179,16 @@ public class OpenALRecorder implements Runnable
 
         this.buffer.flip();
 
-        byte[] pcm = new byte[this.buffer.limit()];
-
-        this.buffer.get(pcm);
-        MemoryUtil.memFree(this.buffer);
-
-        this.buffer = null;
-
-        if (this.consumer != null)
+        if (!this.cancelled && this.consumer != null)
         {
+            byte[] pcm = new byte[this.buffer.limit()];
+
+            this.buffer.get(pcm);
             this.consumer.accept(new Wave(1, 1, SAMPLE_RATE, 16, pcm));
         }
+
+        MemoryUtil.memFree(this.buffer);
+        this.buffer = null;
     }
 
     @Override

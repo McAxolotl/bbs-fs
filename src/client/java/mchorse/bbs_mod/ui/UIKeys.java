@@ -186,6 +186,7 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-description");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_LABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-label");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_SUBLABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-sublabel");
+    public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_COUNTDOWN = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-countdown");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-title");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS = L10n.lang("bbs.ui.camera.timeline.context.remove_clips");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REORGANIZE = L10n.lang("bbs.ui.camera.timeline.context.reorganize");
