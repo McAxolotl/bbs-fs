@@ -85,8 +85,9 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         return this;
     }
 
-    private static final int TRACK_W = 20;
-    private static final int TRACK_H = 12;
+    private static final int TRACK_W = 22;
+    private static final int TRACK_H = 10;
+    private static final int KNOB = 12;
 
     @Override
     protected void renderSkin(UIContext context)
@@ -103,34 +104,44 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
             this.anim = this.value ? 1F : 0F;
         }
 
-        int x = this.area.ex() - TRACK_W - 2;
-        int y = this.area.my() - TRACK_H / 2;
+        int my = this.area.my();
+        int trackRight = this.area.ex() - 2;
+        int trackLeft = trackRight - TRACK_W;
+        int trackTop = my + KNOB / 2 - TRACK_H;
+        int trackBottom = my + KNOB / 2;
 
-        int track = Colors.lerp(BBSSettings.inputSurface(), Colors.A100 | BBSSettings.primaryColor.get(), this.anim);
-        int border = Colors.lerp(BBSSettings.dividerColor(), Colors.A100 | BBSSettings.primaryColor.get(), this.anim);
+        int trackFill = Colors.lerp(0xff3a3d41, Colors.A100 | BBSSettings.primaryColor.get(), this.anim);
 
-        if (this.hover)
-        {
-            track = Colors.lerp(track, Colors.WHITE, 0.08F);
-        }
+        /* Track background: beveled fill with a 1px inner black border */
+        context.batcher.box(trackLeft, trackTop, trackRight, trackBottom, Colors.A100);
+        this.renderBevel(context, trackLeft + 1, trackTop + 1, trackRight - 1, trackBottom - 1, trackFill, false);
 
-        /* Track: hairline border, flat fill, crisp inner shadow along the top */
-        context.batcher.box(x, y, x + TRACK_W, y + TRACK_H, border);
-        context.batcher.box(x + 1, y + 1, x + TRACK_W - 1, y + TRACK_H - 1, track);
-        context.batcher.box(x + 1, y + 1, x + TRACK_W - 1, y + 2, Colors.A25);
+        /* Knob: 12x12, taller than the track so it pokes out the top, 1px inner black border */
+        int knobLeft = trackLeft + Math.round((TRACK_W - KNOB) * this.anim);
+        int knobTop = my - KNOB / 2;
+        int knobColor = this.hover ? Colors.lerp(0xffc9cdd2, Colors.WHITE, 0.2F) : 0xffc9cdd2;
 
-        /* Knob slides between the ends, lifted by a sharp drop shadow */
-        int knob = TRACK_H - 4;
-        int kx = x + 2 + Math.round((TRACK_W - knob - 4) * this.anim);
-        int ky = y + 2;
-
-        context.batcher.box(kx + 1, ky + 1, kx + knob + 1, ky + knob + 1, Colors.A50);
-        context.batcher.box(kx, ky, kx + knob, ky + knob, 0xfff0f2f5);
+        context.batcher.box(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, Colors.A100);
+        this.renderBevel(context, knobLeft + 1, knobTop + 1, knobLeft + KNOB - 1, knobTop + KNOB - 1, knobColor, true);
 
         if (!this.isEnabled())
         {
-            context.batcher.box(x, y, x + TRACK_W, y + TRACK_H, Colors.A50);
-            context.batcher.outlinedIcon(Icons.LOCKED, x + TRACK_W / 2, this.area.my(), 0.5F, 0.5F);
+            context.batcher.box(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, Colors.A50);
+            context.batcher.outlinedIcon(Icons.LOCKED, trackLeft + TRACK_W / 2, my, 0.5F, 0.5F);
+        }
+    }
+
+    private void renderBevel(UIContext context, int x1, int y1, int x2, int y2, int fill, boolean shadow)
+    {
+        int light = Colors.lerp(fill, Colors.WHITE, 0.2F);
+
+        context.batcher.box(x1, y1, x2, y2, fill);
+        context.batcher.box(x1, y1, x2, y1 + 1, light);
+        context.batcher.box(x2 - 1, y1, x2, y2, light);
+
+        if (shadow)
+        {
+            context.batcher.box(x1, y2 - 2, x2, y2, Colors.lerp(fill, Colors.A100, 0.22F));
         }
     }
 }

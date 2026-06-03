@@ -86,29 +86,15 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
             color = this.custom ? this.customHighlightColor : Colors.mulRGB(color, 0.85F);
         }
 
-        boolean pressed = this.pressed && this.isEnabled();
-
         if (this.background)
         {
             this.area.render(context.batcher, color);
-
-            if (pressed)
-            {
-                /* Pushed in: a crisp shadow along the top edge */
-                context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.y + 2, Colors.A50);
-            }
-            else
-            {
-                /* Raised slab: a thin top highlight and a sharp bottom shadow */
-                context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.y + 1, Colors.setA(Colors.WHITE, 0.12F));
-                context.batcher.box(this.area.x, this.area.ey() - 2, this.area.ex(), this.area.ey(), Colors.A50);
-            }
         }
 
         FontRenderer font = context.batcher.getFont();
         String label = font.limitToWidth(this.label.get(), this.area.w - 4);
         int x = this.area.mx(font.getWidth(label));
-        int y = this.area.my(font.getHeight()) + (pressed ? 1 : 0);
+        int y = this.area.my(font.getHeight());
 
         context.batcher.text(label, x, y, Colors.mulRGB(this.textColor, this.hover ? 0.9F : 1F), this.textShadow);
 
