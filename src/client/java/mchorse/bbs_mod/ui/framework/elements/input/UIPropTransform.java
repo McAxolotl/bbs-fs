@@ -36,6 +36,11 @@ public class UIPropTransform extends UITransform
     /** Fraction of the camera-to-gizmo distance the object moves in depth per wheel notch
      *  during a screen-space grab (Alt divides it by 5, Ctrl multiplies it by 5). */
     private static final float DEPTH_WHEEL_FACTOR = 0.05F;
+    /** Base degrees of view-axis (arcball) roll per mouse-wheel notch while
+     *  trackball-dragging; Alt divides it by 5 (fine), Ctrl multiplies by 5 (coarse). */
+    private static final float TRACKBALL_WHEEL_DEG = 5F;
+    /** Factor the modifier keys apply to a gizmo step: Ctrl coarsens, Alt refines. */
+    private static final float STEP_MODIFIER = 5F;
 
     private Transform transform;
     private Runnable preCallback;
@@ -110,6 +115,11 @@ public class UIPropTransform extends UITransform
      *  roll (the classic incremental-trackball drift). */
     private float trackballAccumX;
     private float trackballAccumY;
+    /** View axis (toward the camera) in the bone's parent frame, captured at
+     *  trackball-drag start — the mouse wheel rolls about this for arcball motion. */
+    private final Vector3f trackballViewLocal = new Vector3f();
+    /** Accumulated wheel-driven view-axis roll (degrees) for the current trackball drag. */
+    private float trackballRollDeg;
     /** Whether {@link #dragStartRotateDeg} should be written back to {@code rotate2} instead of {@code rotate}. */
     private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
@@ -566,6 +576,7 @@ public class UIPropTransform extends UITransform
 
         this.trackballAccumX = 0F;
         this.trackballAccumY = 0F;
+        this.trackballRollDeg = 0F;
         this.beginRayRotateTrackball(context.mouseX, context.mouseY);
 
         if (!this.handler.hasParent())
@@ -817,6 +828,19 @@ public class UIPropTransform extends UITransform
      * @return {@code true} when the wheel was consumed as depth (i.e. a screen-space
      *         grab is live), so callers can fall back to their default scroll handling.
      */
+    /**
+     * Apply the shared modifier keys to a gizmo step amount: Alt makes it fine
+     * (÷5), Ctrl makes it coarse (×5), both/neither leave it as-is. Keeps the
+     * wheel-driven depth and arcball roll consistent.
+     */
+    private static float applyStepModifiers(float step)
+    {
+        if (Window.isAltPressed()) step /= STEP_MODIFIER;
+        if (Window.isCtrlPressed()) step *= STEP_MODIFIER;
+
+        return step;
+    }
+
     public boolean scrollDepth(UIContext context)
     {
         if (!this.editing || !this.translateScreen || !this.dragHasStart || this.transform == null)
@@ -853,10 +877,7 @@ public class UIPropTransform extends UITransform
 
         ray.div(distance);
 
-        float step = (float) (context.mouseWheel * distance * DEPTH_WHEEL_FACTOR);
-
-        if (Window.isAltPressed()) step /= 5F;
-        if (Window.isCtrlPressed()) step *= 5F;
+        float step = applyStepModifiers((float) (context.mouseWheel * distance * DEPTH_WHEEL_FACTOR));
 
         /* Move along the camera->object ray (preserves screen position), in translate units. */
         Vector3f translateStep = this.dragScreenInverseJacobian.transform(
@@ -1292,6 +1313,7 @@ public class UIPropTransform extends UITransform
 
         parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
         parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
+        parentInverse.transform(invView.getColumn(2, new Vector3f()).normalize(), this.trackballViewLocal);
 
         if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
         {
@@ -1302,6 +1324,7 @@ public class UIPropTransform extends UITransform
 
         this.trackballRightLocal.normalize();
         this.trackballUpLocal.normalize();
+        this.trackballViewLocal.normalize();
         this.trackballLastX = mouseX;
         this.trackballLastY = mouseY;
         this.dragHasStart = true;
@@ -1333,11 +1356,20 @@ public class UIPropTransform extends UITransform
         this.trackballAccumX += dx;
         this.trackballAccumY += dy;
 
-        /* Rebuild the rotation from the FIXED start orientation plus this absolute
-         * offset, rather than nudging the previous frame's result. Because the
-         * outcome is a pure function of (accumX, accumY) — and number addition
-         * commutes, unlike rotation composition — a back-and-forth drag returns to
-         * the exact starting rotation, eliminating the trackball roll drift. */
+        this.updateTrackballRotation();
+    }
+
+    /**
+     * Rebuild the trackball rotation from the FIXED start orientation plus the
+     * absolute cursor offset (yaw/pitch) and the wheel-driven view-axis roll,
+     * rather than nudging the previous frame's result. Because the outcome is a
+     * pure function of those accumulated amounts — and addition commutes, unlike
+     * rotation composition — a back-and-forth drag returns to the exact starting
+     * rotation, eliminating the trackball roll drift. Shared by the cursor drag
+     * and the mouse-wheel arcball roll.
+     */
+    private void updateTrackballRotation()
+    {
         Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
 
         Matrix3f startRotation = new Matrix3f()
@@ -1348,9 +1380,11 @@ public class UIPropTransform extends UITransform
         float sensitivity = BBSSettings.trackballSensitivity.get();
         float yaw = MathUtils.toRad(this.trackballAccumX * sensitivity);
         float pitch = MathUtils.toRad(this.trackballAccumY * sensitivity);
+        float roll = MathUtils.toRad(this.trackballRollDeg);
 
         Vector3f euler = new Matrix3f()
-            .rotation(yaw, this.trackballUpLocal)
+            .rotation(roll, this.trackballViewLocal)
+            .rotate(yaw, this.trackballUpLocal.x, this.trackballUpLocal.y, this.trackballUpLocal.z)
             .rotate(pitch, this.trackballRightLocal.x, this.trackballRightLocal.y, this.trackballRightLocal.z)
             .mul(startRotation)
             .getEulerAnglesZYX(new Vector3f());
@@ -1362,6 +1396,26 @@ public class UIPropTransform extends UITransform
 
         if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
         else this.setR(null, rx, ry, rz);
+    }
+
+    /**
+     * Mouse-wheel arcball roll while trackball-dragging: each notch rolls the
+     * object about the view axis (toward the camera), with Alt for fine (÷5) and
+     * Ctrl for coarse (×5) steps. Returns whether the wheel was consumed.
+     */
+    public boolean scrollTrackballRoll(UIContext context)
+    {
+        if (!this.editing || this.rotateKind != RotateKind.TRACKBALL || !this.dragHasStart || this.transform == null)
+        {
+            return false;
+        }
+
+        float step = applyStepModifiers((float) (context.mouseWheel * TRACKBALL_WHEEL_DEG));
+
+        this.trackballRollDeg += step;
+        this.updateTrackballRotation();
+
+        return true;
     }
 
     /**
@@ -2404,8 +2458,14 @@ public class UIPropTransform extends UITransform
         @Override
         protected boolean subMouseScrolled(UIContext context)
         {
-            /* During a screen-space grab the wheel drives depth; otherwise it keeps
-             * adjusting the drag sensitivity amplifier as before. */
+            /* While trackball-dragging the wheel rolls about the view axis (arcball);
+             * during a screen-space grab it drives depth; otherwise it keeps adjusting
+             * the drag sensitivity amplifier as before. */
+            if (this.transform.scrollTrackballRoll(context))
+            {
+                return true;
+            }
+
             if (this.transform.scrollDepth(context))
             {
                 return true;
