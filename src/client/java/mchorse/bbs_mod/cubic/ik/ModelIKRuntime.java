@@ -2,6 +2,8 @@ package mchorse.bbs_mod.cubic.ik;
 
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import org.joml.Vector3f;
@@ -60,7 +62,9 @@ public final class ModelIKRuntime
             return;
         }
 
-        ModelIKApplier.apply(model, chains, controllerTargets, poseFixByBone);
+        Map<String, BoneConstraint> boneLimits = ModelConstraintsRuntime.getBones(instance);
+
+        ModelIKApplier.apply(model, chains, controllerTargets, poseFixByBone, boneLimits);
     }
 
     public static List<String> getControllers(ModelInstance instance)
