@@ -127,6 +127,12 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             Matrix4f matrix = new Matrix4f(InverseView.get());
 
+            /* Since 1.21.1 the world render keeps the camera view in RenderSystem's global
+             * model-view and gives the stack an identity base, so stack.peek() no longer
+             * carries the view rotation InverseView is meant to cancel. Fold the global
+             * model-view in (identity, hence a no-op, in the form editor) so the emitter's
+             * world origin and rotation come out right. */
+            matrix.mul(RenderSystem.getModelViewMatrix());
             matrix.mul(context.stack.peek().getPositionMatrix());
 
             Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
@@ -139,7 +145,13 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             context.stack.push();
             context.stack.loadIdentity();
-            context.stack.multiplyPositionMatrix(new Matrix4f(InverseView.get()).invert());
+            /* The emitter builds its quads in camera-relative world space, so the effective
+             * model-view (RenderSystem.getModelViewMatrix() * stack) must be the pure camera
+             * view. Since 1.21.1 holds that view in RenderSystem's global model-view (it used
+             * to be identity), cancel it here so it isn't applied twice: stack = inv(global) * view.
+             * In the form editor the global model-view is identity, so this stays the old `view`. */
+            Matrix4f particleView = new Matrix4f(InverseView.get()).invert();
+            context.stack.multiplyPositionMatrix(new Matrix4f(RenderSystem.getModelViewMatrix()).invert().mul(particleView));
 
             emitter.lastGlobal.set(translation);
             emitter.rotation.set(matrix);
