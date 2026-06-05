@@ -77,7 +77,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             float outlineOffset = 0.02F;
 
             axisOffset *= scale;
-            outlineOffset *= scale;
+            outlineOffset *= scale; int i = 10;
 
 
             BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
@@ -111,7 +111,12 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         if (!this.form.paused.get())
         {
-            Matrix4f modelView = stack.peek().getPositionMatrix();
+            /* Since 1.21.1 the camera view lives in RenderSystem's global model-view and the
+             * stack base is identity, so fold it back in to recover the FULL model-view
+             * (view * translate(-cam) * formChain). Without it camInverse over-rotates the
+             * sampled point and the recorded world position ends up depending on the camera,
+             * which makes the trail smear whenever the camera moves rather than the object. */
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix());
 
             Vector4f top = new Vector4f(0F, 1F, 0F, 1F);
             Vector4f bottom = new Vector4f(0F, -1F, 0F, 1F);
@@ -167,10 +172,15 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         Trail last = null;
         Trail trail;
+        /* The vertices below are in camera-relative world space; the GPU then applies
+         * RenderSystem's global model-view, which since 1.21.1 already holds the camera view.
+         * Build m so that (globalModelView * m) collapses to the pure camera view:
+         * m = inv(globalModelView) * view. In the form editor the global model-view is
+         * identity, so m stays the plain view and nothing changes. */
         Matrix4f m = stack.peek().getPositionMatrix();
 
-        m.set(camInverse);
-        m.invert();
+        m.set(RenderSystem.getModelViewMatrix()).invert();
+        m.mul(new Matrix4f(camInverse).invert());
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
 
