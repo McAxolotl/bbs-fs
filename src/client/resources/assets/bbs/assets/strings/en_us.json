@@ -802,7 +802,7 @@
 	"bbs.ui.forms.editors.model.constraints.context.reset": "Reset constraints",
 	"bbs.ui.forms.editors.model.constraints.context.save": "Save constraints",
 	"bbs.ui.forms.editors.model.constraints.context.name": "Name...",
-	"bbs.ui.forms.editors.model.additive_color": "Additive color",
+	"bbs.ui.forms.editors.additive_color": "Additive color",
 	"bbs.ui.forms.editors.model.pose": "Pose",
 	"bbs.ui.forms.editors.trail.length": "Length",
 	"bbs.ui.forms.editors.trail.loop": "Loop",
