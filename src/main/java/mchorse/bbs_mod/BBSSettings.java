@@ -2,7 +2,6 @@ package mchorse.bbs_mod;
 
 import java.util.HashSet;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueString;
@@ -376,8 +375,8 @@ public class BBSSettings {
 
 		builder.category("appearance", Icons.LAYOUT);
 		builder.register(language = new ValueLanguage("language"));
-		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", true);
-		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", true);
+		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
+		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
 		userIntefaceScale = builder.getInt("ui_scale", 2, 0, 4);
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
@@ -426,8 +425,8 @@ public class BBSSettings {
 		keystrokeMode = builder.getInt("keystrokes_position", 1);
 
 		builder.category("background", Icons.IMAGE);
-		backgroundImage = builder.getRL("image", Link.assets("textures/banners/bg.png"));
-		backgroundColor = builder.getInt("color", Colors.WHITE).colorAlpha();
+		backgroundImage = builder.getRL("image", null);
+		backgroundColor = builder.getInt("color", 0xff101217).colorAlpha();
 
 		builder.category("chroma_sky", Icons.GLOBE);
 		chromaSkyEnabled = builder.getBoolean("enabled", false);
