@@ -163,7 +163,7 @@ public class BBSSettings {
 	private static final float MAX_BACKGROUND_BRIGHTNESS = 1.5F;
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
-	private static final int DEFAULT_PRIMARY_COLOR = 0xffff3242;
+	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
 	private static final int LIGHT_CHROME_SURFACE = 0xffe6e9ef;
 	private static final int DARK_CHROME_SURFACE = 0xff111316;
 	private static final int LIGHT_BASE_SURFACE = 0xfff1f4f8;
