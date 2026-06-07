@@ -38,6 +38,7 @@ public class OrbitFilmCameraController implements ICameraController
     private static final float PITCH_LIMIT = MathUtils.PI * 0.5F - 0.01F;
     private static final float MIN_DISTANCE = 0.5F;
     private static final float MAX_DISTANCE = 256F;
+    private static final int DRAG_THRESHOLD = 3;
 
     private final UIFilmController controller;
 
@@ -46,6 +47,8 @@ public class OrbitFilmCameraController implements ICameraController
     private boolean orbiting;
     private int orbitButton = -1;
     private final Vector2i last = new Vector2i();
+    private final Vector2i pressOrigin = new Vector2i();
+    private boolean dragged;
 
     /* The state the input drives. */
     private final Vector2f targetRotation = new Vector2f();
@@ -78,12 +81,19 @@ public class OrbitFilmCameraController implements ICameraController
 
         this.orbitButton = context.mouseButton;
         this.orbiting = true;
+        this.dragged = false;
         this.last.set(context.mouseX, context.mouseY);
+        this.pressOrigin.set(context.mouseX, context.mouseY);
 
         if (this.isPanning())
         {
             this.cachePanState(context);
         }
+    }
+
+    public boolean wasDragged()
+    {
+        return this.dragged;
     }
 
     public void stop()
@@ -150,6 +160,11 @@ public class OrbitFilmCameraController implements ICameraController
         int y = context.mouseY;
         int dx = x - this.last.x;
         int dy = y - this.last.y;
+
+        if (!this.dragged && (Math.abs(x - this.pressOrigin.x) > DRAG_THRESHOLD || Math.abs(y - this.pressOrigin.y) > DRAG_THRESHOLD))
+        {
+            this.dragged = true;
+        }
 
         if (this.orbitButton == 2)
         {
