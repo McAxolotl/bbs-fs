@@ -174,7 +174,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         Matrix3f normal = matrices.peek().getNormalMatrix();
 
-        FormColorBlend.blend(color, this.form.color.get(), FormColorBlend.BlendMode.MULTIPLY);
+        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
 
         if (this.form.billboard.get())
         {
