@@ -27,7 +27,7 @@ public class DamageControl
         this.enable = BBSSettings.damageControl.get();
     }
 
-    public void addBlock(BlockPos pos, BlockState state, BlockEntity entity)
+    public void addBlock(BlockPos pos, BlockState state, NbtCompound blockEntity)
     {
         if (!this.enable)
         {
@@ -43,8 +43,8 @@ public class DamageControl
                 return;
             }
         }
-
-        this.blocks.add(new BlockCapture(new BlockPos(pos), state, entity == null ? null : entity.createNbtWithId(this.world.getRegistryManager())));
+        
+        this.blocks.add(new BlockCapture(new BlockPos(pos), state, blockEntity));
     }
 
     public void addEntity(Entity entity)

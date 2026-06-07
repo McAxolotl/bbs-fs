@@ -9,7 +9,7 @@
         "BlockItemMixin",
         "ServerWorldMixin",
         "ItemStackMixin",
-        "WorldMixin",
+        "WorldChunkMixin",
         "LivingEntityMixin",
         "ServerPlayerEntityMixin",
         "LimbAnimatorAccessor",
