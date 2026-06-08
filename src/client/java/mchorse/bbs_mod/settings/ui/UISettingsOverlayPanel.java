@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.Settings;
+import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -248,7 +249,14 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
 
     private boolean matches(BaseValue value)
     {
-        String label = L10n.lang(UIValueFactory.getValueLabelKey(value)).get().toLowerCase();
+        IKey key = L10n.lang(UIValueFactory.getValueLabelKey(value));
+
+        if (value instanceof ValueKeyCombo combo)
+        {
+            key = combo.get().label;
+        }
+
+        String label = key.get().toLowerCase();
 
         return label.contains(this.filter) || value.getId().toLowerCase().contains(this.filter);
     }

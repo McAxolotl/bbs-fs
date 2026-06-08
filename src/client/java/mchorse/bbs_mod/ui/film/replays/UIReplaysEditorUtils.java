@@ -37,7 +37,6 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransfo
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -589,7 +588,7 @@ public class UIReplaysEditorUtils
              * doing nothing unless a pose keyframe happens to be selected already. */
             if (sheet.channel.isEmpty())
             {
-                UIKeyframeSheet poseSheet = getPoseSheet(graph, formPath);
+                UIKeyframeSheet poseSheet = getPreferredPoseSheet(graph, formPath);
 
                 if (poseSheet != null)
                 {
@@ -600,7 +599,7 @@ public class UIReplaysEditorUtils
             return sheet;
         }
 
-        return getActivePoseSheet(keyframeEditor, formPath);
+        return getPreferredPoseSheet(graph, formPath);
     }
 
     private static UIKeyframeSheet getPoseSheet(IUIKeyframeGraph graph, String formPath)
@@ -616,42 +615,27 @@ public class UIReplaysEditorUtils
         return null;
     }
 
-    private static UIKeyframeSheet getActivePoseSheet(UIKeyframeEditor keyframeEditor, String formPath)
+    private static UIKeyframeSheet getPreferredPoseSheet(IUIKeyframeGraph graph, String formPath)
     {
-        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        /* Prefer the pose track the user is actually working in - the currently selected pose keyframe, then
+         * the last selected sheet (remembered across clicks) - so picks and inserts stay on that track (e.g.
+         * an overlay) instead of snapping back to the form's top pose track. */
         Keyframe selected = graph.getSelected();
-        UIKeyframeSheet sheet = selected != null ? graph.getSheet(selected) : graph.getLastSheet();
+        UIKeyframeSheet current = selected != null ? graph.getSheet(selected) : null;
 
-        if (sheet == null || sheet.id == null)
+        if (isPoseSheet(current, formPath))
         {
-            return null;
+            return current;
         }
 
-        String name = StringUtils.fileName(sheet.id);
+        UIKeyframeSheet last = graph.getLastSheet();
 
-        if (!name.startsWith("pose"))
+        if (isPoseSheet(last, formPath))
         {
-            return null;
+            return last;
         }
 
-        if (sheet.property != null)
-        {
-            Form sheetForm = FormUtils.getForm(sheet.property);
-
-            if (sheetForm != null)
-            {
-                return FormUtils.getPath(sheetForm).equals(formPath) ? sheet : null;
-            }
-        }
-
-        if (formPath.isEmpty())
-        {
-            return sheet.id.contains(FormUtils.PATH_SEPARATOR) ? null : sheet;
-        }
-
-        String prefix = formPath + FormUtils.PATH_SEPARATOR;
-
-        return sheet.id.startsWith(prefix) ? sheet : null;
+        return getPoseSheet(graph, formPath);
     }
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, String key, boolean insert)
@@ -755,7 +739,10 @@ public class UIReplaysEditorUtils
 
         String prefix = formPath.isEmpty() ? "" : formPath + FormUtils.PATH_SEPARATOR;
 
-        return sheet.id.equals(prefix + "pose") || sheet.id.equals(prefix + "pose_overlay");
+        /* The main pose track is matched exactly so per-limb bone tracks ("pose.bones.<bone>") are excluded,
+         * while every overlay track - the default "pose_overlay" and the numbered ones ("pose_overlay0",
+         * "pose_overlay1", ...) - is matched by prefix, consistent with FormUtils.isPoseProperty. */
+        return sheet.id.equals(prefix + "pose") || sheet.id.startsWith(prefix + "pose_overlay");
     }
 
     private static void forceSelectInSheet(IUIKeyframeGraph graph, UIKeyframeSheet sheet, Keyframe keyframe)
