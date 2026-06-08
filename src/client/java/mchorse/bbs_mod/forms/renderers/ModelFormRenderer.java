@@ -19,6 +19,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
@@ -344,7 +345,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.applyConstraintsOnce(model);
         model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get());
 
-        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof mchorse.bbs_mod.data.types.MapType ikMap)
+        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
             ModelIKDebug.render(newStack, model.model, ikMap, "");
         }

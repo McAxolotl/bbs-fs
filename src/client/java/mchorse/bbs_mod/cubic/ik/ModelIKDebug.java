@@ -2,12 +2,14 @@ package mchorse.bbs_mod.cubic.ik;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
+import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -15,6 +17,7 @@ import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -70,10 +73,19 @@ public final class ModelIKDebug
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
 
+        stack.push();
+
+        if (model instanceof BOBJModel)
+        {
+            stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+        }
+
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
             drawChain(stack, frames, chain, selectedTip);
         }
+
+        stack.pop();
 
         RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
@@ -121,6 +133,13 @@ public final class ModelIKDebug
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
 
+        stack.push();
+
+        if (model instanceof BOBJModel)
+        {
+            stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+        }
+
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
@@ -142,6 +161,8 @@ public final class ModelIKDebug
         }
 
         BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        stack.pop();
 
         RenderSystem.enableDepthTest();
     }
