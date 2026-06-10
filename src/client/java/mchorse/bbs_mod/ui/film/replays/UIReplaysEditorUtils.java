@@ -269,7 +269,7 @@ public class UIReplaysEditorUtils
             String id = PerLimbService.toIKTargetKey(path, controller);
             String title = path.isEmpty() ? "IK/" + controller : path + "/IK/" + controller;
 
-            addTargetSheet(out, properties, id, title, Colors.CYAN, Icons.LIMB);
+            addTargetSheet(out, properties, id, title, Colors.CYAN, null);
         }
     }
 
@@ -328,7 +328,7 @@ public class UIReplaysEditorUtils
             String id = PerLimbService.toPoleTargetKey(path, controller);
             String title = path.isEmpty() ? "Pole/" + controller : path + "/Pole/" + controller;
 
-            addTargetSheet(out, properties, id, title, Colors.ORANGE, Icons.LIMB);
+            addTargetSheet(out, properties, id, title, Colors.ORANGE, null);
         }
     }
 
