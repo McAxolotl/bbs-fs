@@ -160,6 +160,8 @@
 	"bbs.config.editor.rule_of_thirds-comment": "Показывает правило третей",
 	"bbs.config.editor.seconds": "Использовать секунды",
 	"bbs.config.editor.seconds-comment": "Когда включено, то показывает секунды вместо тиков в редакоре камеры",
+	"bbs.config.editor.timeline_grid": "Сетка таймлайна",
+	"bbs.config.editor.timeline_grid-comment": "Когда включено, линии линейки таймлайна продлеваются по трекам на всю высоту, образуя вертикальную сетку",
 	"bbs.config.editor.snap_to_markers": "Привязка к тикам",
 	"bbs.config.editor.snap_to_markers-comment": "Когда включено, клипы будут также привязываться к маркерам тиков",
 	"bbs.config.editor.speed": "Скорость",

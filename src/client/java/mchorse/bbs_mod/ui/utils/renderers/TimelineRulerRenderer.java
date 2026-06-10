@@ -42,6 +42,8 @@ public class TimelineRulerRenderer
     private static final float MAJOR_ALPHA = 0.55F;
     private static final float MINOR_ALPHA = 0.28F;
     private static final float LABEL_ALPHA = 0.72F;
+    private static final float GRID_MAJOR_ALPHA = 0.35F;
+    private static final float GRID_MINOR_ALPHA = 0.16F;
 
     public static int getTimelineBottom(Area area)
     {
@@ -121,18 +123,9 @@ public class TimelineRulerRenderer
             return;
         }
 
-        FontRenderer font = context.batcher.getFont();
-        int labelWidth = Math.max(font.getWidth(labelFormatter.apply(Math.max(startTick, 0))), font.getWidth(labelFormatter.apply(startTick + (int) (area.w / pxPerTick))));
-        int minMajorPx = Math.max(MIN_MAJOR_GAP, labelWidth + MIN_LABEL_PADDING);
-
-        int step = niceStep(minMajorPx / pxPerTick);
-        int subdivisions = subdivisions(step);
-        int minor = Math.max(1, step / subdivisions);
-
-        if (minor * pxPerTick < MIN_MINOR_GAP)
-        {
-            minor = step;
-        }
+        int step = chooseStep(area, startTick, pxPerTick, context.batcher.getFont(), labelFormatter);
+        int minor = minorStep(step, pxPerTick);
+        int labelMargin = (int) Math.ceil(step * pxPerTick);
 
         int majorColor = Colors.setA(BBSSettings.dividerColor(), MAJOR_ALPHA);
         int minorColor = Colors.setA(BBSSettings.dividerColor(), MINOR_ALPHA);
@@ -160,11 +153,63 @@ public class TimelineRulerRenderer
                 context.batcher.box(x, major ? majorTop : minorTop, x + 1, lineBottom, major ? majorColor : minorColor);
             }
 
-            if (major && x > area.x - minMajorPx)
+            if (major && x > area.x - labelMargin)
             {
                 context.batcher.textShadow(labelFormatter.apply((int) tick), x + 4, area.y + 2, labelColor);
             }
         }
+    }
+
+    /**
+     * Draw the ruler's vertical lines extended over the whole track area, aligned exactly
+     * with the labeled ticks of {@link #render}. Meant to be called as an overlay after the
+     * tracks are painted.
+     */
+    public static void renderGrid(
+        UIContext context,
+        Area area,
+        int top,
+        int startTick,
+        int durationTick,
+        IntUnaryOperator toGraphX,
+        IntFunction<String> labelFormatter
+    )
+    {
+        double pxPerTick = pixelsPerTick(toGraphX);
+
+        if (pxPerTick <= 0 || top >= area.ey())
+        {
+            return;
+        }
+
+        int step = chooseStep(area, startTick, pxPerTick, context.batcher.getFont(), labelFormatter);
+        int minor = minorStep(step, pxPerTick);
+        int timelineEndX = durationTick > 0 ? toGraphX.applyAsInt(durationTick) : Integer.MAX_VALUE;
+        int visibleEx = Math.min(area.ex(), timelineEndX);
+
+        int majorColor = Colors.setA(BBSSettings.dividerColor(), GRID_MAJOR_ALPHA);
+        int minorColor = Colors.setA(BBSSettings.dividerColor(), GRID_MINOR_ALPHA);
+
+        context.batcher.clip(area.x, top, area.ex(), area.ey(), context);
+
+        long first = Math.max(0, (long) Math.floor(startTick / (double) minor) * minor);
+
+        for (long tick = first, i = 0; i < ITERATION_CAP; tick += minor, i++)
+        {
+            int x = toGraphX.applyAsInt((int) tick);
+
+            if (x >= visibleEx)
+            {
+                break;
+            }
+
+            if (x >= area.x)
+            {
+                context.batcher.box(x, top, x + 1, area.ey(), tick % step == 0 ? majorColor : minorColor);
+            }
+        }
+
+        context.batcher.unclip(context);
     }
 
     /**
@@ -176,6 +221,22 @@ public class TimelineRulerRenderer
         int probe = 100000;
 
         return (toGraphX.applyAsInt(probe) - toGraphX.applyAsInt(0)) / (double) probe;
+    }
+
+    private static int chooseStep(Area area, int startTick, double pxPerTick, FontRenderer font, IntFunction<String> labelFormatter)
+    {
+        int rightTick = startTick + (int) (area.w / pxPerTick);
+        int labelWidth = Math.max(font.getWidth(labelFormatter.apply(Math.max(startTick, 0))), font.getWidth(labelFormatter.apply(rightTick)));
+        int minMajorPx = Math.max(MIN_MAJOR_GAP, labelWidth + MIN_LABEL_PADDING);
+
+        return niceStep(minMajorPx / pxPerTick);
+    }
+
+    private static int minorStep(int step, double pxPerTick)
+    {
+        int minor = Math.max(1, step / subdivisions(step));
+
+        return minor * pxPerTick < MIN_MINOR_GAP ? step : minor;
     }
 
     private static int niceStep(double desired)

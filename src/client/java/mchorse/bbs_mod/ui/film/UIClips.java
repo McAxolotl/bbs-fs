@@ -1794,6 +1794,19 @@ public class UIClips extends UIElement
         batcher.unclip(context);
         batcher.clip(this.vertical.area.x, rulerBottom, this.vertical.area.ex(), this.vertical.area.ey(), context);
 
+        if (BBSSettings.editorTimelineGrid.get())
+        {
+            TimelineRulerRenderer.renderGrid(
+                context,
+                area,
+                rulerBottom,
+                (int) this.scale.getMinValue(),
+                this.clips.calculateDuration(),
+                this::toGraphX,
+                TimeUtils::formatTime
+            );
+        }
+
         List<Clip> clips = this.clips.get();
 
         for (int i = 0, c = clips.size(); i < c; i++)
