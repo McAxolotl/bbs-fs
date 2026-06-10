@@ -36,6 +36,7 @@ public class ModelForm extends Form
 
     public final List<ValuePose> additionalOverlays = new ArrayList<>();
     public final transient Map<String, Vector3f> ikTargetOverrides = new HashMap<>();
+    public final transient Map<String, Vector3f> poleTargetOverrides = new HashMap<>();
     public final transient Map<String, Vector3f> physicsTargetOverrides = new HashMap<>();
 
     public ModelForm()

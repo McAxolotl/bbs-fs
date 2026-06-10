@@ -27,12 +27,7 @@ final class ModelIKApplier
     {
     }
 
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone)
-    {
-        apply(model, chains, controllerTargets, poseFixByBone, null);
-    }
-
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone, Map<String, BoneConstraint> boneLimits)
+    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> poseFixByBone, Map<String, BoneConstraint> boneLimits)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
@@ -51,10 +46,15 @@ final class ModelIKApplier
             wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
 
+            if (chain.poleTarget() != null && !chain.poleTarget().isEmpty())
+            {
+                wanted.add(chain.poleTarget());
+            }
+
             Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
             ModelPivotFrames.collect(model, wanted, frames);
 
-            applyChain(model, chain, frames, controllerTargets, poseFixByBone, boneLimits);
+            applyChain(model, chain, frames, controllerTargets, poleTargets, poseFixByBone, boneLimits);
         }
     }
 
@@ -81,7 +81,7 @@ final class ModelIKApplier
         return depth;
     }
 
-    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone, Map<String, BoneConstraint> boneLimits)
+    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> poseFixByBone, Map<String, BoneConstraint> boneLimits)
     {
         float poseFix = getChainPoseFix(chain, poseFixByBone);
         float weight = chain.weight() * (1F - poseFix);
@@ -127,13 +127,38 @@ final class ModelIKApplier
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
         Vector3f target = override != null ? new Vector3f(override) : new Vector3f(targetFrame.position());
 
-        float poleAngleRad = (float) Math.toRadians(chain.poleAngle());
+        Vector3f polePoint = resolvePolePoint(chain, frames, poleTargets);
         IKSolver.Limit[] limits = buildLimits(model, chainIds, boneLimits);
 
-        List<Vector3f> solved = IKSolver.solve(currentPositions, target, chain.pole(), poleAngleRad, chain.softness(), MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, chain.pole(), polePoint, chain.softness(), MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
 
         Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
         ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
+    }
+
+    /**
+     * Resolves the pole target into a model-space point the bend aims at: the
+     * film override position if the chain's pole bone is being driven, otherwise
+     * the pole bone's current position. Returns {@code null} (automatic hinge)
+     * when the chain has no pole or no pole target.
+     */
+    private static Vector3f resolvePolePoint(ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> poleTargets)
+    {
+        if (!chain.pole() || chain.poleTarget() == null || chain.poleTarget().isEmpty())
+        {
+            return null;
+        }
+
+        Vector3f override = poleTargets == null ? null : poleTargets.get(chain.poleTarget());
+
+        if (override != null)
+        {
+            return new Vector3f(override);
+        }
+
+        PivotFrame frame = frames.get(chain.poleTarget());
+
+        return frame == null ? null : new Vector3f(frame.position());
     }
 
     /**

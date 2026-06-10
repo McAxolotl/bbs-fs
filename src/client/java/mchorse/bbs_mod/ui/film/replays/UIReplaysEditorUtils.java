@@ -273,6 +273,33 @@ public class UIReplaysEditorUtils
         }
     }
 
+    public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+        List<String> controllers = ModelIKRuntime.getPoleControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        for (String controller : controllers)
+        {
+            if (controller == null || controller.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toPoleTargetKey(path, controller);
+            String title = path.isEmpty() ? "Pole/" + controller : path + "/Pole/" + controller;
+
+            addTargetSheet(out, properties, id, title, Colors.ORANGE, Icons.LIMB);
+        }
+    }
+
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
@@ -908,21 +935,31 @@ public class UIReplaysEditorUtils
         }
 
         List<String> controllers = ModelIKRuntime.getControllers(model);
+        List<String> poleControllers = ModelIKRuntime.getPoleControllers(model);
         String path = FormUtils.getPath(modelForm);
 
         BaseValue.edit(replay.properties, (props) ->
         {
             for (String controller : controllers)
             {
-                String id = PerLimbService.toIKTargetKey(path, controller);
-                KeyframeChannel channel = props.properties.get(id);
+                removeChannel(props, PerLimbService.toIKTargetKey(path, controller));
+            }
 
-                if (channel != null)
-                {
-                    channel.removeAll();
-                }
+            for (String controller : poleControllers)
+            {
+                removeChannel(props, PerLimbService.toPoleTargetKey(path, controller));
             }
         });
+    }
+
+    private static void removeChannel(FormProperties props, String id)
+    {
+        KeyframeChannel channel = props.properties.get(id);
+
+        if (channel != null)
+        {
+            channel.removeAll();
+        }
     }
 
     /* Offer bone hierarchy options */

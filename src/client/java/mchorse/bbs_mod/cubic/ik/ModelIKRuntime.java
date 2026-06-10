@@ -32,10 +32,10 @@ public final class ModelIKRuntime
 
     public static void applyWithPoseFix(ModelInstance instance, Map<String, Float> poseFixByBone)
     {
-        apply(instance, null, poseFixByBone);
+        apply(instance, null, null, poseFixByBone);
     }
 
-    public static void apply(ModelInstance instance, Map<String, Vector3f> controllerTargets, Map<String, Float> poseFixByBone)
+    public static void apply(ModelInstance instance, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> poseFixByBone)
     {
         if (instance == null || instance.model == null)
         {
@@ -64,7 +64,7 @@ public final class ModelIKRuntime
 
         Map<String, BoneConstraint> boneLimits = ModelConstraintsRuntime.getBones(instance);
 
-        ModelIKApplier.apply(model, chains, controllerTargets, poseFixByBone, boneLimits);
+        ModelIKApplier.apply(model, chains, controllerTargets, poleTargets, poseFixByBone, boneLimits);
     }
 
     public static List<String> getControllers(ModelInstance instance)
@@ -94,6 +94,40 @@ public final class ModelIKRuntime
             if (chain != null && chain.target() != null && !chain.target().isEmpty())
             {
                 unique.add(chain.target());
+            }
+        }
+
+        return unique.isEmpty() ? java.util.Collections.emptyList() : new ArrayList<>(unique);
+    }
+
+    /** The pole-target bones of all enabled chains that have one — the film keys a pole anchor sheet off each. */
+    public static List<String> getPoleControllers(ModelInstance instance)
+    {
+        if (instance == null || instance.model == null)
+        {
+            return java.util.Collections.emptyList();
+        }
+
+        IModel model = instance.model;
+
+        ModelIKCache.Compiled compiled = null;
+        if (instance.form instanceof ModelForm form && form.ik.get() instanceof MapType map)
+        {
+            compiled = ModelIKCache.getFromData(model, map);
+        }
+
+        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
+        {
+            return java.util.Collections.emptyList();
+        }
+
+        Set<String> unique = new LinkedHashSet<>();
+
+        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        {
+            if (chain != null && chain.pole() && chain.poleTarget() != null && !chain.poleTarget().isEmpty())
+            {
+                unique.add(chain.poleTarget());
             }
         }
 

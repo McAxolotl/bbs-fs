@@ -757,6 +757,10 @@ public class UIReplaysEditor extends UIElement {
                 UIReplaysEditorUtils.addIKTargetSheets(modelForm, this.replay.properties, ikSheets);
                 orderedFormSheets.addAll(ikSheets);
 
+                List<UIKeyframeSheet> poleSheets = new ArrayList<>();
+                UIReplaysEditorUtils.addPoleTargetSheets(modelForm, this.replay.properties, poleSheets);
+                orderedFormSheets.addAll(poleSheets);
+
                 List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
                 orderedFormSheets.addAll(physicsSheets);

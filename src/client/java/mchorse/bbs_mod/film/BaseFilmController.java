@@ -780,7 +780,15 @@ public abstract class BaseFilmController
 
             if (ikPath != null)
             {
-                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, true);
+                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, TargetKind.IK);
+                continue;
+            }
+
+            PerLimbService.PoleTargetPath polePath = PerLimbService.parsePoleTargetPath(id);
+
+            if (polePath != null)
+            {
+                this.applyOverride(root, polePath.formPath(), polePath.controller(), channel, tick, transition, TargetKind.POLE);
                 continue;
             }
 
@@ -788,12 +796,17 @@ public abstract class BaseFilmController
 
             if (physicsPath != null)
             {
-                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, false);
+                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, TargetKind.PHYSICS);
             }
         }
     }
 
-    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, boolean isIK)
+    private enum TargetKind
+    {
+        IK, POLE, PHYSICS
+    }
+
+    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind)
     {
         Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -803,7 +816,13 @@ public abstract class BaseFilmController
 
             if (position != null)
             {
-                Map<String, Vector3f> overrides = isIK ? modelForm.ikTargetOverrides : modelForm.physicsTargetOverrides;
+                Map<String, Vector3f> overrides = switch (kind)
+                {
+                    case IK -> modelForm.ikTargetOverrides;
+                    case POLE -> modelForm.poleTargetOverrides;
+                    case PHYSICS -> modelForm.physicsTargetOverrides;
+                };
+
                 overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
             }
         }
@@ -843,6 +862,7 @@ public abstract class BaseFilmController
         if (form instanceof ModelForm modelForm)
         {
             modelForm.ikTargetOverrides.clear();
+            modelForm.poleTargetOverrides.clear();
             modelForm.physicsTargetOverrides.clear();
         }
 
