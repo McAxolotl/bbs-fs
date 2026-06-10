@@ -731,16 +731,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     protected void renderGrid(UIContext context)
     {
         Area area = this.keyframes.graphArea;
-        int mult = this.keyframes.getXAxis().getMult();
         int ht = (int) this.keyframes.fromGraphX(area.x);
         int duration = this.keyframes.getDuration();
 
         TimelineRulerRenderer.render(
             context,
             area,
-            mult,
             Math.max(ht, 0),
-            duration,
             duration,
             this.keyframes::toGraphX,
             TimeUtils::formatTime,
