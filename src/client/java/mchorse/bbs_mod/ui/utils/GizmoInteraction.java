@@ -150,6 +150,16 @@ public class GizmoInteraction
         this.updateSphereHover(context);
     }
 
+    /**
+     * Composite the trackball sphere's hover highlight over this viewport. Call
+     * from the host's GUI overlay pass (after its own stencil hover), so the
+     * sphere reads with the same screen-space highlight as bones and handles.
+     */
+    public void renderSphereHighlight(UIContext context)
+    {
+        Gizmo.INSTANCE.renderSphereHighlight(context, this.viewport.getGizmoProjection(), this.viewport.getGizmoArea());
+    }
+
     public void stop()
     {
         if (this.gizmoActive)

@@ -635,6 +635,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         super.render(context);
 
         this.renderGizmoHover(context);
+
+        if (this.canShowGizmo())
+        {
+            this.gizmo.renderSphereHighlight(context);
+        }
     }
 
     /**

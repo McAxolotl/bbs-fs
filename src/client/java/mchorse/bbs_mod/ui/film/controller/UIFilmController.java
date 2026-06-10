@@ -1260,6 +1260,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         if (this.canShowGizmo())
         {
             this.gizmo.update(context);
+            this.gizmo.renderSphereHighlight(context);
         }
 
         if (!this.stencil.hasPicked())
