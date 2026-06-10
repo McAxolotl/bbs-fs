@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.cubic.ik;
 
+import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
@@ -163,15 +165,18 @@ final class ModelIKApplier
 
     /**
      * Builds per-bone rotation limits for the chain's directed bones (root..tip-1),
-     * matching the renderer's reconstruction so the clamp is exact. Returns
-     * {@code null} when no bone in the chain is constrained (unconstrained fast
-     * path) or when the model is not a cubic {@link Model}. Every returned entry
-     * carries the bone's local rest direction (needed to advance the parent frame
-     * during the clamp pass); {@code enabled} is set only where a constraint exists.
+     * matching the renderer's reconstruction so the clamp is exact. The solver math
+     * is in degrees and the {@link BoneConstraint} limits are degrees, so the same
+     * path serves cubic {@link Model} and {@link BOBJModel} — only the rest
+     * direction differs (each taken the way that model's renderer takes it).
+     * Returns {@code null} when no bone in the chain is constrained (fast path) or
+     * the model is neither type. Every entry carries the bone's local rest
+     * direction (needed to advance the parent frame during the clamp pass);
+     * {@code enabled} is set only where a constraint exists.
      */
     private static IKSolver.Limit[] buildLimits(IModel model, List<String> chainIds, Map<String, BoneConstraint> boneLimits)
     {
-        if (boneLimits == null || boneLimits.isEmpty() || !(model instanceof Model cubic))
+        if (boneLimits == null || boneLimits.isEmpty())
         {
             return null;
         }
@@ -206,22 +211,12 @@ final class ModelIKApplier
         for (int i = 0; i < directed; i++)
         {
             String id = chainIds.get(i);
-            ModelGroup bone = cubic.getGroup(id);
-            ModelGroup child = cubic.getGroup(chainIds.get(i + 1));
+            Vector3f restDir = restDirection(model, chainIds, i);
 
-            if (bone == null || child == null)
+            if (restDir == null)
             {
                 return null;
             }
-
-            Vector3f restDir = new Vector3f(child.initial.translate).sub(bone.initial.translate);
-
-            if (restDir.lengthSquared() < 1.0e-12f)
-            {
-                restDir.set(0F, -1F, 0F);
-            }
-
-            restDir.normalize();
 
             BoneConstraint c = boneLimits.get(id);
             boolean enabled = c != null && c.enabled();
@@ -232,6 +227,58 @@ final class ModelIKApplier
         }
 
         return limits;
+    }
+
+    /**
+     * The bone's local rest direction towards its child, taken exactly as that
+     * model's renderer takes it (cubic: pivot difference; BOBJ: the renderer's
+     * own {@link ModelRotationBlender#getBobjRestDirection}), so the limit clamp
+     * reconstructs the same swing the renderer applies.
+     */
+    private static Vector3f restDirection(IModel model, List<String> chainIds, int i)
+    {
+        String id = chainIds.get(i);
+        String childId = chainIds.get(i + 1);
+
+        if (model instanceof Model cubic)
+        {
+            ModelGroup bone = cubic.getGroup(id);
+            ModelGroup child = cubic.getGroup(childId);
+
+            if (bone == null || child == null)
+            {
+                return null;
+            }
+
+            return normalizeRest(new Vector3f(child.initial.translate).sub(bone.initial.translate));
+        }
+
+        if (model instanceof BOBJModel bobj)
+        {
+            BOBJBone bone = bobj.getArmature().bones.get(id);
+            BOBJBone child = bobj.getArmature().bones.get(childId);
+
+            if (bone == null)
+            {
+                return null;
+            }
+
+            return normalizeRest(ModelRotationBlender.getBobjRestDirection(bobj, bone, child, chainIds, i));
+        }
+
+        return null;
+    }
+
+    private static Vector3f normalizeRest(Vector3f restDir)
+    {
+        if (restDir.lengthSquared() < 1.0e-12f)
+        {
+            restDir.set(0F, -1F, 0F);
+        }
+
+        restDir.normalize();
+
+        return restDir;
     }
 
     private static float getChainPoseFix(ModelIKCache.CompiledChain chain, Map<String, Float> poseFixByBone)
