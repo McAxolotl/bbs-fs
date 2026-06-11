@@ -3,31 +3,23 @@ package mchorse.bbs_mod.resources.packs;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.utils.DataPath;
+import mchorse.bbs_mod.utils.StringUtils;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collection;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 public class InternalAssetsSourcePack implements ISourcePack
 {
     private String prefix;
     private String internalPrefix;
     private Class clazz;
-
-    private boolean isForge;
-
-    private List<String> zipCache = new ArrayList<>();
 
     public InternalAssetsSourcePack()
     {
@@ -39,15 +31,6 @@ public class InternalAssetsSourcePack implements ISourcePack
         this.prefix = prefix;
         this.internalPrefix = internalPrefix;
         this.clazz = clazz;
-
-        try
-        {
-            Class.forName("net.minecraftforge.common.MinecraftForge");
-
-            isForge = true;
-        }
-        catch (Exception e)
-        {}
     }
 
     @Override
@@ -83,176 +66,58 @@ public class InternalAssetsSourcePack implements ISourcePack
     @Override
     public void getLinksFromPath(Collection<Link> links, Link link, boolean recursive)
     {
-        if (isForge)
-        {
-            this.stupidWorkaround(links, link, recursive);
+        ModContainer container = FabricLoader.getInstance().getModContainer(BBSMod.MOD_ID).orElse(null);
 
-            return;
-        }
-
-        URL url = this.clazz.getProtectionDomain().getCodeSource().getLocation();
-
-        try
-        {
-            File file = Paths.get(url.toURI()).toFile();
-
-            if (file.isDirectory())
-            {
-                this.getLinksFromFolder(this.getResourcesFolder(file), link, links, recursive);
-            }
-            else if (file.getName().endsWith(".jar") || file.getName().endsWith(".zip"))
-            {
-                this.getLinksFromZipFile(file, link, links, recursive);
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-
-            this.stupidWorkaround(links, link, recursive);
-        }
-    }
-
-    private void stupidWorkaround(Collection<Link> links, Link link, boolean recursive)
-    {
-        /* Forge throws some exception due to the way Connector works, it can't find the
-         * jar file for some reason... so I have to resort to such ugly piece of code for
-         * it to work correctly. I should probably ask on Connector's Discord what I can do,
-         * but whatever for now... */
-        String version = "";
-
-        for (ModContainer allMod : FabricLoader.getInstance().getAllMods())
-        {
-            if (allMod.getMetadata().getId().equals(BBSMod.MOD_ID))
-            {
-                version = allMod.getMetadata().getVersion().getFriendlyString();
-
-                break;
-            }
-        }
-
-        if (version.isEmpty())
+        if (container == null)
         {
             return;
         }
 
-        File mods = new File(FabricLoader.getInstance().getGameDir().toFile(), "mods");
+        String path = link.path;
 
-        if (mods.isDirectory())
+        if (path.endsWith("/"))
         {
-            for (File file : mods.listFiles())
-            {
-                String name = file.getName();
+            path = path.substring(0, path.length() - 1);
+        }
 
-                if (name.startsWith("bbs") && name.contains(version) && name.endsWith(".jar"))
+        /* Walk the mod's resource roots through NIO so it works regardless of the
+         * underlying file system. Reading the jar as a java.io.File (via Path.toFile())
+         * breaks on Forge/NeoForge, where the mod is mounted in a non-default (union)
+         * file system. In a development environment getRootPaths() also exposes the
+         * separate classes/resources output folders, so no special casing is needed. */
+        for (Path root : container.getRootPaths())
+        {
+            Path folder = root.resolve(this.internalPrefix + "/" + path);
+
+            if (Files.isDirectory(folder))
+            {
+                this.getLinksFromPath(folder, links, path, recursive ? 9999 : 1);
+            }
+        }
+    }
+
+    private void getLinksFromPath(Path folder, Collection<Link> links, String prefix, int depth)
+    {
+        depth -= 1;
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder))
+        {
+            for (Path file : stream)
+            {
+                boolean directory = Files.isDirectory(file);
+                String path = StringUtils.combinePaths(prefix, file.getFileName().toString());
+
+                if (directory && depth > 0)
                 {
-                    this.getLinksFromZipFile(file, link, links, recursive);
+                    this.getLinksFromPath(file, links, path, depth);
                 }
-            }
-        }
-    }
 
-    /**
-     * Get resources folder. In case this is run in development environment,
-     * the project can be compiled to two folders "classes/" and "resources/."
-     * To get the right folder, this method checks if the folder with
-     * assets exists.
-     */
-    private File getResourcesFolder(File file)
-    {
-        if (new File(file, this.internalPrefix).exists())
-        {
-            return file;
-        }
-
-        for (File subFile : file.getParentFile().listFiles())
-        {
-            if (new File(subFile, this.internalPrefix).exists())
-            {
-                return subFile;
-            }
-        }
-
-        /* In development environment, the assets are separate from classes, and for this
-         * reason for the files to be found, I have to use this ugly workaround. Also, I
-         * don't think it works outside of IntelliJ, so RIP... */
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
-        {
-            File resources = new File(file.getParentFile().getParentFile().getParentFile(), "resources/client/");
-
-            if (resources.isDirectory())
-            {
-                return resources;
-            }
-        }
-
-        return file;
-    }
-
-    private void getLinksFromFolder(File folder, Link link, Collection<Link> links, boolean recursive)
-    {
-        File file = new File(folder, this.internalPrefix + "/" + link.path);
-
-        ExternalAssetsSourcePack.getLinksFromPathRecursively(file, links, link, link.path, recursive ? 9999 : 1);
-    }
-
-    /* Zip handling */
-
-    private void getLinksFromZipFile(File file, Link link, Collection<Link> links, boolean recursive)
-    {
-        /**
-         * Zip files can be big sometimes, so there is no point to
-         * read the zip file every time...
-         */
-        try (ZipFile zipFile = new ZipFile(file))
-        {
-            if (this.zipCache.isEmpty())
-            {
-                Enumeration<? extends ZipEntry> it = zipFile.entries();
-
-                while (it.hasMoreElements())
-                {
-                    String name = it.nextElement().getName();
-
-                    if (name.startsWith(this.internalPrefix))
-                    {
-                        this.zipCache.add(name);
-                    }
-                }
+                links.add(new Link(this.prefix, path + (directory ? "/" : "")));
             }
         }
         catch (IOException e)
         {
             e.printStackTrace();
-        }
-
-        this.handleLinksFromZipFile(link, links, recursive);
-    }
-
-    private void handleLinksFromZipFile(Link link, Collection<Link> links, boolean recursive)
-    {
-        DataPath assetsPath = new DataPath(this.internalPrefix + "/");
-
-        for (String zipName : this.zipCache)
-        {
-            DataPath zipPath = new DataPath(zipName);
-            DataPath fullPath = new DataPath(assetsPath + "/" + link.path);
-
-            if (!zipPath.equals(fullPath) && zipPath.startsWith(fullPath))
-            {
-                for (int i = 0; i < assetsPath.size(); i++)
-                {
-                    zipPath.strings.remove(0);
-                    fullPath.strings.remove(0);
-                }
-
-                if (!recursive && zipPath.size() != fullPath.size() + 1)
-                {
-                    continue;
-                }
-
-                links.add(new Link(this.prefix, zipPath + (zipPath.folder ? "/" : "")));
-            }
         }
     }
 }
