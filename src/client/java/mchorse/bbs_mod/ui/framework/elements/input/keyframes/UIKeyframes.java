@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import mchorse.bbs_mod.BBSSettings;
@@ -283,15 +284,15 @@ public class UIKeyframes extends UIElement
 
             if (factory instanceof Vector3fKeyframeFactory)
             {
-                org.joml.Vector3f v1 = (org.joml.Vector3f) kf.getValue();
-                org.joml.Vector3f v2 = (org.joml.Vector3f) prevKf.getValue();
-                org.joml.Vector3f diff = new org.joml.Vector3f(v1).sub(v2);
+                Vector3f v1 = (org.joml.Vector3f) kf.getValue();
+                Vector3f v2 = (org.joml.Vector3f) prevKf.getValue();
+                Vector3f diff = new Vector3f(v1).sub(v2);
 
                 selected.remove(index);
 
                 for (Keyframe keyframe : selected)
                 {
-                    keyframe.setValue(new org.joml.Vector3f((org.joml.Vector3f) keyframe.getValue()).add(diff));
+                    keyframe.setValue(new Vector3f((org.joml.Vector3f) keyframe.getValue()).add(diff));
                 }
             }
             else
