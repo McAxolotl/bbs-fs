@@ -15,6 +15,7 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
@@ -348,6 +349,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
             ModelIKDebug.render(newStack, model.model, ikMap, "");
+        }
+
+        if (stencilMap == null && ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        {
+            ModelPhysicsDebug.render(newStack, model.model, physicsMap, "");
         }
 
         gameRenderer.getLightmapTextureManager().disable();
@@ -696,6 +702,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         if (ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof mchorse.bbs_mod.data.types.MapType ikMap)
         {
             ModelIKDebug.renderStencil(context.stack, model.model, ikMap, context.stencilMap, this.form);
+        }
+
+        if (ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof mchorse.bbs_mod.data.types.MapType physicsMap)
+        {
+            ModelPhysicsDebug.renderStencil(context.stack, model.model, physicsMap, context.stencilMap, this.form);
         }
     }
 

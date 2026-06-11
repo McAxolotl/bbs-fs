@@ -214,7 +214,7 @@ public class UIKeys
     public static final IKey CONTEXT_MENU_KEY_CATEGORY = L10n.lang("bbs.ui.context.key_category");
     public static final IKey DASHBOARD_CATEGORY = L10n.lang("bbs.ui.dashboard.category");
     public static final IKey DASHBOARD_CONTEXT_TOGGLE_VISIBILITY = L10n.lang("bbs.ui.dashboard.context.toggle_visibility");
-    public static final IKey DASHBOARD_KEYS_TOGGLE_IK_DEBUG = L10n.lang("bbs.ui.dashboard.keys.toggle_ik_debug");
+    public static final IKey DASHBOARD_KEYS_TOGGLE_DEBUG = L10n.lang("bbs.ui.dashboard.keys.toggle_debug");
     public static final IKey DASHBOARD_OPTIFINE_EW_DESCRIPTION = L10n.lang("bbs.ui.dashboard.optifine_ew-description");
     public static final IKey DASHBOARD_OPTIFINE_EW_TITLE = L10n.lang("bbs.ui.dashboard.optifine_ew-title");
     public static final IKey ENGINE_KEYSTROKES_POSITION_AUTO = L10n.lang("bbs.keystrokes_position.auto");
@@ -454,6 +454,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_SAVE = L10n.lang("bbs.ui.forms.editors.model.ik.context.save");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_NAME = L10n.lang("bbs.ui.forms.editors.model.ik.context.name");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_TITLE = L10n.lang("bbs.ui.forms.editors.model.physics.title");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_DEBUG = L10n.lang("bbs.ui.forms.editors.model.physics.debug");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_CHAINS = L10n.lang("bbs.ui.forms.editors.model.physics.chains");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.physics.settings");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_ENABLED = L10n.lang("bbs.ui.forms.editors.model.physics.enabled");
