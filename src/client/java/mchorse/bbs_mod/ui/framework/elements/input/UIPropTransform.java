@@ -139,8 +139,6 @@ public class UIPropTransform extends UITransform
     private float arcballRadius;
     /** Whether the arcball anchor state is valid (guards the re-anchor fold). */
     private boolean arcballAnchored;
-    /** Whether {@link #dragStartRotateDeg} should be written back to {@code rotate2} instead of {@code rotate}. */
-    private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
     private RotateKind rotateKind = RotateKind.AXIS;
     /**
@@ -399,7 +397,6 @@ public class UIPropTransform extends UITransform
             this.fillT(0, 0, 0);
             this.fillS(1, 1, 1);
             this.fillR(0, 0, 0);
-            this.fillR2(0, 0, 0);
 
             return;
         }
@@ -420,7 +417,6 @@ public class UIPropTransform extends UITransform
         this.fillT(transform.translate.x, transform.translate.y, transform.translate.z);
         this.fillS(transform.scale.x, transform.scale.y, transform.scale.z);
         this.fillR(MathUtils.toDeg(transform.rotate.x), MathUtils.toDeg(transform.rotate.y), MathUtils.toDeg(transform.rotate.z));
-        this.fillR2(MathUtils.toDeg(transform.rotate2.x), MathUtils.toDeg(transform.rotate2.y), MathUtils.toDeg(transform.rotate2.z));
     }
 
     public void enableMode(int mode)
@@ -1117,8 +1113,7 @@ public class UIPropTransform extends UITransform
      * projection this stays accurate when the ring faces the camera (where the
      * plane hit degenerates), and the per-frame deltas are unwrapped and
      * accumulated without limit so the user can wind several full turns in
-     * either direction. When {@code local && gizmos enabled} the change goes
-     * into {@code rotate2}, otherwise into {@code rotate}.
+     * either direction.
      */
     private void applyScreenRotate(int mouseX, int mouseY)
     {
@@ -1159,8 +1154,7 @@ public class UIPropTransform extends UITransform
             case Z: rz = (float) this.snapGizmoValue(rz); break;
         }
 
-        if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     /**
@@ -1447,15 +1441,12 @@ public class UIPropTransform extends UITransform
      */
     private void beginRayRotateTrackball(int mouseX, int mouseY)
     {
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
         /* Axes come from the cached start orientation, not the live one, so the
          * screen right/up directions stay fixed for the whole drag. This also
          * makes the call idempotent: a cursor wrap re-invokes it, and rebuilding
          * from the unchanged cache yields the same axes (and never disturbs the
          * accumulated offset). */
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        Matrix3f parentInverse = this.computeParentInverse(source);
+        Matrix3f parentInverse = this.computeParentInverse(this.cache.rotate);
 
         if (parentInverse == null)
         {
@@ -1525,7 +1516,7 @@ public class UIPropTransform extends UITransform
      */
     private void updateTrackballRotation()
     {
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Vector3f source = this.cache.rotate;
 
         Matrix3f startRotation = new Matrix3f()
             .rotationZ(source.z)
@@ -1544,13 +1535,12 @@ public class UIPropTransform extends UITransform
             .mul(startRotation)
             .getEulerAnglesZYX(new Vector3f());
 
-        Vector3f live = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f live = this.transform.rotate;
         float rx = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(live.x));
         float ry = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(live.y));
         float rz = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(live.z));
 
-        if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     /**
@@ -1590,10 +1580,7 @@ public class UIPropTransform extends UITransform
             this.arcballAnchored = false;
         }
 
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        Matrix3f parentInverse = this.computeParentInverse(source);
+        Matrix3f parentInverse = this.computeParentInverse(this.cache.rotate);
         float radius = Gizmo.INSTANCE.getSphereWorldRadius();
 
         if (parentInverse == null || radius <= 0F)
@@ -1712,7 +1699,7 @@ public class UIPropTransform extends UITransform
      */
     private void updateArcballRotation()
     {
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Vector3f source = this.cache.rotate;
 
         Matrix3f startRotation = new Matrix3f()
             .rotationZ(source.z)
@@ -1729,13 +1716,12 @@ public class UIPropTransform extends UITransform
             .mul(startRotation)
             .getEulerAnglesZYX(new Vector3f());
 
-        Vector3f live = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f live = this.transform.rotate;
         float rx = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(live.x));
         float ry = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(live.y));
         float rz = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(live.z));
 
-        if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     /**
@@ -1770,13 +1756,10 @@ public class UIPropTransform extends UITransform
         this.dragRotateSign = -1F;
         this.accumulatedRotateDeg = 0;
 
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
         /* Express the view axis once in the bone's parent frame; it stays
          * constant for the whole drag, while applyRayRotateView premultiplies
          * the live rotation by a turn about it. */
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-        Matrix3f parentInverse = this.computeParentInverse(source);
+        Matrix3f parentInverse = this.computeParentInverse(this.transform.rotate);
 
         if (parentInverse == null)
         {
@@ -1863,7 +1846,7 @@ public class UIPropTransform extends UITransform
 
         this.accumulatedRotateDeg += MathUtils.toDeg(angle);
 
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f source = this.transform.rotate;
 
         Matrix3f rotation = new Matrix3f()
             .rotationZ(source.z)
@@ -1879,8 +1862,7 @@ public class UIPropTransform extends UITransform
         float ry = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(source.y));
         float rz = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(source.z));
 
-        if (this.dragRotateGizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     private void beginRayRotate(int mouseX, int mouseY)
@@ -1935,9 +1917,7 @@ public class UIPropTransform extends UITransform
         this.initialDragRingVec.set(this.computeStartRingVec(mouseX, mouseY, axisDir));
         this.accumulatedRotateDeg = 0;
 
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f source = this.transform.rotate;
 
         this.dragStartRotateDeg.set(
             MathUtils.toDeg(source.x),
@@ -1961,7 +1941,7 @@ public class UIPropTransform extends UITransform
         }
         else if (this.mode == 2)
         {
-            return this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
+            return this.transform.rotate;
         }
 
         return this.transform.translate;
@@ -1971,11 +1951,7 @@ public class UIPropTransform extends UITransform
     {
         if (this.mode == 0 || fully) this.setT(null, this.cache.translate.x, this.cache.translate.y, this.cache.translate.z);
         if (this.mode == 1 || fully) this.setS(null, this.cache.scale.x, this.cache.scale.y, this.cache.scale.z);
-        if (this.mode == 2 || fully)
-        {
-            this.setR(null, MathUtils.toDeg(this.cache.rotate.x), MathUtils.toDeg(this.cache.rotate.y), MathUtils.toDeg(this.cache.rotate.z));
-            this.setR2(null, MathUtils.toDeg(this.cache.rotate2.x), MathUtils.toDeg(this.cache.rotate2.y), MathUtils.toDeg(this.cache.rotate2.z));
-        }
+        if (this.mode == 2 || fully) this.setR(null, MathUtils.toDeg(this.cache.rotate.x), MathUtils.toDeg(this.cache.rotate.y), MathUtils.toDeg(this.cache.rotate.z));
     }
 
     private void disable()
@@ -2381,8 +2357,7 @@ public class UIPropTransform extends UITransform
 
     private void applyNumericRotate(double value)
     {
-        boolean gizmoSpace = this.local && BBSSettings.gizmos.get();
-        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Vector3f source = this.cache.rotate;
 
         float rx = MathUtils.toDeg(source.x);
         float ry = MathUtils.toDeg(source.y);
@@ -2392,8 +2367,7 @@ public class UIPropTransform extends UITransform
         if (this.axis == Axis.Y || this.axis2 == Axis.Y) ry += value;
         if (this.axis == Axis.Z || this.axis2 == Axis.Z) rz += value;
 
-        if (gizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     private void applyNumericView(double value)
@@ -2420,8 +2394,7 @@ public class UIPropTransform extends UITransform
             return;
         }
 
-        boolean gizmoSpace = this.dragRotateGizmoSpace;
-        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Vector3f source = this.cache.rotate;
 
         Vector3f euler = new Matrix3f()
             .rotation(MathUtils.toRad((float) degrees), localAxis)
@@ -2432,8 +2405,7 @@ public class UIPropTransform extends UITransform
         float ry = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(source.y));
         float rz = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(source.z));
 
-        if (gizmoSpace) this.setR2(null, rx, ry, rz);
-        else this.setR(null, rx, ry, rz);
+        this.setR(null, rx, ry, rz);
     }
 
     @Override
@@ -2518,19 +2490,6 @@ public class UIPropTransform extends UITransform
 
         this.preCallback();
         this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
-        this.postCallback();
-    }
-
-    @Override
-    public void setR2(Axis axis, double x, double y, double z)
-    {
-        if (this.transform == null)
-        {
-            return;
-        }
-
-        this.preCallback();
-        this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
         this.postCallback();
     }
 
@@ -2701,11 +2660,7 @@ public class UIPropTransform extends UITransform
 
                     if (this.mode == 0) this.setT(null, vector3f.x, vector3f.y, vector3f.z);
                     if (this.mode == 1) this.setS(null, vector3f.x, vector3f.y, vector3f.z);
-                    if (this.mode == 2)
-                    {
-                        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, vector3f.x, vector3f.y, vector3f.z);
-                        else this.setR(null, vector3f.x, vector3f.y, vector3f.z);
-                    }
+                    if (this.mode == 2) this.setR(null, vector3f.x, vector3f.y, vector3f.z);
                 }
             }
 
