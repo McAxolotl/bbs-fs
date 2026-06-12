@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -176,15 +177,11 @@ public class UIPropTransform extends UITransform
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.space = BBSSettings.transformLocalDefault.get() ? TransformSpace.LOCAL : TransformSpace.GLOBAL;
+        this.space = BBSSettings.transformLocalDefault.get() ? TransformSpace.LOCAL : TransformSpace.PARENT;
 
         this.context((menu) ->
         {
-            menu.action(
-                this.isLocal() ? Icons.FULLSCREEN : Icons.MINIMIZE,
-                this.isLocal() ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL,
-                this::toggleLocal
-            );
+            menu.action(spaceIcon(this.space.next()), switchSpaceLabel(this.space.next()), this::toggleLocal);
 
             menu.actions.add(0, menu.actions.remove(menu.actions.size() - 1));
         });
@@ -235,13 +232,34 @@ public class UIPropTransform extends UITransform
         return this.space == TransformSpace.LOCAL;
     }
 
+    public TransformSpace getSpace()
+    {
+        return this.space;
+    }
+
+    private static Icon spaceIcon(TransformSpace space)
+    {
+        if (space == TransformSpace.LOCAL) return Icons.MINIMIZE;
+        if (space == TransformSpace.WORLD) return Icons.GLOBE;
+
+        return Icons.ALL_DIRECTIONS;
+    }
+
+    private static IKey switchSpaceLabel(TransformSpace space)
+    {
+        if (space == TransformSpace.LOCAL) return UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL;
+        if (space == TransformSpace.WORLD) return UIKeys.TRANSFORMS_CONTEXT_SWITCH_WORLD;
+
+        return UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL;
+    }
+
     private void toggleLocal()
     {
-        this.space = this.isLocal() ? TransformSpace.GLOBAL : TransformSpace.LOCAL;
+        this.space = this.space.next();
 
-        /* In local mode the translate trackpads accumulate deltas, so their
-         * values drift from the canonical ones — resync on the way out. */
-        if (!this.isLocal() && this.transform != null)
+        /* In the delta spaces the translate trackpads accumulate offsets, so
+         * their values drift from the canonical ones — resync on the way out. */
+        if (this.space == TransformSpace.PARENT && this.transform != null)
         {
             this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
         }
@@ -251,13 +269,13 @@ public class UIPropTransform extends UITransform
 
     private void updateLocalUI()
     {
-        boolean local = this.isLocal();
+        boolean delta = this.space != TransformSpace.PARENT;
 
-        this.tx.relative(local);
-        this.ty.relative(local);
-        this.tz.relative(local);
-        this.iconT.both(local ? Icons.MINIMIZE : Icons.ALL_DIRECTIONS);
-        this.iconT.tooltip(local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+        this.tx.relative(delta);
+        this.ty.relative(delta);
+        this.tz.relative(delta);
+        this.iconT.both(spaceIcon(this.space));
+        this.iconT.tooltip(switchSpaceLabel(this.space.next()));
     }
 
     /**
@@ -287,16 +305,18 @@ public class UIPropTransform extends UITransform
 
     /**
      * Unit direction (in {@code transform.translate} units) one unit of input
-     * moves along the given axis in the active space. In LOCAL the direction
-     * comes from the anchored ray basis when one is live (so typed amounts
-     * match the handles, renderer conventions included), else from the
-     * transform's own rotation; in GLOBAL it is the plain channel axis.
+     * moves along the given axis in the active space. The anchored ray basis is
+     * preferred when one is live (so typed amounts match the handles, renderer
+     * conventions included); without it LOCAL falls back to the transform's own
+     * rotation and WORLD to a freshly built drag's Jacobian. PARENT is the
+     * plain channel axis, which is also the last-resort fallback — exact
+     * wherever the parent frame is the world itself (e.g. model blocks).
      */
     private Vector3f spaceTranslateDir(Axis axis)
     {
         Vector3f dir = new Vector3f();
 
-        if (this.space == TransformSpace.LOCAL && this.transform != null)
+        if (this.space != TransformSpace.PARENT && this.transform != null)
         {
             if (this.drag != null && this.dragHasStart && this.mode == 0)
             {
@@ -305,10 +325,20 @@ public class UIPropTransform extends UITransform
 
             if (dir.lengthSquared() < 1.0E-12F)
             {
-                this.transform.createRotationMatrix().getColumn(axis.ordinal(), dir);
+                if (this.space == TransformSpace.LOCAL)
+                {
+                    this.transform.createRotationMatrix().getColumn(axis.ordinal(), dir);
+                }
+                else
+                {
+                    this.worldTranslateDir(axis, dir);
+                }
             }
 
-            return dir.normalize();
+            if (dir.lengthSquared() >= 1.0E-12F)
+            {
+                return dir.normalize();
+            }
         }
 
         return dir.set(
@@ -316,6 +346,26 @@ public class UIPropTransform extends UITransform
             axis == Axis.Y ? 1F : 0F,
             axis == Axis.Z ? 1F : 0F
         );
+    }
+
+    /** World axis mapped into translate units via a freshly built drag's Jacobian. */
+    private void worldTranslateDir(Axis axis, Vector3f dir)
+    {
+        GizmoDrag drag = this.getHotkeyDrag();
+
+        if (drag == null)
+        {
+            return;
+        }
+
+        Matrix3f inverse = new Matrix3f(drag.translateJacobian);
+
+        if (Math.abs(inverse.determinant()) < 1.0E-8F)
+        {
+            return;
+        }
+
+        inverse.invert().getColumn(axis.ordinal(), dir);
     }
 
     public UIPropTransform enableHotkeys()
@@ -1183,11 +1233,11 @@ public class UIPropTransform extends UITransform
 
         this.accumulatedRotateDeg += angleDeg;
 
-        /* LOCAL composes the whole accumulated sweep about the grabbed ring's
-         * parent-frame axis on top of the cached start orientation — the snap
-         * lands on whole degrees of the sweep, since after the decomposition
-         * no single euler channel corresponds to it. */
-        if (this.space == TransformSpace.LOCAL)
+        /* LOCAL and WORLD compose the whole accumulated sweep about the grabbed
+         * ring's parent-frame axis on top of the cached start orientation — the
+         * snap lands on whole degrees of the sweep, since after the
+         * decomposition no single euler channel corresponds to it. */
+        if (this.space != TransformSpace.PARENT)
         {
             this.applyAxisRotation(this.snapGizmoValue(this.accumulatedRotateDeg), this.rotateParentAxis);
 
@@ -1912,15 +1962,15 @@ public class UIPropTransform extends UITransform
 
     private void beginRayRotate(int mouseX, int mouseY)
     {
-        boolean localSpace = this.space == TransformSpace.LOCAL;
+        boolean composed = this.space != TransformSpace.PARENT;
 
-        /* GLOBAL turns the stored euler channel, so it needs the renderer's
+        /* PARENT turns the stored euler channel, so it needs the renderer's
          * actual channel axis (GizmoDrag.computeRotateAxes) — for cubic models
          * it differs in sign on X/Z from the visible arrows, because the
          * renderer post-multiplies by Ry(180°) after the bone's own rotation.
-         * LOCAL composes about the ring the user actually grabbed, so there
-         * the rendered gizmo axis is the right one by definition. */
-        Vector3f axisDir = (localSpace ? this.drag.gizmoWorldAxes : this.drag.rotateAxes).getColumn(this.axis.ordinal(), new Vector3f());
+         * LOCAL and WORLD compose about the ring the user actually grabbed, so
+         * there the rendered gizmo axis is the right one by definition. */
+        Vector3f axisDir = (composed ? this.drag.gizmoWorldAxes : this.drag.rotateAxes).getColumn(this.axis.ordinal(), new Vector3f());
 
         if (axisDir.lengthSquared() < 1.0E-8F)
         {
@@ -1963,7 +2013,7 @@ public class UIPropTransform extends UITransform
         this.initialDragRingVec.set(this.computeStartRingVec(mouseX, mouseY, axisDir));
         this.accumulatedRotateDeg = 0;
 
-        if (localSpace)
+        if (composed)
         {
             Matrix3f parentInverse = this.computeParentInverse(this.transform.rotate);
 
@@ -2413,18 +2463,24 @@ public class UIPropTransform extends UITransform
 
     private void applyNumericRotate(double value)
     {
-        if (this.space == TransformSpace.LOCAL)
+        if (this.space != TransformSpace.PARENT)
         {
             if (this.useRayDrag() && this.dragHasStart)
             {
                 this.applyAxisRotation(value, this.rotateParentAxis);
-            }
-            else
-            {
-                this.applyLocalBodyRotation(value, this.cache.rotate);
+
+                return;
             }
 
-            return;
+            if (this.space == TransformSpace.LOCAL)
+            {
+                this.applyLocalBodyRotation(value, this.cache.rotate);
+
+                return;
+            }
+
+            /* WORLD without a ray anchor has no world axis in reach; the channel
+             * add below stands in — exact wherever parent == world. */
         }
 
         Vector3f source = this.cache.rotate;
@@ -2521,14 +2577,14 @@ public class UIPropTransform extends UITransform
     }
 
     /**
-     * In local space the translate trackpads feed deltas ({@link UITrackpad#relative}),
-     * which move along the space's axis instead of setting the channel; the global
-     * mode keeps the plain absolute channel edit.
+     * In the delta spaces (LOCAL, WORLD) the translate trackpads feed deltas
+     * ({@link UITrackpad#relative}), which move along the space's axis instead
+     * of setting the channel; PARENT keeps the plain absolute channel edit.
      */
     @Override
     protected void internalSetT(double x, Axis axis)
     {
-        if (!this.isLocal())
+        if (this.space == TransformSpace.PARENT)
         {
             super.internalSetT(x, axis);
 
@@ -2688,7 +2744,11 @@ public class UIPropTransform extends UITransform
             return null;
         }
 
-        return (this.isLocal() ? UIKeys.TRANSFORMS_SPACE_LOCAL : UIKeys.TRANSFORMS_SPACE_GLOBAL).get();
+        IKey label = this.space == TransformSpace.LOCAL ? UIKeys.TRANSFORMS_SPACE_LOCAL
+            : this.space == TransformSpace.WORLD ? UIKeys.TRANSFORMS_SPACE_WORLD
+            : UIKeys.TRANSFORMS_SPACE_GLOBAL;
+
+        return label.get();
     }
 
     @Override
@@ -2790,7 +2850,7 @@ public class UIPropTransform extends UITransform
             }
         }
 
-        if (this.isLocal() && this.transform != null)
+        if (this.space != TransformSpace.PARENT && this.transform != null)
         {
             this.syncLocalTranslateFields();
         }
