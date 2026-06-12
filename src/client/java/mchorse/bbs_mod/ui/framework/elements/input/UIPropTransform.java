@@ -239,12 +239,50 @@ public class UIPropTransform extends UITransform
     {
         this.space = this.isLocal() ? TransformSpace.GLOBAL : TransformSpace.LOCAL;
 
+        /* In local mode the translate trackpads accumulate deltas, so their
+         * values drift from the canonical ones — resync on the way out. */
+        if (!this.isLocal() && this.transform != null)
+        {
+            this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
+        }
+
         this.updateLocalUI();
     }
 
     private void updateLocalUI()
     {
-        this.iconT.tooltip(this.isLocal() ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+        boolean local = this.isLocal();
+
+        this.tx.relative(local);
+        this.ty.relative(local);
+        this.tz.relative(local);
+        this.iconT.both(local ? Icons.MINIMIZE : Icons.ALL_DIRECTIONS);
+        this.iconT.tooltip(local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+    }
+
+    /**
+     * In local space the translate trackpads feed deltas, so mid-gesture their
+     * readout is the gesture's own accumulation (start value plus the dragged
+     * amount) and must not be touched — rewriting it would break the delta
+     * anchor. The moment no field is being dragged or typed into, pin them
+     * back to the canonical translate values.
+     */
+    private void syncLocalTranslateFields()
+    {
+        if (this.tx.isDragging() || this.ty.isDragging() || this.tz.isDragging()
+            || this.tx.textbox.isFocused() || this.ty.textbox.isFocused() || this.tz.textbox.isFocused())
+        {
+            return;
+        }
+
+        Vector3f t = this.transform.translate;
+
+        if (Math.abs(this.tx.getValue() - t.x) > 1.0E-6D
+            || Math.abs(this.ty.getValue() - t.y) > 1.0E-6D
+            || Math.abs(this.tz.getValue() - t.z) > 1.0E-6D)
+        {
+            this.fillT(t.x, t.y, t.z);
+        }
     }
 
     /**
@@ -2482,6 +2520,35 @@ public class UIPropTransform extends UITransform
         else rotation.rotateZ(rad);
     }
 
+    /**
+     * In local space the translate trackpads feed deltas ({@link UITrackpad#relative}),
+     * which move along the space's axis instead of setting the channel; the global
+     * mode keeps the plain absolute channel edit.
+     */
+    @Override
+    protected void internalSetT(double x, Axis axis)
+    {
+        if (!this.isLocal())
+        {
+            super.internalSetT(x, axis);
+
+            return;
+        }
+
+        if (this.transform == null)
+        {
+            return;
+        }
+
+        Vector3f offset = this.spaceTranslateDir(axis).mul((float) x);
+
+        this.setT(null,
+            this.transform.translate.x + offset.x,
+            this.transform.translate.y + offset.y,
+            this.transform.translate.z + offset.z
+        );
+    }
+
     private boolean shouldSnapGizmoValues()
     {
         return this.editing && this.mode == 2 && this.rotateKind == RotateKind.AXIS && !Window.isAltPressed() && !this.numericActive;
@@ -2721,6 +2788,11 @@ public class UIPropTransform extends UITransform
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
             }
+        }
+
+        if (this.isLocal() && this.transform != null)
+        {
+            this.syncLocalTranslateFields();
         }
 
         super.render(context);

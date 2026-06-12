@@ -219,7 +219,9 @@ public abstract class BaseFilmController
         if (matrix != null)
         {
             stack.push();
-            MatrixStackUtils.multiply(stack, matrix);
+            /* The full bone matrix carries the bone's scale, which the gizmo must
+             * not inherit — the form editor strips it the same way. */
+            MatrixStackUtils.multiply(stack, local ? MatrixStackUtils.stripScale(matrix) : matrix);
 
             if (stencilMap == null)
             {
