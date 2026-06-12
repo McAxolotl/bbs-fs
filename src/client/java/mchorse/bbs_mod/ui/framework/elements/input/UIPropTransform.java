@@ -316,9 +316,20 @@ public class UIPropTransform extends UITransform
         return this.axis;
     }
 
+    public Axis getAxis2()
+    {
+        return this.axis2;
+    }
+
     public int getMode()
     {
         return this.mode;
+    }
+
+    /** Whether the active translate is the screen-space (view-plane) grab. */
+    public boolean isScreenTranslate()
+    {
+        return this.translateScreen;
     }
 
     /** Whether the active rotation is one of the sphere's kinds (trackball or arcball). */
