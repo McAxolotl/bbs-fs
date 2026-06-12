@@ -907,6 +907,7 @@
 	"bbs.ui.keyframes.context.copy": "Скопировать ключевые кадры",
 	"bbs.ui.keyframes.context.edit_track": "Отредактировать %s дорожку",
 	"bbs.ui.keyframes.context.exit_track": "Выйти из дорожки",
+	"bbs.ui.keyframes.context.flip": "Отразить ключевые кадры",
 	"bbs.ui.keyframes.context.maximize": "Увидеть все ключевые кадры",
 	"bbs.ui.keyframes.context.paste": "Вставить скопированные ключевые кадры",
 	"bbs.ui.keyframes.context.remove": "Удалить ключевой(ые) кадр(ы)",

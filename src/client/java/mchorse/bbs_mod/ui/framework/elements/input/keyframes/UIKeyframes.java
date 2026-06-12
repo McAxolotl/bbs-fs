@@ -163,6 +163,7 @@ public class UIKeyframes extends UIElement
 
             if (hasSelected)
             {
+                menu.action(Icons.EXCHANGE, UIKeys.KEYFRAMES_CONTEXT_FLIP, this::flipKeyframes);
                 menu.action(Icons.CONVERT, UIKeys.KEYFRAMES_CONTEXT_SPREAD, this::spreadKeyframes);
                 menu.action(Icons.OUTLINE_SPHERE, UIKeys.KEYFRAMES_CONTEXT_ROUND, () ->
                 {
@@ -237,6 +238,7 @@ public class UIKeyframes extends UIElement
         this.keys().register(Keys.KEYFRAMES_SELECT_PREV, () -> this.selectNextKeyframe(-1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SELECT_NEXT, () -> this.selectNextKeyframe(1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SPREAD, this::spreadKeyframes).category(category);
+        this.keys().register(Keys.KEYFRAMES_FLIP, this::flipKeyframes).category(category).active(canModify);
         this.keys().register(Keys.KEYFRAMES_ADJUST_VALUES, this::adjustValues).category(category);
     }
 
@@ -542,6 +544,57 @@ public class UIKeyframes extends UIElement
     public float getStackOffset()
     {
         return this.stackOffset;
+    }
+
+    /**
+     * Flip (mirror in time) currently selected keyframes around a pivot that is shared
+     * across every track. The pivot is the center of the selection's global tick range,
+     * so the flip preserves the timing relationships between tracks instead of mirroring
+     * each track around its own local center.
+     */
+    private void flipKeyframes()
+    {
+        /* Find the global tick range of the selection across all tracks */
+        float min = Float.MAX_VALUE;
+        float max = -Float.MAX_VALUE;
+
+        for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+        {
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                min = Math.min(min, keyframe.getTick());
+                max = Math.max(max, keyframe.getTick());
+            }
+        }
+
+        if (min > max)
+        {
+            return;
+        }
+
+        float pivot = min + max;
+
+        for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+        {
+            if (!sheet.selection.hasAny())
+            {
+                continue;
+            }
+
+            sheet.channel.preNotify();
+
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                keyframe.setTick(pivot - keyframe.getTick(), false);
+            }
+
+            sheet.channel.postNotify();
+
+            /* Re-sort the channel (the flip reverses the order) and re-sync the selection indices */
+            sheet.sort();
+        }
+
+        this.getGraph().pickSelected();
     }
 
     private void spreadKeyframes()
