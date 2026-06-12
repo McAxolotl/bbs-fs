@@ -7,15 +7,17 @@ import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.TransformSpace;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
-import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -174,21 +176,33 @@ public class UIPropTransform extends UITransform
 
     private UITransformHandler handler;
 
+    /* The spaces bar: one square icon per editing space, the active one carries
+     * the dashboard-style primary highlight. */
+    private UIElement spacesBar;
+    private UIIcon spaceParent;
+    private UIIcon spaceLocal;
+    private UIIcon spaceWorld;
+    private boolean spacesBarBackground;
+
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
         this.space = BBSSettings.transformLocalDefault.get() ? TransformSpace.LOCAL : TransformSpace.PARENT;
 
-        this.context((menu) ->
-        {
-            menu.action(spaceIcon(this.space.next()), switchSpaceLabel(this.space.next()), this::toggleLocal);
+        this.spaceParent = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.setSpace(TransformSpace.PARENT));
+        this.spaceParent.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL);
+        this.spaceLocal = new UIIcon(Icons.MINIMIZE, (b) -> this.setSpace(TransformSpace.LOCAL));
+        this.spaceLocal.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+        this.spaceWorld = new UIIcon(Icons.GLOBE, (b) -> this.setSpace(TransformSpace.WORLD));
+        this.spaceWorld.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_WORLD);
 
-            menu.actions.add(0, menu.actions.remove(menu.actions.size() - 1));
-        });
+        this.spacesBar = new UIElement();
+        this.spacesBar.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
+        this.spacesBar.add(this.spaceParent, this.spaceLocal, this.spaceWorld);
 
-        this.iconT.callback = (b) -> this.toggleLocal();
-        this.iconT.hoverColor = Colors.LIGHTEST_GRAY;
-        this.iconT.setEnabled(true);
+        this.prepend(this.spacesBar);
+        this.h(4 * UIConstants.CONTROL_HEIGHT);
+
         this.updateLocalUI();
 
         this.noCulling();
@@ -227,6 +241,14 @@ public class UIPropTransform extends UITransform
         return this;
     }
 
+    /** Give the spaces bar a backdrop — for hosts where the panel floats over the preview. */
+    public UIPropTransform barBackground()
+    {
+        this.spacesBarBackground = true;
+
+        return this;
+    }
+
     public boolean isLocal()
     {
         return this.space == TransformSpace.LOCAL;
@@ -237,25 +259,17 @@ public class UIPropTransform extends UITransform
         return this.space;
     }
 
-    private static Icon spaceIcon(TransformSpace space)
+    private UIIcon activeSpaceIcon()
     {
-        if (space == TransformSpace.LOCAL) return Icons.MINIMIZE;
-        if (space == TransformSpace.WORLD) return Icons.GLOBE;
+        if (this.space == TransformSpace.LOCAL) return this.spaceLocal;
+        if (this.space == TransformSpace.WORLD) return this.spaceWorld;
 
-        return Icons.ALL_DIRECTIONS;
+        return this.spaceParent;
     }
 
-    private static IKey switchSpaceLabel(TransformSpace space)
+    private void setSpace(TransformSpace space)
     {
-        if (space == TransformSpace.LOCAL) return UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL;
-        if (space == TransformSpace.WORLD) return UIKeys.TRANSFORMS_CONTEXT_SWITCH_WORLD;
-
-        return UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL;
-    }
-
-    private void toggleLocal()
-    {
-        this.space = this.space.next();
+        this.space = space;
 
         /* In the delta spaces the translate trackpads accumulate offsets, so
          * their values drift from the canonical ones — resync on the way out. */
@@ -267,6 +281,11 @@ public class UIPropTransform extends UITransform
         this.updateLocalUI();
     }
 
+    private void toggleLocal()
+    {
+        this.setSpace(this.space.next());
+    }
+
     private void updateLocalUI()
     {
         boolean delta = this.space != TransformSpace.PARENT;
@@ -274,8 +293,6 @@ public class UIPropTransform extends UITransform
         this.tx.relative(delta);
         this.ty.relative(delta);
         this.tz.relative(delta);
-        this.iconT.both(spaceIcon(this.space));
-        this.iconT.tooltip(switchSpaceLabel(this.space.next()));
     }
 
     /**
@@ -2854,6 +2871,13 @@ public class UIPropTransform extends UITransform
         {
             this.syncLocalTranslateFields();
         }
+
+        if (this.spacesBarBackground)
+        {
+            this.spacesBar.area.render(context.batcher, Colors.A50);
+        }
+
+        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area);
 
         super.render(context);
 
