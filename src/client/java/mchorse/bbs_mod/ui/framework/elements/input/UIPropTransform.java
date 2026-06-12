@@ -63,7 +63,9 @@ public class UIPropTransform extends UITransform
     private Transform cache = new Transform();
     private Timer checker = new Timer(30);
 
-    private TransformSpace space;
+    /** The space the per-instance UI (relative trackpads, field resync) was last
+     *  configured for — the space itself is the shared {@link BBSSettings#transformSpace}. */
+    private TransformSpace uiSpace;
 
     /* Ray-based drag state for translate mode */
     private GizmoDrag drag;
@@ -187,7 +189,7 @@ public class UIPropTransform extends UITransform
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.space = BBSSettings.transformLocalDefault.get() ? TransformSpace.LOCAL : TransformSpace.PARENT;
+        this.uiSpace = this.getSpace();
 
         this.spaceParent = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.setSpace(TransformSpace.PARENT));
         this.spaceParent.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL);
@@ -251,44 +253,40 @@ public class UIPropTransform extends UITransform
 
     public boolean isLocal()
     {
-        return this.space == TransformSpace.LOCAL;
+        return this.getSpace() == TransformSpace.LOCAL;
     }
 
+    /** The editing space is shared between every transform panel and persists with the settings. */
     public TransformSpace getSpace()
     {
-        return this.space;
+        TransformSpace[] values = TransformSpace.values();
+
+        return values[MathUtils.clamp(BBSSettings.transformSpace.get(), 0, values.length - 1)];
     }
 
     private UIIcon activeSpaceIcon()
     {
-        if (this.space == TransformSpace.LOCAL) return this.spaceLocal;
-        if (this.space == TransformSpace.WORLD) return this.spaceWorld;
+        TransformSpace space = this.getSpace();
+
+        if (space == TransformSpace.LOCAL) return this.spaceLocal;
+        if (space == TransformSpace.WORLD) return this.spaceWorld;
 
         return this.spaceParent;
     }
 
     private void setSpace(TransformSpace space)
     {
-        this.space = space;
-
-        /* In the delta spaces the translate trackpads accumulate offsets, so
-         * their values drift from the canonical ones — resync on the way out. */
-        if (this.space == TransformSpace.PARENT && this.transform != null)
-        {
-            this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
-        }
-
-        this.updateLocalUI();
+        BBSSettings.transformSpace.set(space.ordinal());
     }
 
     private void toggleLocal()
     {
-        this.setSpace(this.space.next());
+        this.setSpace(this.getSpace().next());
     }
 
     private void updateLocalUI()
     {
-        boolean delta = this.space != TransformSpace.PARENT;
+        boolean delta = this.getSpace() != TransformSpace.PARENT;
 
         this.tx.relative(delta);
         this.ty.relative(delta);
@@ -332,8 +330,9 @@ public class UIPropTransform extends UITransform
     private Vector3f spaceTranslateDir(Axis axis)
     {
         Vector3f dir = new Vector3f();
+        TransformSpace space = this.getSpace();
 
-        if (this.space != TransformSpace.PARENT && this.transform != null)
+        if (space != TransformSpace.PARENT && this.transform != null)
         {
             if (this.drag != null && this.dragHasStart && this.mode == 0)
             {
@@ -342,7 +341,7 @@ public class UIPropTransform extends UITransform
 
             if (dir.lengthSquared() < 1.0E-12F)
             {
-                if (this.space == TransformSpace.LOCAL)
+                if (space == TransformSpace.LOCAL)
                 {
                     this.transform.createRotationMatrix().getColumn(axis.ordinal(), dir);
                 }
@@ -1254,7 +1253,7 @@ public class UIPropTransform extends UITransform
          * ring's parent-frame axis on top of the cached start orientation — the
          * snap lands on whole degrees of the sweep, since after the
          * decomposition no single euler channel corresponds to it. */
-        if (this.space != TransformSpace.PARENT)
+        if (this.getSpace() != TransformSpace.PARENT)
         {
             this.applyAxisRotation(this.snapGizmoValue(this.accumulatedRotateDeg), this.rotateParentAxis);
 
@@ -1979,7 +1978,7 @@ public class UIPropTransform extends UITransform
 
     private void beginRayRotate(int mouseX, int mouseY)
     {
-        boolean composed = this.space != TransformSpace.PARENT;
+        boolean composed = this.getSpace() != TransformSpace.PARENT;
 
         /* PARENT turns the stored euler channel, so it needs the renderer's
          * actual channel axis (GizmoDrag.computeRotateAxes) — for cubic models
@@ -2480,7 +2479,9 @@ public class UIPropTransform extends UITransform
 
     private void applyNumericRotate(double value)
     {
-        if (this.space != TransformSpace.PARENT)
+        TransformSpace space = this.getSpace();
+
+        if (space != TransformSpace.PARENT)
         {
             if (this.useRayDrag() && this.dragHasStart)
             {
@@ -2489,7 +2490,7 @@ public class UIPropTransform extends UITransform
                 return;
             }
 
-            if (this.space == TransformSpace.LOCAL)
+            if (space == TransformSpace.LOCAL)
             {
                 this.applyLocalBodyRotation(value, this.cache.rotate);
 
@@ -2601,7 +2602,7 @@ public class UIPropTransform extends UITransform
     @Override
     protected void internalSetT(double x, Axis axis)
     {
-        if (this.space == TransformSpace.PARENT)
+        if (this.getSpace() == TransformSpace.PARENT)
         {
             super.internalSetT(x, axis);
 
@@ -2761,8 +2762,9 @@ public class UIPropTransform extends UITransform
             return null;
         }
 
-        IKey label = this.space == TransformSpace.LOCAL ? UIKeys.TRANSFORMS_SPACE_LOCAL
-            : this.space == TransformSpace.WORLD ? UIKeys.TRANSFORMS_SPACE_WORLD
+        TransformSpace space = this.getSpace();
+        IKey label = space == TransformSpace.LOCAL ? UIKeys.TRANSFORMS_SPACE_LOCAL
+            : space == TransformSpace.WORLD ? UIKeys.TRANSFORMS_SPACE_WORLD
             : UIKeys.TRANSFORMS_SPACE_GLOBAL;
 
         return label.get();
@@ -2830,7 +2832,7 @@ public class UIPropTransform extends UITransform
 
                     this.setT(null, vector.x + offset.x, vector.y + offset.y, vector.z + offset.z);
                 }
-                else if (this.mode == 2 && this.space == TransformSpace.LOCAL)
+                else if (this.mode == 2 && this.getSpace() == TransformSpace.LOCAL)
                 {
                     this.applyLocalBodyRotation(factor * dx, this.transform.rotate);
                 }
@@ -2867,7 +2869,23 @@ public class UIPropTransform extends UITransform
             }
         }
 
-        if (this.space != TransformSpace.PARENT && this.transform != null)
+        /* The space is shared between every transform panel: when another one
+         * (or the hotkey) switches it, this panel follows — landing back in
+         * PARENT also pins the delta-drifted fields to the canonical values. */
+        TransformSpace currentSpace = this.getSpace();
+
+        if (currentSpace != this.uiSpace)
+        {
+            if (currentSpace == TransformSpace.PARENT && this.transform != null)
+            {
+                this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
+            }
+
+            this.uiSpace = currentSpace;
+            this.updateLocalUI();
+        }
+
+        if (currentSpace != TransformSpace.PARENT && this.transform != null)
         {
             this.syncLocalTranslateFields();
         }

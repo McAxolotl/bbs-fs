@@ -51,7 +51,7 @@ public class BBSSettings {
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
-	public static ValueBoolean transformLocalDefault;
+	public static ValueInt transformSpace;
 	public static ValueBoolean transformHotkeys3dRay;
 	public static ValueOrder translateHotkeyOrder;
 	public static ValueOrder scaleHotkeyOrder;
@@ -423,7 +423,8 @@ public class BBSSettings {
 		rotate3dSphereColor = builder.getInt("rotate_3d_sphere_color", Colors.setA(Colors.WHITE, 0F)).colorAlpha();
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
-		transformLocalDefault = builder.getBoolean("transform_local_default", false);
+		transformSpace = builder.getInt("space", 0, 0, 2);
+		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);

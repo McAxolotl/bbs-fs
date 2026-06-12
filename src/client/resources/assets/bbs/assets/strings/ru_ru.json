@@ -37,8 +37,6 @@
 	"bbs.config.transformation.rotate_hide_rings-comment": "Если включено, в режиме вращения будут видны только 3D-сфера (если она включена), а кольца осей будут скрыты",
 	"bbs.config.transformation.hide_inactive_handles": "Скрывать неактивные элементы",
 	"bbs.config.transformation.hide_inactive_handles-comment": "Если включено, при захвате элемента гизмо все остальные элементы скрываются на время перетаскивания — остаётся только тот, который трансформируется; если выключено, гизмо никогда ничего не скрывает",
-	"bbs.config.transformation.transform_local_default": "Локальная трансформация по умолчанию",
-	"bbs.config.transformation.transform_local_default-comment": "Если включено, поля трансформации (поза, модель и т.д.) открываются в локальном пространстве, а не в глобальном. Переключение по Q по-прежнему доступно.",
 	"bbs.config.transformation.hotkeys_3d_ray": "3D-луч для R/G/S",
 	"bbs.config.transformation.hotkeys_3d_ray-comment": "Если включено, трансформация через горячие клавиши R/G/S работает по 3D-лучу, а не по экранному смещению влево/вправо",
 	"bbs.config.transformation.rotate_hotkey_order": "Очередь режимов вращения",

@@ -37,8 +37,6 @@
 	"bbs.config.transformation.rotate_hide_rings-comment": "When enabled, rotate mode will hide the axis rings and only show the 3D sphere (if enabled)",
 	"bbs.config.transformation.hide_inactive_handles": "Hide inactive handles",
 	"bbs.config.transformation.hide_inactive_handles-comment": "When enabled, grabbing a gizmo handle hides all the other handles for the duration of the drag, leaving only the one being transformed; when disabled, the gizmo never hides anything",
-	"bbs.config.transformation.transform_local_default": "Local transformation by default",
-	"bbs.config.transformation.transform_local_default-comment": "When enabled, transform fields (pose, model, etc.) start in local space instead of global. You can still toggle with Q.",
 	"bbs.config.transformation.hotkeys_3d_ray": "3D ray for R/G/S",
 	"bbs.config.transformation.hotkeys_3d_ray-comment": "When enabled, transformations started with R/G/S use a 3D ray instead of the old left/right screen-space drag",
 	"bbs.config.transformation.rotate_hotkey_order": "Rotation key cycle",
