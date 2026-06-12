@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
+import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -27,6 +28,8 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 public class UIPropTransform extends UITransform
@@ -423,35 +426,131 @@ public class UIPropTransform extends UITransform
     public void enableMode(int mode)
     {
         GizmoDrag drag = this.getHotkeyDrag();
+        boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
 
-        if (mode == Gizmo.Mode.ROTATE.ordinal() && BBSSettings.transformHotkeys3dRay.get() && drag != null)
+        /* G/S/R walk their handles in the user-configured order (the
+         * *_hotkey_order settings), wrapping past the end back to the first
+         * step. Steps whose handle is unavailable drop out: the ray-driven
+         * ones without a rendered gizmo, the sphere when it's turned off. */
+        HotkeyTarget target = this.nextHotkeyTarget(mode, ray);
+
+        if (target == HotkeyTarget.VIEW)
         {
-            boolean rotating = this.editing && this.mode == mode;
-            boolean sphere = BBSSettings.rotate3dSphere.get();
+            this.enableViewRotate(drag, true);
+        }
+        else if (target == HotkeyTarget.SPHERE)
+        {
+            this.enableSphereRotate(drag, true);
+        }
+        else if (target == HotkeyTarget.SCREEN)
+        {
+            this.enableScreenTranslate(drag, true);
+        }
+        else
+        {
+            this.enableHotkeyAxis(mode, target.axis, drag);
+        }
+    }
 
-            /* R walks the 3D rotation handles before falling through to the
-             * per-axis rings: screen-plane ring -> trackball sphere -> X/Y/Z,
-             * each skipped when its handle is turned off. The screen-plane ring
-             * is always available (it is excluded from "Hide rotation rings"). */
-            boolean wantView = !rotating;
-            boolean wantSphere = sphere && rotating && this.rotateKind == RotateKind.VIEW;
-
-            if (wantView)
-            {
-                this.enableViewRotate(drag, true);
-
-                return;
-            }
-
-            if (wantSphere)
-            {
-                this.enableSphereRotate(drag, true);
-
-                return;
-            }
+    /** The walk step the active edit corresponds to ({@code null} when not editing this mode). */
+    private HotkeyTarget currentHotkeyTarget(int mode)
+    {
+        if (!this.editing || this.mode != mode)
+        {
+            return null;
         }
 
-        this.enableMode(mode, null, null, drag);
+        if (this.rotateKind == RotateKind.VIEW) return HotkeyTarget.VIEW;
+        if (this.isSphereRotate()) return HotkeyTarget.SPHERE;
+        if (this.translateScreen) return HotkeyTarget.SCREEN;
+        if (this.axis == Axis.Y) return HotkeyTarget.Y;
+        if (this.axis == Axis.Z) return HotkeyTarget.Z;
+
+        return HotkeyTarget.X;
+    }
+
+    private HotkeyTarget nextHotkeyTarget(int mode, boolean ray)
+    {
+        ValueOrder order = mode == 0 ? BBSSettings.translateHotkeyOrder : (mode == 1 ? BBSSettings.scaleHotkeyOrder : BBSSettings.rotateHotkeyOrder);
+        List<HotkeyTarget> steps = new ArrayList<>();
+
+        for (String token : order.get())
+        {
+            HotkeyTarget target = HotkeyTarget.byToken(token);
+
+            if (target == null || (target.needsRay && !ray))
+            {
+                continue;
+            }
+
+            if (target == HotkeyTarget.SPHERE && !BBSSettings.rotate3dSphere.get())
+            {
+                continue;
+            }
+
+            steps.add(target);
+        }
+
+        if (steps.isEmpty())
+        {
+            return HotkeyTarget.X;
+        }
+
+        int index = steps.indexOf(this.currentHotkeyTarget(mode));
+
+        return steps.get((index + 1) % steps.size());
+    }
+
+    /**
+     * Start (or switch to) a hotkey-driven operation along a specific axis.
+     * Unlike the mouse path through {@link #enableMode(int, Axis, Axis, GizmoDrag)}
+     * this keeps the hotkey semantics (numeric input, accept/reject overlay,
+     * the display-mode switch on the first press); the axis comes from the
+     * configured hotkey order rather than a fixed cycle.
+     */
+    private void enableHotkeyAxis(int mode, Axis axis, GizmoDrag drag)
+    {
+        if (Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.editing = true;
+        this.mode = mode;
+        this.rotateKind = RotateKind.AXIS;
+        this.translateScreen = false;
+        this.axis = axis;
+        this.axis2 = null;
+        this.hotkeyMode = true;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (this.useRayDrag())
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
     }
 
     public void enableMode(int mode, Axis axis)
@@ -464,17 +563,14 @@ public class UIPropTransform extends UITransform
         this.enableMode(mode, axis, axis2, null);
     }
 
+    /**
+     * Start an operation from a mouse handle pick: the axes come straight
+     * from the picked handle, so this never cycles and never switches the
+     * gizmo's display mode. The keyboard path goes through
+     * {@link #enableMode(int)} and the configured hotkey orders instead.
+     */
     public void enableMode(int mode, Axis axis, Axis axis2, GizmoDrag drag)
     {
-        /* Only the keyboard path (axis == null) flips the gizmo's display mode,
-         * and never while combined is on screen: there G/S/R run their operation
-         * and leave every handle visible. Grabbing a handle with the mouse
-         * (axis != null) likewise must not switch the displayed mode. */
-        if (axis == null && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
-        {
-            return;
-        }
-
         UIContext context = this.getContext();
         if (context == null)
         {
@@ -490,48 +586,16 @@ public class UIPropTransform extends UITransform
 
         if (this.editing)
         {
-            if (this.translateScreen)
-            {
-                /* Leaving the screen-space grab via G constrains to X first, so further
-                 * presses cycle X -> Y -> Z like the regular axis walk. */
-                this.axis = Axis.X;
-            }
-            else
-            {
-                Axis[] values = Axis.values();
-
-                this.axis = values[MathUtils.cycler(this.axis != null ? this.axis.ordinal() + 1 : 0, 0, values.length - 1)];
-            }
-
-            this.axis2 = null;
-            this.translateScreen = false;
-            this.rotateKind = RotateKind.AXIS;
-            this.drag = drag;
-
             this.restore(true);
         }
-        else
-        {
-            /* G (translate hotkey) with ray dragging available grabs in screen space
-             * by default; X/Y/Z then constrain it to an axis. */
-            this.translateScreen = axis == null && mode == 0 && BBSSettings.transformHotkeys3dRay.get() && drag != null;
 
-            if (this.translateScreen)
-            {
-                this.axis = Axis.X;
-                this.axis2 = Axis.Y;
-            }
-            else
-            {
-                this.axis = axis == null ? Axis.X : axis;
-                this.axis2 = axis2;
-            }
-
-            this.rotateKind = RotateKind.AXIS;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
-            this.drag = drag;
-        }
+        this.translateScreen = false;
+        this.rotateKind = RotateKind.AXIS;
+        this.axis = axis == null ? Axis.X : axis;
+        this.axis2 = axis2;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
 
         this.editing = true;
         this.mode = mode;
@@ -719,12 +783,18 @@ public class UIPropTransform extends UITransform
 
     /**
      * Start a screen-space (view-plane) translate: the object moves along the
-     * camera's right/up axes in the plane facing the camera. Unlike {@link #enableMode}
-     * this never switches the gizmo's display mode, so grabbing the centre cube with
-     * the mouse leaves the visible handles untouched (like the other handle picks).
+     * camera's right/up axes in the plane facing the camera. Grabbing the
+     * centre cube with the mouse never switches the gizmo's display mode
+     * (like the other handle picks); as a hotkey walk step the first press
+     * switches it like the rest of the hotkey starters.
      */
     public void enableScreenTranslate(GizmoDrag drag, boolean hotkeyMode)
     {
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.TRANSLATE))
+        {
+            return;
+        }
+
         UIContext context = this.getContext();
         if (context == null || this.transform == null)
         {
@@ -2759,6 +2829,45 @@ public class UIPropTransform extends UITransform
     public enum RotateKind
     {
         AXIS, TRACKBALL, ARCBALL, VIEW;
+    }
+
+    /**
+     * A step of a transform hotkey's walk. Tokens match the entries of the
+     * translate/scale/rotate hotkey order settings.
+     */
+    public enum HotkeyTarget
+    {
+        VIEW("view", null, true),
+        SPHERE("sphere", null, true),
+        SCREEN("screen", null, true),
+        X("x", Axis.X, false),
+        Y("y", Axis.Y, false),
+        Z("z", Axis.Z, false);
+
+        public final String token;
+        public final Axis axis;
+        /** Whether the step is driven by the 3D ray and so needs a rendered gizmo. */
+        public final boolean needsRay;
+
+        HotkeyTarget(String token, Axis axis, boolean needsRay)
+        {
+            this.token = token;
+            this.axis = axis;
+            this.needsRay = needsRay;
+        }
+
+        public static HotkeyTarget byToken(String token)
+        {
+            for (HotkeyTarget target : values())
+            {
+                if (target.token.equals(token))
+                {
+                    return target;
+                }
+            }
+
+            return null;
+        }
     }
 
     public static class UITransformHandler extends UIElement

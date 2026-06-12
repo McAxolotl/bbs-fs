@@ -12,6 +12,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
+import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -51,6 +52,9 @@ public class BBSSettings {
 	public static ValueBoolean gizmos;
 	public static ValueBoolean transformLocalDefault;
 	public static ValueBoolean transformHotkeys3dRay;
+	public static ValueOrder translateHotkeyOrder;
+	public static ValueOrder scaleHotkeyOrder;
+	public static ValueOrder rotateHotkeyOrder;
 	public static ValueFloat trackballSensitivity;
 
 	public static ValueBoolean enableCursorRendering;
@@ -419,6 +423,12 @@ public class BBSSettings {
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		transformLocalDefault = builder.getBoolean("transform_local_default", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
+		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
+		builder.register(translateHotkeyOrder);
+		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
+		builder.register(scaleHotkeyOrder);
+		rotateHotkeyOrder = new ValueOrder("rotate_hotkey_order", "view", "sphere", "x", "y", "z");
+		builder.register(rotateHotkeyOrder);
 		trackballSensitivity = builder.getFloat("trackball_sensitivity", 1F, 0.05F, 2F);
 
 		builder.category("tutorials", Icons.HELP);

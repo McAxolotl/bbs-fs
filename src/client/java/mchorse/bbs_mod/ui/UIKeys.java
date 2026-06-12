@@ -1065,7 +1065,9 @@ public class UIKeys
     public static final IKey TRANSFORMS_SPACE_GLOBAL = L10n.lang("bbs.ui.transforms.space.global");
     public static final IKey TRANSFORMS_SPACE_LOCAL = L10n.lang("bbs.ui.transforms.space.local");
     public static final IKey TRANSFORMS_TARGET_SCREEN = L10n.lang("bbs.ui.transforms.target.screen");
+    public static final IKey TRANSFORMS_TARGET_SPHERE = L10n.lang("bbs.ui.transforms.target.sphere");
     public static final IKey TRANSFORMS_TARGET_VIEW = L10n.lang("bbs.ui.transforms.target.view");
+    public static final IKey ORDER_RESET = L10n.lang("bbs.ui.order.reset");
     public static final IKey TRANSFORMS_KEYS_CATEGORY = L10n.lang("bbs.ui.transforms.keys.category");
     public static final IKey TRANSFORMS_KEYS_TOGGLE_AXES = L10n.lang("bbs.ui.transforms.keys.toggle_axes");
     public static final IKey TRANSFORMS_KEYS_TOGGLE_FIX = L10n.lang("bbs.ui.transforms.keys.toggle_fix");
