@@ -2069,18 +2069,16 @@ public class UIPropTransform extends UITransform
 
         int key = context.getKeyCode();
 
-        /* On the sphere, X/Y aim the typed angle at the horizontal (screen-up
-         * axis) or vertical (screen-right axis) turn instead of constraining to
-         * a ring. */
-        if (this.mode == 2 && this.isSphereRotate()
+        /* While typing on the sphere, X/Y aim the typed angle at the
+         * horizontal (screen-up axis) or vertical (screen-right axis) turn.
+         * Without typed digits they must fall through to the axis keybinds
+         * and constrain to a ring, the same as Z — otherwise they read as
+         * dead keys. */
+        if (this.mode == 2 && this.isSphereRotate() && this.numericActive
             && (key == GLFW.GLFW_KEY_X || key == GLFW.GLFW_KEY_Y))
         {
             this.trackballAxis = key == GLFW.GLFW_KEY_Y ? Axis.Y : Axis.X;
-
-            if (this.numericActive)
-            {
-                this.applyNumericInput();
-            }
+            this.applyNumericInput();
 
             return true;
         }
