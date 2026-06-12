@@ -2492,6 +2492,67 @@ public class UIPropTransform extends UITransform
         return super.subKeyPressed(context);
     }
 
+    /** Short label of what the active drag grabs: axis letters, the screen
+     *  plane, the view ring, or one of the sphere's rotations. */
+    private String editingTargetLabel()
+    {
+        if (this.translateScreen)
+        {
+            return UIKeys.TRANSFORMS_TARGET_SCREEN.get();
+        }
+
+        if (this.mode == 2)
+        {
+            if (this.rotateKind == RotateKind.TRACKBALL) return UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL.get();
+            if (this.rotateKind == RotateKind.ARCBALL) return UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL.get();
+            if (this.rotateKind == RotateKind.VIEW) return UIKeys.TRANSFORMS_TARGET_VIEW.get();
+        }
+
+        if (this.mode == 1 && Window.isCtrlPressed())
+        {
+            return "XYZ";
+        }
+
+        String label = this.axis == null ? "" : this.axis.name();
+
+        if (this.axis2 != null)
+        {
+            label += this.axis2.name();
+        }
+
+        return label;
+    }
+
+    /** Axis letters tint to their gizmo colors; everything else stays white. */
+    private int editingTargetColor()
+    {
+        boolean singleAxis = !this.translateScreen
+            && this.axis != null && this.axis2 == null
+            && (this.mode != 2 || this.rotateKind == RotateKind.AXIS)
+            && !(this.mode == 1 && Window.isCtrlPressed());
+
+        if (!singleAxis)
+        {
+            return Colors.WHITE;
+        }
+
+        if (this.axis == Axis.X) return Colors.A100 | Colors.RED;
+        if (this.axis == Axis.Y) return Colors.A100 | Colors.GREEN;
+
+        return Colors.A100 | Colors.BLUE;
+    }
+
+    /** Local/global chip; scale ignores the space toggle, so it gets none. */
+    private String editingSpaceLabel()
+    {
+        if (this.mode == 1)
+        {
+            return null;
+        }
+
+        return (this.local ? UIKeys.TRANSFORMS_SPACE_LOCAL : UIKeys.TRANSFORMS_SPACE_GLOBAL).get();
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -2596,14 +2657,37 @@ public class UIPropTransform extends UITransform
 
         if (this.editing)
         {
-            String label = UIKeys.TRANSFORMS_EDITING.get();
             FontRenderer font = context.batcher.getFont();
-            int x = this.area.mx(font.getWidth(label));
+            String op = (this.mode == 0 ? UIKeys.TRANSFORMS_TRANSLATE : this.mode == 1 ? UIKeys.TRANSFORMS_SCALE : UIKeys.TRANSFORMS_ROTATE).get();
+            String target = this.editingTargetLabel();
+            String space = this.editingSpaceLabel();
+
+            /* Chip row: the operation on the primary color, then what is
+             * grabbed (axis letters in their gizmo colors), then the editing
+             * space. The 5s account for textCard's box overhang at the
+             * default card offset. */
+            int gap = 2;
+            int rowWidth = font.getWidth(op) + 5 + gap + font.getWidth(target) + 5;
+
+            if (space != null)
+            {
+                rowWidth += gap + font.getWidth(space) + 5;
+            }
+
+            int x = this.area.mx(rowWidth) + 3;
             int y = this.area.my(font.getHeight());
 
-            context.batcher.textCard(label, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+            context.batcher.textCard(op, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+            x += font.getWidth(op) + 5 + gap;
+            context.batcher.textCard(target, x, y, this.editingTargetColor(), Colors.A50);
 
-            /* Label echoed both at the cursor and (when typing) under "Editing...". */
+            if (space != null)
+            {
+                x += font.getWidth(target) + 5 + gap;
+                context.batcher.textCard(space, x, y, Colors.LIGHTEST_GRAY, Colors.A50);
+            }
+
+            /* Label echoed both at the cursor and (when typing) under the info row. */
             String numericLabel = null;
 
             if (this.axis != null)
@@ -2654,7 +2738,7 @@ public class UIPropTransform extends UITransform
                 context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
             }
 
-            /* Mirror the live numeric input on its own card right under "Editing...". */
+            /* Mirror the live numeric input on its own card right under the info row. */
             if (numericLabel != null)
             {
                 int nx = this.area.mx(font.getWidth(numericLabel));
