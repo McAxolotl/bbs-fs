@@ -123,6 +123,31 @@ public class Pose implements IMapSerializable
         }
     }
 
+    /**
+     * The mirror (opposite-side) counterpart of a bone name via the same
+     * left/right patterns used for flipping, or the same name when it has no
+     * side (a centre/unpaired bone).
+     */
+    public static String getMirrorName(String name)
+    {
+        if (name == null)
+        {
+            return null;
+        }
+
+        for (Pair<Pattern, String> pair : patterns)
+        {
+            Matcher matcher = pair.a.matcher(name);
+
+            if (matcher.matches())
+            {
+                return matcher.replaceAll(pair.b);
+            }
+        }
+
+        return name;
+    }
+
     public PoseTransform get(String name)
     {
         PoseTransform transform = this.transforms.get(name);

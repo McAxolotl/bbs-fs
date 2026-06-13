@@ -1349,6 +1349,7 @@
 	"bbs.ui.transforms.context.switch_world": "Переключить в мировое пространство",
 	"bbs.ui.transforms.combined": "Совмещённый",
 	"bbs.ui.transforms.editing": "Редактируется...",
+	"bbs.ui.transforms.mirror_edit": "Зеркальное редактирование\n\nКогда включено, правка кости в реальном времени зеркалится на её парную кость с противоположной стороны (лево/право) — даже если та не выделена — так что выделять обе не нужно, симметричная поза остаётся симметричной.",
 	"bbs.ui.transforms.keys.category": "Трансформации",
 	"bbs.ui.transforms.keys.toggle_axes": "Переключить XYZ оси",
 	"bbs.ui.transforms.keys.toggle_fix": "Переключить фиксацию (0 / 1)",

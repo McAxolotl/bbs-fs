@@ -56,6 +56,7 @@ public class BBSSettings {
 	public static ValueBoolean gizmos;
 	public static ValueInt transformSpace;
 	public static ValueBoolean transformHotkeys3dRay;
+	public static ValueBoolean poseMirrorEdit;
 	public static ValueOrder translateHotkeyOrder;
 	public static ValueOrder scaleHotkeyOrder;
 	public static ValueOrder rotateHotkeyOrder;
@@ -432,6 +433,8 @@ public class BBSSettings {
 		transformSpace = builder.getInt("space", 0, 0, 2);
 		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
+		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
+		poseMirrorEdit.invisible();
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
 		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");

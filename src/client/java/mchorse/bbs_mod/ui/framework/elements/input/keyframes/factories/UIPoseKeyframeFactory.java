@@ -28,6 +28,8 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
@@ -130,6 +132,27 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             });
         }
 
+        /**
+         * Like {@link #apply(UIKeyframes, Keyframe, List, Consumer)} but hands the bone
+         * name alongside its {@link PoseTransform}, so callers can decide per bone (e.g.
+         * mirror editing via {@link UIPoseEditor#applyToBone}).
+         */
+        public static void applyBones(UIKeyframes editor, Keyframe keyframe, List<String> boneNames, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (boneNames == null || boneNames.isEmpty())
+            {
+                return;
+            }
+
+            apply(editor, keyframe, (pose) ->
+            {
+                for (String bone : boneNames)
+                {
+                    consumer.accept(bone, pose.get(bone));
+                }
+            });
+        }
+
         public UIPoseFactoryEditor(UIKeyframes editor, Keyframe<Pose> keyframe)
         {
             super();
@@ -200,15 +223,27 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
+        protected boolean supportsMirror()
+        {
+            return true;
+        }
+
+        @Override
         protected void applyToSelection(Consumer<Transform> consumer)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> consumer.accept(poseT));
+            Map<String, Boolean> targets = this.editor.resolveMirrorTargets(this.isMirrorEdit());
+
+            UIPoseFactoryEditor.applyBones(this.editor.editor, this.editor.keyframe, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
         }
 
         @Override
         protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
         {
-            applyRecording(this.editor.editor, this.editor.keyframe, tick, this.editor.groups.getCurrent(), (poseT) -> consumer.accept(poseT));
+            Map<String, Boolean> targets = this.editor.resolveMirrorTargets(this.isMirrorEdit());
+
+            applyRecordingBones(this.editor.editor, this.editor.keyframe, tick, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
         }
 
         @Override
@@ -241,6 +276,27 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 for (String bone : bones)
                 {
                     consumer.accept(pose.get(bone));
+                }
+
+                recorded.postNotify();
+            });
+        }
+
+        public static void applyRecordingBones(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (bones == null || bones.isEmpty())
+            {
+                return;
+            }
+
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                Pose pose = (Pose) recorded.getValue();
+                recorded.preNotify();
+
+                for (String bone : bones)
+                {
+                    consumer.accept(bone, pose.get(bone));
                 }
 
                 recorded.postNotify();

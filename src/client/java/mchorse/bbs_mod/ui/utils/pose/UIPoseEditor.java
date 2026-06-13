@@ -26,6 +26,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -232,9 +233,18 @@ public class UIPoseEditor extends UIElement
         }
 
         @Override
+        protected boolean supportsMirror()
+        {
+            return true;
+        }
+
+        @Override
         protected void applyToSelection(Consumer<Transform> consumer)
         {
-            UIPoseEditor.this.forEachSelectedPose(consumer);
+            for (Map.Entry<String, Boolean> target : UIPoseEditor.this.resolveMirrorTargets(this.isMirrorEdit()).entrySet())
+            {
+                UIPoseEditor.this.applyToBone(target.getValue(), UIPoseEditor.this.pose.get(target.getKey()), consumer);
+            }
         }
 
         @Override
@@ -295,6 +305,100 @@ public class UIPoseEditor extends UIElement
         {
             consumer.accept(this.pose.get(bone));
         }
+    }
+
+    /**
+     * Bones an edit should touch and whether each one is mirrored. The selected
+     * bones are drivers (applied as-is); when {@code mirror} is on, each driver's
+     * opposite-side counterpart is added mirrored &mdash; even when it isn't
+     * selected &mdash; so editing one bone reflects onto its pair live, with no
+     * need to select both. A counterpart that is itself selected stays a driver
+     * (never double-applied). Shared by the model panel and film pose editors.
+     */
+    public Map<String, Boolean> resolveMirrorTargets(boolean mirror)
+    {
+        Map<String, Boolean> targets = new LinkedHashMap<>();
+
+        for (String bone : this.groups.getCurrent())
+        {
+            targets.put(bone, false);
+        }
+
+        if (mirror)
+        {
+            for (String bone : new ArrayList<>(targets.keySet()))
+            {
+                String partner = this.mirrorPartner(bone);
+
+                if (partner != null && !targets.containsKey(partner))
+                {
+                    targets.put(partner, true);
+                }
+            }
+        }
+
+        return targets;
+    }
+
+    /**
+     * The opposite-side counterpart of a bone (the model's flip map first, then
+     * the left/right name patterns), or null when it has none or the resolved
+     * name isn't an actual bone.
+     */
+    private String mirrorPartner(String bone)
+    {
+        String partner = null;
+
+        if (this.flippedParts != null && !this.flippedParts.isEmpty())
+        {
+            partner = this.flippedParts.get(bone);
+
+            if (partner == null)
+            {
+                for (Map.Entry<String, String> entry : this.flippedParts.entrySet())
+                {
+                    if (bone.equals(entry.getValue()))
+                    {
+                        partner = entry.getKey();
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (partner == null)
+        {
+            String mirrored = Pose.getMirrorName(bone);
+
+            partner = mirrored.equals(bone) ? null : mirrored;
+        }
+
+        return partner != null && this.groups.getList().contains(partner) ? partner : null;
+    }
+
+    /**
+     * Applies the edit to one bone, reflecting it across the model's symmetry
+     * (the same negation as {@link Pose#flip}) when {@code mirror} is true.
+     */
+    public void applyToBone(boolean mirror, PoseTransform pt, Consumer<Transform> consumer)
+    {
+        if (mirror)
+        {
+            mirrorTransform(pt);
+            consumer.accept(pt);
+            mirrorTransform(pt);
+        }
+        else
+        {
+            consumer.accept(pt);
+        }
+    }
+
+    private static void mirrorTransform(Transform transform)
+    {
+        transform.translate.mul(-1F, 1F, 1F);
+        transform.rotate.mul(1F, -1F, -1F);
     }
 
     private void applyFixToSelection(float value)

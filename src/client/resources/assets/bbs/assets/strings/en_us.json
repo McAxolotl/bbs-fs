@@ -1356,6 +1356,7 @@
 	"bbs.ui.transforms.context.switch_world": "Switch to world space",
 	"bbs.ui.transforms.combined": "Combined",
 	"bbs.ui.transforms.editing": "Editing...",
+	"bbs.ui.transforms.mirror_edit": "Mirror edit\n\nWhen enabled, editing a bone also mirrors the change onto its opposite-side (left/right) counterpart in real time — even when the counterpart isn't selected — so a symmetric pose stays symmetric without having to select both.",
 	"bbs.ui.transforms.keys.category": "Transformations",
 	"bbs.ui.transforms.keys.toggle_axes": "Toggle XYZ axes",
 	"bbs.ui.transforms.keys.toggle_fix": "Toggle fix (0 / 1)",

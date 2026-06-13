@@ -198,6 +198,13 @@ public class UIPropTransform extends UITransform
     private UIIcon spaceWorld;
     private boolean spacesBarBackground;
 
+    /* Right-hand toggle of the spaces bar: mirror edit. When on, a pose edit is
+     * reflected across the model's symmetry onto each bone's opposite-side
+     * counterpart. Only shown on editors that support it (see
+     * {@link #supportsMirror()}); the state is the shared, persisted
+     * {@link BBSSettings#poseMirrorEdit}. */
+    private UIIcon mirror;
+
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
@@ -213,6 +220,16 @@ public class UIPropTransform extends UITransform
         this.spacesBar = new UIElement();
         this.spacesBar.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
         this.spacesBar.add(this.spaceParent, this.spaceLocal, this.spaceWorld);
+
+        if (this.supportsMirror())
+        {
+            this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
+            this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
+
+            /* An empty, width-less spacer eats the leftover row width so the
+             * mirror toggle is pushed to the far (right) end of the bar. */
+            this.spacesBar.add(new UIElement(), this.mirror);
+        }
 
         this.prepend(this.spacesBar);
         this.h(4 * UIConstants.CONTROL_HEIGHT);
@@ -261,6 +278,23 @@ public class UIPropTransform extends UITransform
         this.spacesBarBackground = true;
 
         return this;
+    }
+
+    /** Whether this editor offers the mirror-edit toggle (pose multi-bone editors do). */
+    protected boolean supportsMirror()
+    {
+        return false;
+    }
+
+    public boolean isMirrorEdit()
+    {
+        return BBSSettings.poseMirrorEdit.get();
+    }
+
+    private void toggleMirrorEdit()
+    {
+        BBSSettings.poseMirrorEdit.set(!BBSSettings.poseMirrorEdit.get());
+        UIUtils.playClick();
     }
 
     public boolean isLocal()
@@ -3003,6 +3037,11 @@ public class UIPropTransform extends UITransform
         }
 
         UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area);
+
+        if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area);
+        }
 
         super.render(context);
 
