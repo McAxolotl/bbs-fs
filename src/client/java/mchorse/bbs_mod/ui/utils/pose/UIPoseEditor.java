@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -15,12 +16,12 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
-import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,8 +44,6 @@ public class UIPoseEditor extends UIElement
     private Pose pose;
     protected IModel model;
     protected Map<String, String> flippedParts;
-
-    private int suppressPoseSync;
 
     public UIPoseEditor()
     {
@@ -126,16 +125,6 @@ public class UIPoseEditor extends UIElement
     public String getGroup()
     {
         return this.groups.getCurrentFirst();
-    }
-
-    private void beginSuppressPoseSync()
-    {
-        this.suppressPoseSync++;
-    }
-
-    private void endSuppressPoseSync()
-    {
-        this.suppressPoseSync--;
     }
 
     protected void pastePose(MapType data)
@@ -231,9 +220,11 @@ public class UIPoseEditor extends UIElement
     }
 
     /**
-     * Applies transform edits from the primary bone to the rest of the multi-selection.
+     * Applies each transform edit as a per-channel delta to every selected bone,
+     * so a multi-selection keeps each bone's own pose instead of collapsing onto
+     * the primary's. See {@link UIDeltaPropTransform}.
      */
-    private class UIPosePropTransform extends UIPropTransform
+    private class UIPosePropTransform extends UIDeltaPropTransform
     {
         UIPosePropTransform()
         {
@@ -241,41 +232,24 @@ public class UIPoseEditor extends UIElement
         }
 
         @Override
-        public void rejectChanges()
+        protected void applyToSelection(Consumer<Transform> consumer)
         {
-            UIPoseEditor.this.beginSuppressPoseSync();
+            UIPoseEditor.this.forEachSelectedPose(consumer);
+        }
 
-            try
+        @Override
+        protected void reset()
+        {
+            this.preCallback();
+            this.applyToTarget((t) ->
             {
-                super.rejectChanges();
-            }
-            finally
-            {
-                UIPoseEditor.this.endSuppressPoseSync();
-            }
+                t.translate.set(0F, 0F, 0F);
+                t.scale.set(1F, 1F, 1F);
+                t.rotate.set(0F, 0F, 0F);
+            });
+            this.postCallback();
 
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setT(Axis axis, double x, double y, double z)
-        {
-            super.setT(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setS(Axis axis, double x, double y, double z)
-        {
-            super.setS(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setR(Axis axis, double x, double y, double z)
-        {
-            super.setR(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.syncTargetTransform();
         }
     }
 
@@ -315,37 +289,7 @@ public class UIPoseEditor extends UIElement
         this.transform.setTransform(poseTransform);
     }
 
-    private void syncPoseTransformToSelection()
-    {
-        if (this.suppressPoseSync > 0)
-        {
-            return;
-        }
-
-        List<String> bones = this.groups.getCurrent();
-
-        if (bones.size() <= 1)
-        {
-            return;
-        }
-
-        if (!(this.transform.getTransform() instanceof PoseTransform primary))
-        {
-            return;
-        }
-
-        for (String bone : bones)
-        {
-            PoseTransform pt = this.pose.get(bone);
-
-            if (pt != primary)
-            {
-                pt.copy(primary);
-            }
-        }
-    }
-
-    private void forEachSelectedPose(Consumer<PoseTransform> consumer)
+    private void forEachSelectedPose(Consumer<? super PoseTransform> consumer)
     {
         for (String bone : this.groups.getCurrent())
         {
