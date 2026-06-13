@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -49,6 +50,8 @@ public class UIPropTransform extends UITransform
     private static final float TRACKBALL_WHEEL_DEG = 5F;
     /** Factor the modifier keys apply to a gizmo step: Ctrl coarsens, Alt refines. */
     private static final float STEP_MODIFIER = 5F;
+    /** Cursor-speed multiplier for a ray gesture while Shift is held (precision drag). */
+    private static final float FINE_DRAG_FACTOR = 0.1F;
 
     private Transform transform;
     private Runnable preCallback;
@@ -176,6 +179,16 @@ public class UIPropTransform extends UITransform
      *  {@link Axis#Y} = vertical (screen-right axis). */
     private Axis trackballAxis = Axis.X;
 
+    /* Fine-drag (Shift) precision: a virtual cursor that lags the real one,
+     * advancing at {@link #FINE_DRAG_FACTOR} speed while Shift is held, so every
+     * ray gesture slows uniformly without per-mode code. The lag is the
+     * accumulated offset between the two. */
+    private float fineOffsetX;
+    private float fineOffsetY;
+    private int fineLastX;
+    private int fineLastY;
+    private boolean fineHasLast;
+
     private UITransformHandler handler;
 
     /* The spaces bar: one square icon per editing space, the active one carries
@@ -185,6 +198,13 @@ public class UIPropTransform extends UITransform
     private UIIcon spaceLocal;
     private UIIcon spaceWorld;
     private boolean spacesBarBackground;
+
+    /* Right-hand toggles of the spaces bar, only on editors that support it (see
+     * {@link #supportsMirror()}): mirror edit reflects a pose change onto each
+     * bone's left/right counterpart; alternate-invert flips the rotation of every
+     * second selected bone. Both are shared, persisted settings. */
+    private UIIcon mirror;
+    private UIIcon invert;
 
     public UIPropTransform()
     {
@@ -201,6 +221,18 @@ public class UIPropTransform extends UITransform
         this.spacesBar = new UIElement();
         this.spacesBar.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
         this.spacesBar.add(this.spaceParent, this.spaceLocal, this.spaceWorld);
+
+        if (this.supportsMirror())
+        {
+            this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
+            this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
+            this.invert = new UIIcon(Icons.REVERSE, (b) -> this.toggleAlternateInvert());
+            this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
+
+            /* An empty, width-less spacer eats the leftover row width so the
+             * toggles are pushed to the far (right) end of the bar. */
+            this.spacesBar.add(new UIElement(), this.mirror, this.invert);
+        }
 
         this.prepend(this.spacesBar);
         this.h(4 * UIConstants.CONTROL_HEIGHT);
@@ -249,6 +281,34 @@ public class UIPropTransform extends UITransform
         this.spacesBarBackground = true;
 
         return this;
+    }
+
+    /** Whether this editor offers the mirror-edit toggle (pose multi-bone editors do). */
+    protected boolean supportsMirror()
+    {
+        return false;
+    }
+
+    public boolean isMirrorEdit()
+    {
+        return BBSSettings.poseMirrorEdit.get();
+    }
+
+    private void toggleMirrorEdit()
+    {
+        BBSSettings.poseMirrorEdit.set(!BBSSettings.poseMirrorEdit.get());
+        UIUtils.playClick();
+    }
+
+    public boolean isAlternateInvert()
+    {
+        return BBSSettings.poseAlternateInvert.get();
+    }
+
+    private void toggleAlternateInvert()
+    {
+        BBSSettings.poseAlternateInvert.set(!BBSSettings.poseAlternateInvert.get());
+        UIUtils.playClick();
     }
 
     public boolean isLocal()
@@ -2082,6 +2142,10 @@ public class UIPropTransform extends UITransform
             MathUtils.toDeg(source.z)
         );
 
+        /* Freeze the ring at this orientation so it stays put while we drag,
+         * instead of writhing as the live rotation is recomposed each frame. */
+        Gizmo.INSTANCE.bakeRotation();
+
         this.dragHasStart = true;
     }
 
@@ -2121,6 +2185,7 @@ public class UIPropTransform extends UITransform
         this.drag = null;
         this.dragHasStart = false;
         this.arcballAnchored = false;
+        this.fineHasLast = false;
         this.clearNumericInput();
         Gizmo.INSTANCE.clearTrackedTransform(this);
 
@@ -2419,6 +2484,10 @@ public class UIPropTransform extends UITransform
 
         this.lastX = context.mouseX;
         this.lastY = context.mouseY;
+
+        /* The cursor was free to roam while typing; re-anchor the precision
+         * tracking here so the resumed drag doesn't inherit a stale lag. */
+        this.resetFineCursor(context.mouseX, context.mouseY);
 
         if (this.useRayDrag())
         {
@@ -2801,6 +2870,53 @@ public class UIPropTransform extends UITransform
         return label.get();
     }
 
+    /**
+     * Maintain the virtual cursor for the current frame. While Shift is held it
+     * advances at {@link #FINE_DRAG_FACTOR} of the real cursor — the rest of the
+     * motion piles into the lag offset; released, it tracks the cursor 1:1 again
+     * with no jump. Ray gestures read {@link #fineX}/{@link #fineY} so they all
+     * slow uniformly without any per-mode code.
+     */
+    private void updateFineCursor(int mouseX, int mouseY)
+    {
+        if (!this.fineHasLast)
+        {
+            this.resetFineCursor(mouseX, mouseY);
+
+            return;
+        }
+
+        if (Window.isShiftPressed())
+        {
+            float keep = 1F - FINE_DRAG_FACTOR;
+
+            this.fineOffsetX += (mouseX - this.fineLastX) * keep;
+            this.fineOffsetY += (mouseY - this.fineLastY) * keep;
+        }
+
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+    }
+
+    private void resetFineCursor(int mouseX, int mouseY)
+    {
+        this.fineOffsetX = 0F;
+        this.fineOffsetY = 0F;
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+        this.fineHasLast = true;
+    }
+
+    private int fineX(int mouseX)
+    {
+        return Math.round(mouseX - this.fineOffsetX);
+    }
+
+    private int fineY(int mouseY)
+    {
+        return Math.round(mouseY - this.fineOffsetY);
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -2822,12 +2938,18 @@ public class UIPropTransform extends UITransform
             int border = 5;
             int borderPadding = border + 1;
 
+            this.updateFineCursor(context.mouseX, context.mouseY);
+
             if (rawX <= border)
             {
                 Window.moveCursor(w - borderPadding, (int) mc.mouse.getY());
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
+
+                /* The wrap re-anchors the drag at the teleported position, so the
+                 * virtual cursor resets there too — no lag carries across the seam. */
+                this.resetFineCursor(this.lastX, context.mouseY);
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
@@ -2838,11 +2960,13 @@ public class UIPropTransform extends UITransform
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
 
+                this.resetFineCursor(this.lastX, context.mouseY);
+
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (this.useRayDrag())
             {
-                this.applyRayDrag(context.mouseX, context.mouseY);
+                this.applyRayDrag(this.fineX(context.mouseX), this.fineY(context.mouseY));
             }
             else
             {
@@ -2850,7 +2974,7 @@ public class UIPropTransform extends UITransform
                 Vector3f vector = this.getValue();
                 boolean all = this.mode == 1 && Window.isCtrlPressed();
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
-                float factor = (float) reference.getValueModifier();
+                float factor = (float) reference.getValueModifier() * (Window.isShiftPressed() ? FINE_DRAG_FACTOR : 1F);
 
                 if (this.mode == 0)
                 {
@@ -2926,7 +3050,17 @@ public class UIPropTransform extends UITransform
             this.spacesBar.area.render(context.batcher, Colors.A50);
         }
 
-        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area);
+        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area, Direction.BOTTOM);
+
+        if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area, Direction.BOTTOM);
+        }
+
+        if (this.invert != null && BBSSettings.poseAlternateInvert.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area, Direction.BOTTOM);
+        }
 
         super.render(context);
 

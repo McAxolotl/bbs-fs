@@ -139,6 +139,31 @@ public abstract class EditorLayoutNode
         );
     }
 
+    /**
+     * Default particle layout: the section-group tabs stacked across the top, with the bottom split
+     * between the preview (left) and the MoLang editor (right).
+     */
+    public static EditorLayoutNode defaultParticleLayout()
+    {
+        List<String> tabs = new ArrayList<>();
+        tabs.add("general");
+        tabs.add("emitter");
+        tabs.add("particle");
+        tabs.add("appearance");
+
+        return new SplitterNode(
+            false,
+            0.22446808F,
+            new StackNode(tabs, "general"),
+            new SplitterNode(
+                true,
+                0.7408994F,
+                new PanelNode("preview"),
+                new PanelNode("molang")
+            )
+        );
+    }
+
     /** Returns a new tree with panelId removed; parent splitter is collapsed to its other child. */
     public static EditorLayoutNode copyWithRemovedLeaf(EditorLayoutNode root, String panelId)
     {

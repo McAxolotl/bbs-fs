@@ -56,6 +56,8 @@ public class BBSSettings {
 	public static ValueBoolean gizmos;
 	public static ValueInt transformSpace;
 	public static ValueBoolean transformHotkeys3dRay;
+	public static ValueBoolean poseMirrorEdit;
+	public static ValueBoolean poseAlternateInvert;
 	public static ValueOrder translateHotkeyOrder;
 	public static ValueOrder scaleHotkeyOrder;
 	public static ValueOrder rotateHotkeyOrder;
@@ -136,7 +138,6 @@ public class BBSSettings {
 
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
-	public static ValueBoolean editorReplayTabs;
 	public static ValueBoolean recordingOverlays;
 	public static ValueInt recordingPoseTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
@@ -432,6 +433,10 @@ public class BBSSettings {
 		transformSpace = builder.getInt("space", 0, 0, 2);
 		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
+		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
+		poseMirrorEdit.invisible();
+		poseAlternateInvert = builder.getBoolean("pose_alternate_invert", false);
+		poseAlternateInvert.invisible();
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
 		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
@@ -523,7 +528,6 @@ public class BBSSettings {
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
-		editorReplayTabs = builder.getBoolean("replay_tabs", true);
 		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 

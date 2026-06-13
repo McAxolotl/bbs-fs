@@ -97,6 +97,11 @@ public class UIReplaysEditor extends UIElement {
     /* Keyframes */
     public UIKeyframeEditor keyframeEditor;
 
+    /* Action clips share the timeline area; the toggle beside the categories switches to them. */
+    private UIClipsPanel actionTimeline;
+    private UIIcon actionsToggle;
+    private boolean actionsMode;
+
     /* Clips */
     private UIFilmPanel filmPanel;
     private Film film;
@@ -351,8 +356,8 @@ public class UIReplaysEditor extends UIElement {
 
                     context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), BBSSettings.chromeSurface());
 
-                    /* Render active tab indicator */
-                    UIIcon activeIcon = this.tabButtons.get(this.category);
+                    /* Render active tab indicator (under the actions toggle when in actions mode) */
+                    UIIcon activeIcon = this.actionsMode ? this.actionsToggle : this.tabButtons.get(this.category);
 
                     if (activeIcon != null) {
                         int color = BBSSettings.primaryColor.get();
@@ -385,6 +390,11 @@ public class UIReplaysEditor extends UIElement {
             this.tabButtons.put(category, button);
         }
 
+        /* Actions toggle: pinned to the right edge of the track-names column, not a keyframe category. */
+        this.actionsToggle = new UIIcon(Icons.ACTION, b -> this.toggleActionsMode());
+        this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.LEFT);
+        this.layoutActionsToggle();
+
         this.setCategory(ReplayCategory.PLAYER);
 
         this.keys()
@@ -400,11 +410,12 @@ public class UIReplaysEditor extends UIElement {
                 .register(Keys.REPLAYS_TAB_4, () -> this.setCategory(ReplayCategory.IK))
                 .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar);
+        this.add(this.iconBar, this.actionsToggle);
         this.markContainer();
     }
 
     private void setCategory(ReplayCategory c) {
+        this.actionsMode = false;
         this.category = c;
         this.updateChannelsList();
     }
@@ -499,11 +510,10 @@ public class UIReplaysEditor extends UIElement {
         List<UIKeyframeSheet> sheets = new ArrayList<>();
         Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
         Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
-        boolean tabsEnabled = BBSSettings.editorReplayTabs.get();
 
-        this.collectCuratedSheets(sheets, tabsEnabled);
-        this.collectFormPropertySheets(sheets, tabsEnabled, poseTabs, poseTabDepths);
-        this.collectIKSheets(sheets, tabsEnabled);
+        this.collectCuratedSheets(sheets);
+        this.collectFormPropertySheets(sheets, poseTabs, poseTabDepths);
+        this.collectIKSheets(sheets);
 
         this.keys.clear();
 
@@ -544,12 +554,11 @@ public class UIReplaysEditor extends UIElement {
                     .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
             this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
-            this.keyframeEditor.setTimelineVisible(this.timelineVisible);
-            this.keyframeEditor.setPropertiesVisible(this.propertiesVisible);
 
             /* Update iconBar width to match label width */
             int labelWidth = this.keyframeEditor.view.getLabelWidth();
             this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
+            this.layoutActionsToggle();
 
             /* Reset */
             if (lastEditor != null) {
@@ -667,11 +676,9 @@ public class UIReplaysEditor extends UIElement {
             this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
 
             this.add(this.keyframeEditor);
-            /* Icon bar on top so it overlays the track names column (left labelWidth pixels) */
-            if (this.iconBar.getParent() != null) {
-                this.iconBar.removeFromParent();
-            }
-            this.add(this.iconBar);
+            /* Category bar + actions toggle on top so they overlay the track names column. */
+            this.bringBarToFront();
+            this.updateTimelineModeVisibility();
         }
 
         this.resize();
@@ -681,8 +688,8 @@ public class UIReplaysEditor extends UIElement {
         }
     }
 
-    private void collectCuratedSheets(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
-        if (!tabsEnabled || this.category == ReplayCategory.PLAYER) {
+    private void collectCuratedSheets(List<UIKeyframeSheet> sheets) {
+        if (this.category == ReplayCategory.PLAYER) {
             for (String key : ReplayKeyframes.CURATED_CHANNELS) {
                 BaseValue value = this.replay.keyframes.get(key);
                 KeyframeChannel channel = (KeyframeChannel) value;
@@ -696,7 +703,6 @@ public class UIReplaysEditor extends UIElement {
 
     private void collectFormPropertySheets(
             List<UIKeyframeSheet> sheets,
-            boolean tabsEnabled,
             Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
             Map<UIKeyframeSheet, Integer> poseTabDepths
     ) {
@@ -709,15 +715,14 @@ public class UIReplaysEditor extends UIElement {
             boolean isPose = FormUtils.isPoseProperty(name);
 
             if (property != null
-                    && (!tabsEnabled
-                    || (this.category == ReplayCategory.MODEL && !isPose)
+                    && ((this.category == ReplayCategory.MODEL && !isPose)
                     || (this.category == ReplayCategory.POSE && isPose))) {
                 BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
                 Form form = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
 
                 if (form != lastForm) {
                     if (lastForm != null) {
-                        this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+                        this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
                     }
 
                     lastForm = form;
@@ -735,13 +740,13 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (lastForm != null) {
-            this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+            this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
         }
     }
 
     /** IK tracks live in their own category; they are not form properties, so collect them by walking the form tree. */
-    private void collectIKSheets(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
-        if (tabsEnabled && this.category != ReplayCategory.IK) {
+    private void collectIKSheets(List<UIKeyframeSheet> sheets) {
+        if (this.category != ReplayCategory.IK) {
             return;
         }
 
@@ -818,7 +823,6 @@ public class UIReplaysEditor extends UIElement {
             List<UIKeyframeSheet> sheets,
             List<UIKeyframeSheet> formSheets,
             Form form,
-            boolean tabsEnabled,
             Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
             Map<UIKeyframeSheet, Integer> poseTabDepths
     ) {
@@ -839,13 +843,13 @@ public class UIReplaysEditor extends UIElement {
         formSheets.clear();
 
         if (form instanceof ModelForm modelForm) {
-            if (!tabsEnabled || this.category == ReplayCategory.MODEL) {
+            if (this.category == ReplayCategory.MODEL) {
                 List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
                 orderedFormSheets.addAll(physicsSheets);
             }
 
-            if (!tabsEnabled || this.category == ReplayCategory.POSE) {
+            if (this.category == ReplayCategory.POSE) {
                 List<UIKeyframeSheet> boneSheets = new ArrayList<>();
                 Map<String, Integer> depthBySheetId = new HashMap<>();
                 UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.replay.properties, boneSheets, depthBySheetId);
@@ -907,21 +911,91 @@ public class UIReplaysEditor extends UIElement {
     public void setTimelineVisible(boolean visible)
     {
         this.timelineVisible = visible;
-
-        if (this.keyframeEditor != null)
-        {
-            this.keyframeEditor.setTimelineVisible(visible);
-        }
+        this.updateTimelineModeVisibility();
     }
 
     public void setPropertiesVisible(boolean visible)
     {
         this.propertiesVisible = visible;
+        this.updateTimelineModeVisibility();
+    }
+
+    /** The action-clips timeline shares this editor's timeline area; the actions toggle switches to it. */
+    public void attachActionTimeline(UIClipsPanel actionTimeline)
+    {
+        this.actionTimeline = actionTimeline;
+        actionTimeline.relative(this).x(0).y(0).w(1F).h(1F);
+        this.add(actionTimeline);
+        this.bringBarToFront();
+        this.updateTimelineModeVisibility();
+    }
+
+    public boolean isActionsMode()
+    {
+        return this.actionsMode;
+    }
+
+    private void toggleActionsMode()
+    {
+        this.setActionsMode(!this.actionsMode);
+    }
+
+    public void setActionsMode(boolean actionsMode)
+    {
+        if (this.actionsMode == actionsMode)
+        {
+            return;
+        }
+
+        this.actionsMode = actionsMode;
+        this.updateTimelineModeVisibility();
+    }
+
+    /**
+     * Show either the keyframe timeline or the action-clips timeline in the same area;
+     * their parameters share editArea, so only the active mode's panel is shown.
+     */
+    private void updateTimelineModeVisibility()
+    {
+        boolean keyframes = !this.actionsMode;
 
         if (this.keyframeEditor != null)
         {
-            this.keyframeEditor.setPropertiesVisible(visible);
+            this.keyframeEditor.setTimelineVisible(this.timelineVisible && keyframes);
+            this.keyframeEditor.setPropertiesVisible(this.propertiesVisible && keyframes);
         }
+
+        if (this.actionTimeline != null)
+        {
+            this.actionTimeline.setVisible((this.timelineVisible || this.propertiesVisible) && this.actionsMode);
+            this.actionTimeline.setTimelineVisible(this.timelineVisible && this.actionsMode);
+            this.actionTimeline.setPropertiesVisible(this.propertiesVisible && this.actionsMode);
+        }
+    }
+
+    /** Keep the category bar and the actions toggle above the timelines. */
+    private void bringBarToFront()
+    {
+        if (this.iconBar.getParent() != null)
+        {
+            this.iconBar.removeFromParent();
+        }
+
+        if (this.actionsToggle.getParent() != null)
+        {
+            this.actionsToggle.removeFromParent();
+        }
+
+        this.add(this.iconBar, this.actionsToggle);
+    }
+
+    /**
+     * Pin the actions toggle to the right edge of the track-names column. The iconBar
+     * shrink-wraps to its category icons, so anchor to the editor by label width instead.
+     */
+    private void layoutActionsToggle()
+    {
+        this.actionsToggle.relative(this).x(0, this.getLabelWidth() - 20).y(0).wh(20, 20);
     }
 
     public void pickForm(Form form, String bone) {
@@ -1089,12 +1163,11 @@ public class UIReplaysEditor extends UIElement {
 
     @Override
     public void render(UIContext context) {
-        /* Hide category bar when tabs are disabled or "edit track" overlay is open */
-        this.iconBar.setVisible(
-            this.timelineVisible
-            && BBSSettings.editorReplayTabs.get()
-                && (this.keyframeEditor == null || !this.keyframeEditor.view.isEditing())
-        );
+        /* Hide category bar + actions toggle while the "edit track" overlay is open */
+        boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
+
+        this.iconBar.setVisible(this.timelineVisible && notEditing);
+        this.actionsToggle.setVisible(this.timelineVisible && notEditing);
 
         UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);
 
@@ -1110,6 +1183,8 @@ public class UIReplaysEditor extends UIElement {
             int labelWidth = this.keyframeEditor.view.getLabelWidth();
             this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
         }
+
+        this.layoutActionsToggle();
     }
 
     @Override

@@ -104,6 +104,13 @@ public class Gizmo
     private final Matrix4f lastRenderMatrix = new Matrix4f();
     private boolean hasLastRenderMatrix;
 
+    /* While an axis ring is dragged the whole gizmo is drawn from the
+     * orientation captured at grab time, so the ring stays put (only the pie
+     * sweeps) instead of writhing as the live rotation is recomposed from euler
+     * angles each frame — most visible in local/world space. */
+    private final Matrix4f bakedRotationMatrix = new Matrix4f();
+    private boolean hasBakedRotation;
+
     /* VBO caching for rotation rings to save resources */
     private VertexBuffer rotateRingVbo;
     private VertexBuffer rotateStencilRingVbo;
@@ -514,6 +521,7 @@ public class Gizmo
         if (this.currentTransform == transform)
         {
             this.currentTransform = null;
+            this.hasBakedRotation = false;
 
             if (this.index < STENCIL_X || this.index > STENCIL_MAX)
             {
@@ -544,6 +552,7 @@ public class Gizmo
         stack.push();
         MatrixStackUtils.scaleBack(stack);
         this.captureRenderMatrix(stack);
+        this.applyBakedRotation(stack);
 
         if (BBSSettings.gizmos.get())
         {
@@ -783,13 +792,11 @@ public class Gizmo
 
         if (sweepDir == 0) sweepDir = 1;
 
+        /* The ring is baked static for the whole drag (see applyBakedRotation),
+         * so the pie grows from the fixed grab angle in every space — no
+         * counter-rotation to cancel a live-rotating frame is needed. */
         float startDeg = MathUtils.toDeg((float) Math.atan2(pz, px));
         float sweepDeg = this.currentTransform.getAccumulatedRotateDeg() * sweepDir;
-
-        if (this.currentTransform.isLocal())
-        {
-            startDeg -= sweepDeg;
-        }
 
         stack.push();
         
@@ -1103,6 +1110,7 @@ public class Gizmo
         stack.push();
         MatrixStackUtils.scaleBack(stack);
         this.captureRenderMatrix(stack);
+        this.applyBakedRotation(stack);
 
         float distanceScale = this.getAxesDistanceScale(stack);
 
@@ -1117,6 +1125,43 @@ public class Gizmo
     {
         this.lastRenderMatrix.set(stack.peek().getPositionMatrix());
         this.hasLastRenderMatrix = true;
+    }
+
+    /**
+     * Freeze the gizmo orientation at grab time while an axis ring is dragged:
+     * the drawing stack is rewound to {@link #bakedRotationMatrix} (the live
+     * {@link #lastRenderMatrix} is left untouched for pick/projection helpers).
+     * The origin is unchanged by a rotation, so only the orientation is pinned.
+     */
+    private void applyBakedRotation(MatrixStack stack)
+    {
+        if (this.isBakingRotation())
+        {
+            stack.peek().getPositionMatrix().set(this.bakedRotationMatrix);
+        }
+    }
+
+    /**
+     * Snapshot the current render orientation so the ring stays put for the
+     * coming drag. Called when an axis ring rotation begins.
+     */
+    public void bakeRotation()
+    {
+        if (this.hasLastRenderMatrix)
+        {
+            this.bakedRotationMatrix.set(this.lastRenderMatrix);
+            this.hasBakedRotation = true;
+        }
+    }
+
+    private boolean isBakingRotation()
+    {
+        return this.hasBakedRotation
+            && this.currentTransform != null
+            && this.currentTransform.isEditing()
+            && this.currentTransform.getMode() == Op.ROTATE.modeOrdinal
+            && !this.currentTransform.isSphereRotate()
+            && !this.currentTransform.isViewRotate();
     }
 
     private void drawAxes(MatrixStack stack, StencilMap map, float axisSize, float axisOffset)
