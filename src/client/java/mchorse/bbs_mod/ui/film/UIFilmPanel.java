@@ -2835,7 +2835,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (active)
         {
-            UIDashboardPanels.renderHighlight(context.batcher, area);
+            UIDashboardPanels.renderHighlight(context.batcher, area, Direction.BOTTOM);
         }
         else if (hover)
         {
