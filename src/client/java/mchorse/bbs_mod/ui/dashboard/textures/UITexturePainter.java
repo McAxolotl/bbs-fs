@@ -63,7 +63,7 @@ import java.util.function.Consumer;
  * </pre>
  * The 20px icon strip on the right combines action icons (save/resize/extract) and
  * tool icons (brush/eraser/fill/eyedropper) separated by a small gap, styled via
- * {@link mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels#renderHighlightHorizontal}.
+ * {@link mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels#renderHighlight} with {@link mchorse.bbs_mod.utils.Direction#RIGHT}.
  * The left options column is a {@link UIScrollView} with a draggable splitter whose
  * width is persisted per panel class. Closing is handled by Escape in
  * {@link mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker}.
@@ -363,7 +363,7 @@ public class UITexturePainter extends UIElement
 
         if (active != null)
         {
-            UIDashboardPanels.renderHighlightHorizontal(context.batcher, active.area);
+            UIDashboardPanels.renderHighlight(context.batcher, active.area, Direction.RIGHT);
         }
     }
 

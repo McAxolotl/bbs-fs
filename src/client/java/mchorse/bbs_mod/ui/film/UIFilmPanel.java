@@ -309,10 +309,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
                 if (active)
                 {
-                    int color = BBSSettings.primaryColor.get();
-
-                    context.batcher.box(x, ey - 2, ex, ey, Colors.A100 | color);
-                    context.batcher.gradientVBox(x, y, ex, ey - 2, color, Colors.A75 | color);
+                    Area.SHARED.set(x, y, ex - x, ey - y);
+                    UIDashboardPanels.renderHighlight(context.batcher, Area.SHARED, Direction.BOTTOM);
                 }
 
                 context.batcher.icon(icon, Colors.WHITE, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
@@ -2816,7 +2814,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (active)
         {
-            UIDashboardPanels.renderHighlight(context.batcher, area);
+            UIDashboardPanels.renderHighlight(context.batcher, area, Direction.BOTTOM);
         }
         else if (hover)
         {
