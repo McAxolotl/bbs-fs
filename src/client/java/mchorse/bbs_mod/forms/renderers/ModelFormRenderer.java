@@ -180,7 +180,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             PoseTransform poseTransform = targetPose.get(entry.getKey());
             PoseTransform value = entry.getValue();
 
-            if (Math.abs(value.fix) > 1e-4F)
+            if (value.fix != 0)
             {
                 poseTransform.translate.lerp(value.translate, value.fix);
                 poseTransform.scale.lerp(value.scale, value.fix);
