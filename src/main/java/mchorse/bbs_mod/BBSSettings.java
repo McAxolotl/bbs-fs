@@ -48,6 +48,9 @@ public class BBSSettings {
 	public static ValueInt rotate3dSphereColor;
 	public static ValueBoolean rotateHideRings;
 	public static ValueBoolean hideInactiveHandles;
+	public static ValueFloat snapTranslate;
+	public static ValueFloat snapRotate;
+	public static ValueFloat snapScale;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -423,6 +426,9 @@ public class BBSSettings {
 		rotate3dSphereColor = builder.getInt("rotate_3d_sphere_color", Colors.setA(Colors.WHITE, 0F)).colorAlpha();
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
+		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
+		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
+		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
 		transformSpace = builder.getInt("space", 0, 0, 2);
 		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);

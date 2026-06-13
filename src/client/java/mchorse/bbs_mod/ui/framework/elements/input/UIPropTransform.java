@@ -1183,6 +1183,15 @@ public class UIPropTransform extends UITransform
             this.applyRayScaleAxis(hit, this.axis2, all, s);
         }
 
+        if (this.shouldSnap(1))
+        {
+            float step = BBSSettings.snapScale.get();
+
+            if (all || this.axis == Axis.X || this.axis2 == Axis.X) s.x = (float) snap(s.x, step);
+            if (all || this.axis == Axis.Y || this.axis2 == Axis.Y) s.y = (float) snap(s.y, step);
+            if (all || this.axis == Axis.Z || this.axis2 == Axis.Z) s.z = (float) snap(s.z, step);
+        }
+
         this.setS(null, s.x, s.y, s.z);
     }
 
@@ -1362,6 +1371,19 @@ public class UIPropTransform extends UITransform
         Vector3f translateAxis = new Vector3f();
 
         this.dragTranslateBasis.getColumn(axis.ordinal(), translateAxis);
+
+        /* Snap the distance moved along the handle in translate units, so the
+         * step means the same thing whatever frame the handle works in. */
+        if (this.shouldSnap(0))
+        {
+            float length = translateAxis.length();
+
+            if (length > 1.0E-8F)
+            {
+                t = (float) (snap(t * length, BBSSettings.snapTranslate.get()) / length);
+            }
+        }
+
         out.add(translateAxis.mul(t));
     }
 
@@ -2623,19 +2645,28 @@ public class UIPropTransform extends UITransform
         );
     }
 
-    private boolean shouldSnapGizmoValues()
+    /* Blender-style snapping: every gesture is free by default and snaps to the
+     * configured step only while Ctrl is held. Typed numeric input is exact
+     * already, so it never snaps. */
+
+    private boolean shouldSnap(int mode)
     {
-        return this.editing && this.mode == 2 && this.rotateKind == RotateKind.AXIS && !Window.isAltPressed() && !this.numericActive;
+        return this.editing && this.mode == mode && Window.isCtrlPressed() && !this.numericActive;
+    }
+
+    private static double snap(double value, float step)
+    {
+        return step <= 0F ? value : Math.round(value / step) * (double) step;
     }
 
     private double snapGizmoValue(double value)
     {
-        if (!this.shouldSnapGizmoValues())
+        if (this.rotateKind != RotateKind.AXIS || !this.shouldSnap(2))
         {
             return value;
         }
 
-        return value < 0D ? Math.ceil(value) : Math.floor(value);
+        return snap(value, BBSSettings.snapRotate.get());
     }
 
     @Override
