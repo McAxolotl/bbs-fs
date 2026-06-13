@@ -510,11 +510,10 @@ public class UIReplaysEditor extends UIElement {
         List<UIKeyframeSheet> sheets = new ArrayList<>();
         Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
         Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
-        boolean tabsEnabled = BBSSettings.editorReplayTabs.get();
 
-        this.collectCuratedSheets(sheets, tabsEnabled);
-        this.collectFormPropertySheets(sheets, tabsEnabled, poseTabs, poseTabDepths);
-        this.collectIKSheets(sheets, tabsEnabled);
+        this.collectCuratedSheets(sheets);
+        this.collectFormPropertySheets(sheets, poseTabs, poseTabDepths);
+        this.collectIKSheets(sheets);
 
         this.keys.clear();
 
@@ -689,8 +688,8 @@ public class UIReplaysEditor extends UIElement {
         }
     }
 
-    private void collectCuratedSheets(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
-        if (!tabsEnabled || this.category == ReplayCategory.PLAYER) {
+    private void collectCuratedSheets(List<UIKeyframeSheet> sheets) {
+        if (this.category == ReplayCategory.PLAYER) {
             for (String key : ReplayKeyframes.CURATED_CHANNELS) {
                 BaseValue value = this.replay.keyframes.get(key);
                 KeyframeChannel channel = (KeyframeChannel) value;
@@ -704,7 +703,6 @@ public class UIReplaysEditor extends UIElement {
 
     private void collectFormPropertySheets(
             List<UIKeyframeSheet> sheets,
-            boolean tabsEnabled,
             Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
             Map<UIKeyframeSheet, Integer> poseTabDepths
     ) {
@@ -717,15 +715,14 @@ public class UIReplaysEditor extends UIElement {
             boolean isPose = FormUtils.isPoseProperty(name);
 
             if (property != null
-                    && (!tabsEnabled
-                    || (this.category == ReplayCategory.MODEL && !isPose)
+                    && ((this.category == ReplayCategory.MODEL && !isPose)
                     || (this.category == ReplayCategory.POSE && isPose))) {
                 BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
                 Form form = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
 
                 if (form != lastForm) {
                     if (lastForm != null) {
-                        this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+                        this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
                     }
 
                     lastForm = form;
@@ -743,13 +740,13 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (lastForm != null) {
-            this.flushForm(sheets, formSheets, lastForm, tabsEnabled, poseTabs, poseTabDepths);
+            this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
         }
     }
 
     /** IK tracks live in their own category; they are not form properties, so collect them by walking the form tree. */
-    private void collectIKSheets(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
-        if (tabsEnabled && this.category != ReplayCategory.IK) {
+    private void collectIKSheets(List<UIKeyframeSheet> sheets) {
+        if (this.category != ReplayCategory.IK) {
             return;
         }
 
@@ -826,7 +823,6 @@ public class UIReplaysEditor extends UIElement {
             List<UIKeyframeSheet> sheets,
             List<UIKeyframeSheet> formSheets,
             Form form,
-            boolean tabsEnabled,
             Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
             Map<UIKeyframeSheet, Integer> poseTabDepths
     ) {
@@ -847,13 +843,13 @@ public class UIReplaysEditor extends UIElement {
         formSheets.clear();
 
         if (form instanceof ModelForm modelForm) {
-            if (!tabsEnabled || this.category == ReplayCategory.MODEL) {
+            if (this.category == ReplayCategory.MODEL) {
                 List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
                 orderedFormSheets.addAll(physicsSheets);
             }
 
-            if (!tabsEnabled || this.category == ReplayCategory.POSE) {
+            if (this.category == ReplayCategory.POSE) {
                 List<UIKeyframeSheet> boneSheets = new ArrayList<>();
                 Map<String, Integer> depthBySheetId = new HashMap<>();
                 UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.replay.properties, boneSheets, depthBySheetId);
@@ -1167,11 +1163,10 @@ public class UIReplaysEditor extends UIElement {
 
     @Override
     public void render(UIContext context) {
-        /* Hide category bar when tabs are disabled or "edit track" overlay is open */
+        /* Hide category bar + actions toggle while the "edit track" overlay is open */
         boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
 
-        this.iconBar.setVisible(this.timelineVisible && BBSSettings.editorReplayTabs.get() && notEditing);
-        /* The actions toggle stays available even when keyframe category tabs are off. */
+        this.iconBar.setVisible(this.timelineVisible && notEditing);
         this.actionsToggle.setVisible(this.timelineVisible && notEditing);
 
         UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);

@@ -138,7 +138,6 @@ public class BBSSettings {
 
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
-	public static ValueBoolean editorReplayTabs;
 	public static ValueBoolean recordingOverlays;
 	public static ValueInt recordingPoseTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
@@ -529,7 +528,6 @@ public class BBSSettings {
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
-		editorReplayTabs = builder.getBoolean("replay_tabs", true);
 		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 

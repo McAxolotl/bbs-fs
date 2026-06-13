@@ -206,8 +206,6 @@
 	"bbs.config.recording.pose_transform_overlays-comment": "How many additional pose and transform tracks forms will have (relog into the world to refresh the number of overlays)",
 	"bbs.config.recording.swipe_damage": "Swipe damage",
 	"bbs.config.recording.swipe_damage-comment": "When swipe action clip gets recorded, insert also an automatic attack action clip",
-	"bbs.config.recording.replay_tabs": "Replay tabs",
-	"bbs.config.recording.replay_tabs-comment": "When enabled, replay tracks are split into three tabs: Player, Model and Pose. When disabled, all tracks are shown at once",
 	"bbs.config.recording.title": "Recording",
 	"bbs.config.recording.tooltip": "Here is everything related to player recording system",
 	"bbs.config.scrollbars.sensitivity": "Scrolling sensitivity",

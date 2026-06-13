@@ -46,6 +46,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private static final int POSE_TAB_DEPTH_STEP = 4;
     private static final float TRACK_BAR_ALPHA = 0.3F;
 
+    /** Track-name column layout: left text indent, right padding, right-side icon slot, text/icon gap. */
+    private static final int LABEL_TEXT_LEFT = 5;
+    private static final int LABEL_RIGHT_PAD = 2;
+    private static final int LABEL_ICON_SIZE = 16;
+    private static final int LABEL_TEXT_ICON_GAP = 3;
+
     private UIKeyframes keyframes;
 
     private List<UIKeyframeElement> elements = new ArrayList<>();
@@ -1016,15 +1022,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         context.batcher.box(lx, y, lx + 3, y + (int) this.trackHeight, group.color | Colors.A100);
 
+        int arrowX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
         FontRenderer font = context.batcher.getFont();
-        String label = group.title.get();
         int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
-        context.batcher.textShadow(label, lx + 5 + offset, my - font.getHeight() / 2, textColor);
+        int textX = lx + LABEL_TEXT_LEFT + offset;
+        String label = font.limitToWidth(group.title.get(), Math.max(0, arrowX - LABEL_TEXT_ICON_GAP - textX));
 
-        /* Render toggle */
-        int ty = my - 8;
-
-        context.batcher.icon(group.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN, lx + w - 16, ty);
+        context.batcher.textShadow(label, textX, my - font.getHeight() / 2, textColor);
+        context.batcher.icon(group.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN, arrowX, my - 8);
     }
 
     private void renderSheetLabel(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int offset, int y, int w)
@@ -1046,21 +1051,24 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         context.batcher.box(lx, y, lx + 2, y + (int) this.trackHeight, sheet.color | Colors.A100);
 
+        boolean poseTab = this.isPoseTabParent(sheet);
+        Icon icon = poseTab
+            ? (this.expandedPoseTabs.contains(sheet) ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT)
+            : sheet.getIcon();
+        boolean hasIcon = icon != null && this.trackHeight >= 12D;
+
+        int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
         FontRenderer font = context.batcher.getFont();
         int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
-        int textOffset = offset + this.getSheetIndent(sheet);
-        context.batcher.textShadow(sheet.title.get(), lx + 5 + textOffset, my - font.getHeight() / 2, textColor);
+        int textX = lx + LABEL_TEXT_LEFT + offset + this.getSheetIndent(sheet);
+        int textRight = hasIcon ? iconX - LABEL_TEXT_ICON_GAP : lx + w - LABEL_RIGHT_PAD;
+        String title = font.limitToWidth(sheet.title.get(), Math.max(0, textRight - textX));
 
-        if (this.isPoseTabParent(sheet) && this.trackHeight >= 12D)
+        context.batcher.textShadow(title, textX, my - font.getHeight() / 2, textColor);
+
+        if (hasIcon)
         {
-            context.batcher.icon(this.expandedPoseTabs.contains(sheet) ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT, lx + w - 16, my - 8);
-        }
-
-        Icon icon = sheet.getIcon();
-
-        if (icon != null && this.trackHeight >= 12D && !this.isPoseTabParent(sheet))
-        {
-            context.batcher.icon(icon, lx + w - 16, my - icon.h / 2);
+            context.batcher.icon(icon, iconX, my - icon.h / 2);
         }
     }
 
@@ -1358,10 +1366,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private boolean isPoseTabArrowHit(UIContext context, int y, int labelWidth)
     {
-        int x = this.keyframes.area.x + labelWidth - 16;
+        int x = this.keyframes.area.x + labelWidth - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
         int minY = y + (int) this.trackHeight / 2 - 8;
 
-        return context.mouseX >= x && context.mouseX < x + 16 && context.mouseY >= minY && context.mouseY < minY + 16;
+        return context.mouseX >= x && context.mouseX < x + LABEL_ICON_SIZE && context.mouseY >= minY && context.mouseY < minY + LABEL_ICON_SIZE;
     }
 
     private void togglePoseTab(UIKeyframeSheet parent)
