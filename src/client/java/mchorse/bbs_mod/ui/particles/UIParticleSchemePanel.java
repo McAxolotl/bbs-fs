@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.particles;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
@@ -43,6 +44,8 @@ import mchorse.bbs_mod.ui.particles.utils.MolangSyntaxHighlighter;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
+import mchorse.bbs_mod.utils.presets.PresetManager;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.IOUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -71,6 +74,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     public List<UIParticleSchemeSection> sections = new ArrayList<>();
 
+    private UICopyPasteController layoutPresetsController;
     private String molangId;
 
     public UIParticleSchemePanel(UIDashboard dashboard)
@@ -118,15 +122,27 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         this.iconBar.add(restart);
 
-        UIIcon layout = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.dock.toggleLock());
-        layout.tooltip(UIKeys.FILM_LAYOUT_UNLOCK, Direction.LEFT);
-        layout.context((menu) ->
-        {
-            menu.action(this.dock.isLocked() ? Icons.UNLOCKED : Icons.LOCKED, this.dock.isLocked() ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, this.dock::toggleLock);
-            menu.action(Icons.REFRESH, UIKeys.FILM_LAYOUT_RESET, this.dock::resetLayout);
-        });
+        this.layoutPresetsController = new UICopyPasteController(PresetManager.PARTICLE_LAYOUTS, "_CopyParticleLayout")
+            .supplier(this::getLayoutPresetData)
+            .consumer(this::applyLayoutFromPreset);
 
-        this.iconBar.add(layout);
+        UIIcon presets = new UIIcon(Icons.LAYOUT, (b) ->
+        {
+            UIContext context = this.getContext();
+
+            this.layoutPresetsController.openPresets(context, context.mouseX, context.mouseY);
+        });
+        presets.tooltip(UIKeys.FILM_LAYOUT_PRESETS, Direction.LEFT);
+
+        UIIcon resetLayout = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.dock.resetLayout());
+        resetLayout.tooltip(UIKeys.FILM_LAYOUT_RESET, Direction.LEFT);
+
+        UIIcon lock = new UIIcon(() -> this.dock.isLocked() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.dock.toggleLock());
+        lock.tooltip(UIKeys.FILM_LAYOUT_UNLOCK, Direction.LEFT);
+
+        this.iconBar.add(presets);
+        this.iconBar.add(resetLayout);
+        this.iconBar.add(lock);
 
         /* General tab */
         this.addSection(this.generalView, new UIParticleSchemeGeneralSection(this));
@@ -177,6 +193,27 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public void dirty()
     {
         this.renderer.emitter.setupVariables();
+    }
+
+    private MapType getLayoutPresetData()
+    {
+        MapType data = new MapType();
+
+        data.put("particle_layout", this.dock.getLayoutRoot().toData());
+
+        return data;
+    }
+
+    private void applyLayoutFromPreset(MapType data, int mouseX, int mouseY)
+    {
+        BaseType layoutData = data.get("particle_layout");
+
+        if (layoutData == null)
+        {
+            return;
+        }
+
+        this.dock.applyLayoutRoot(EditorLayoutNode.fromData(layoutData));
     }
 
     private ILayoutSource createLayoutSource()
