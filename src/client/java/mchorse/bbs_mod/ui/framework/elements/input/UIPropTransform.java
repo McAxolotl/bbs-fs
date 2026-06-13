@@ -2094,6 +2094,10 @@ public class UIPropTransform extends UITransform
             MathUtils.toDeg(source.z)
         );
 
+        /* Freeze the ring at this orientation so it stays put while we drag,
+         * instead of writhing as the live rotation is recomposed each frame. */
+        Gizmo.INSTANCE.bakeRotation();
+
         this.dragHasStart = true;
     }
 
