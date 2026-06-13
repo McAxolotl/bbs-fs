@@ -3,6 +3,7 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.PerLimbService;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
@@ -182,7 +184,7 @@ public abstract class BaseFilmController
         if (UIBaseMenu.renderAxes)
         {
             if (context.bone != null) renderAxes(context.bone, context.space, context.map, form, entity, transition, stack);
-            if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.space2, context.map, form, entity, transition, stack);
+            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.space2, form, entity, transition, stack);
         }
 
         stack.pop();
@@ -244,6 +246,50 @@ public abstract class BaseFilmController
             RenderSystem.enableDepthTest();
             stack.pop();
         }
+    }
+
+    /**
+     * The replay's "axes preview" (a secondary bone): plain, non-interactive
+     * cool axes via {@link Draw#coolerAxes} — not the editing gizmo. Resolves the
+     * bone matrix exactly like {@link #renderAxes} and applies the same
+     * distance scaling the gizmo uses, so the preview keeps a constant on-screen
+     * size and matches the gizmo's axes.
+     */
+    private static void renderPreviewAxes(String bone, TransformSpace space, Form form, IEntity entity, float transition, MatrixStack stack)
+    {
+        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        MatrixCacheEntry entry = map.get(mapKey);
+
+        if (entry == null)
+        {
+            return;
+        }
+
+        Matrix4f matrix = space == TransformSpace.LOCAL ? entry.matrix() : entry.origin();
+
+        if (matrix == null)
+        {
+            return;
+        }
+
+        if (space == TransformSpace.LOCAL) matrix = MatrixStackUtils.stripScale(matrix);
+        else if (space == TransformSpace.WORLD) matrix = new Matrix4f().translation(matrix.getTranslation(new Vector3f()));
+
+        stack.push();
+        MatrixStackUtils.multiply(stack, matrix);
+
+        Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+        Matrix4f proj = RenderSystem.getProjectionMatrix();
+        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
+        float distanceScale = BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+
+        stack.scale(distanceScale, distanceScale, distanceScale);
+        Draw.coolerAxes(stack, 0.25F, 0.008F);
+
+        RenderSystem.enableDepthTest();
+        stack.pop();
     }
 
     /**
