@@ -139,6 +139,17 @@ public abstract class EditorLayoutNode
         );
     }
 
+    /** Default particle layout: vertical split — sections column (left) | preview (right). */
+    public static EditorLayoutNode defaultParticleLayout()
+    {
+        return new SplitterNode(
+            false,
+            0.22F,
+            new PanelNode("sections"),
+            new PanelNode("preview")
+        );
+    }
+
     /** Returns a new tree with panelId removed; parent splitter is collapsed to its other child. */
     public static EditorLayoutNode copyWithRemovedLeaf(EditorLayoutNode root, String panelId)
     {

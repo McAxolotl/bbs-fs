@@ -1,8 +1,12 @@
 package mchorse.bbs_mod.ui.particles;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
+import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
@@ -16,8 +20,11 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.layout.ILayoutSource;
+import mchorse.bbs_mod.ui.framework.elements.layout.UIDockLayout;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextEditor;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
@@ -58,6 +65,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public UITextEditor textEditor;
     public UIParticleSchemeRenderer renderer;
     public UIScrollView sectionsView;
+    public UIElement sectionsPanel;
+    public UIDockLayout dock;
     public UIParticleSelectionPanel selectionPanel;
 
     public List<UIParticleSchemeSection> sections = new ArrayList<>();
@@ -70,17 +79,29 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.enableTabs();
 
         this.renderer = new UIParticleSchemeRenderer();
-        this.renderer.relative(this).wTo(this.iconBar.getFlex()).h(1F);
 
         this.textEditor = new UITextEditor(null).highlighter(new MolangSyntaxHighlighter());
-        this.textEditor.background().relative(this.editor).y(1F, -60).w(1F).h(60);
         this.sectionsView = UI.scrollView(20, 10);
         this.sectionsView.scroll.cancelScrolling().opposite().scrollSpeed *= 3;
-        this.sectionsView.relative(this.editor).w(200).hTo(this.textEditor.area);
 
-        this.prepend(new UIRenderable(this::drawOverlay));
-        this.prepend(this.renderer);
-        this.editor.add(this.textEditor, this.sectionsView);
+        /* Sections panel: scrollable sections with the MoLang strip pinned to its bottom. */
+        this.sectionsPanel = new UIElement();
+        this.textEditor.background().relative(this.sectionsPanel).y(1F, -60).w(1F).h(60);
+        this.sectionsView.relative(this.sectionsPanel).w(1F).hTo(this.textEditor.area);
+        this.sectionsPanel.add(this.sectionsView, this.textEditor);
+
+        /* Dockable layout: 3D preview + sections, sharing the system with the film editor. */
+        this.dock = new UIDockLayout();
+        this.dock.relative(this.editor).w(1F).h(1F);
+        this.dock.source(this.createLayoutSource())
+            .frameless("preview")
+            .gate(() -> this.data != null);
+        this.dock.addPanel("sections", this.sectionsPanel, Icons.EDITOR);
+        this.dock.addPanel("preview", this.renderer, Icons.VIDEO_CAMERA);
+        this.dock.mount();
+        this.editor.add(this.dock);
+
+        this.add(new UIRenderable(this::drawOverlay));
 
         this.selectionPanel = new UIParticleSelectionPanel(this);
         this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
@@ -99,6 +120,16 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         restart.tooltip(UIKeys.SNOWSTORM_RESTART_EMITTER, Direction.LEFT);
 
         this.iconBar.add(restart);
+
+        UIIcon layout = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.dock.toggleLock());
+        layout.tooltip(UIKeys.FILM_LAYOUT_UNLOCK, Direction.LEFT);
+        layout.context((menu) ->
+        {
+            menu.action(this.dock.isLocked() ? Icons.UNLOCKED : Icons.LOCKED, this.dock.isLocked() ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, this.dock::toggleLock);
+            menu.action(Icons.REFRESH, UIKeys.FILM_LAYOUT_RESET, this.dock::resetLayout);
+        });
+
+        this.iconBar.add(layout);
 
         this.addSection(new UIParticleSchemeGeneralSection(this));
         this.addSection(new UIParticleSchemeCurvesSection(this));
@@ -158,6 +189,50 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.renderer.emitter.setupVariables();
     }
 
+    private ILayoutSource createLayoutSource()
+    {
+        ValueEditorLayout layout = BBSSettings.editorLayoutSettings;
+
+        return new ILayoutSource()
+        {
+            @Override
+            public BaseValue value()
+            {
+                return layout;
+            }
+
+            @Override
+            public EditorLayoutNode getRoot()
+            {
+                return layout.getParticleLayoutRoot();
+            }
+
+            @Override
+            public void setRoot(EditorLayoutNode root)
+            {
+                layout.setParticleLayoutRoot(root);
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplitters()
+            {
+                return layout.getParticleSplitters();
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplittersForWrite()
+            {
+                return layout.getParticleSplittersForWrite();
+            }
+
+            @Override
+            public EditorLayoutNode getDefault()
+            {
+                return EditorLayoutNode.defaultParticleLayout();
+            }
+        };
+    }
+
     private void addSection(UIParticleSchemeSection section)
     {
         this.sections.add(section);
@@ -169,7 +244,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         this.editMoLang(null, null, null);
 
-        this.renderer.setVisible(data != null);
         this.selectionPanel.setVisible(data == null);
 
         if (this.data != null)
@@ -187,6 +261,9 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         {
             this.renderer.setScheme(null);
         }
+
+        /* Dock gate shows/hides the preview + sections panels based on data presence. */
+        this.dock.setupFlex(true);
     }
 
     @Override
@@ -251,9 +328,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         super.resize();
 
-        /* Renderer needs to be resized again because iconBar is in front, and wTo() doesn't
-         * work earlier for some reason... */
-        this.renderer.resize();
+        if (this.dock != null)
+        {
+            this.dock.setupFlex(true);
+        }
     }
 
     @Override
