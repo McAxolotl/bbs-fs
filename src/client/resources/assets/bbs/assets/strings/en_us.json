@@ -1457,6 +1457,7 @@
 	"bbs.ui.film.replays.category.pose.tooltip": "Pose-related tracks (Bones, Transforms)",
 	"bbs.ui.film.replays.category.ik": "IK",
 	"bbs.ui.film.replays.category.ik.tooltip": "IK tracks (targets, pole targets, chain controls)",
+	"bbs.ui.film.replays.actions_timeline": "Action clips timeline",
 	"keybinds.config.title": "UI keybinds",
 	"keybinds.config.transformations.title": "Transformations",
 	"keybinds.config.transformations.tooltip": "Keybinds that are available when editing pose in film editor's form keyframe panel",

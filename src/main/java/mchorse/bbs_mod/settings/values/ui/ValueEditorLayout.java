@@ -15,8 +15,7 @@ public class ValueEditorLayout extends BaseValue
     public enum FilmEditor
     {
         CAMERA("camera"),
-        REPLAY("replay"),
-        ACTION("action");
+        REPLAY("replay");
 
         public final String id;
 

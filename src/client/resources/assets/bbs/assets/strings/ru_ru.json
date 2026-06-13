@@ -1446,6 +1446,7 @@
 	"bbs.ui.film.replays.category.pose.tooltip": "Треки позы (Кости, Трансформации)",
 	"bbs.ui.film.replays.category.ik": "ИК",
 	"bbs.ui.film.replays.category.ik.tooltip": "Треки ИК (цели, цели полюса, настройки цепочек)",
+	"bbs.ui.film.replays.actions_timeline": "Таймлайн действий",
 	"keybinds.config.title": "UI клавиши",
 	"keybinds.config.transformations.title": "Трансформации",
 	"keybinds.config.transformations.tooltip": "Клавиши, которые доступны при редактировании позы в редакторе фильмов и в редакторе позы ключевого кадра",
