@@ -49,6 +49,8 @@ public class UIPropTransform extends UITransform
     private static final float TRACKBALL_WHEEL_DEG = 5F;
     /** Factor the modifier keys apply to a gizmo step: Ctrl coarsens, Alt refines. */
     private static final float STEP_MODIFIER = 5F;
+    /** Cursor-speed multiplier for a ray gesture while Shift is held (precision drag). */
+    private static final float FINE_DRAG_FACTOR = 0.1F;
 
     private Transform transform;
     private Runnable preCallback;
@@ -175,6 +177,16 @@ public class UIPropTransform extends UITransform
     /** Trackball numeric target: {@link Axis#X} = horizontal (screen-up axis),
      *  {@link Axis#Y} = vertical (screen-right axis). */
     private Axis trackballAxis = Axis.X;
+
+    /* Fine-drag (Shift) precision: a virtual cursor that lags the real one,
+     * advancing at {@link #FINE_DRAG_FACTOR} speed while Shift is held, so every
+     * ray gesture slows uniformly without per-mode code. The lag is the
+     * accumulated offset between the two. */
+    private float fineOffsetX;
+    private float fineOffsetY;
+    private int fineLastX;
+    private int fineLastY;
+    private boolean fineHasLast;
 
     private UITransformHandler handler;
 
@@ -2121,6 +2133,7 @@ public class UIPropTransform extends UITransform
         this.drag = null;
         this.dragHasStart = false;
         this.arcballAnchored = false;
+        this.fineHasLast = false;
         this.clearNumericInput();
         Gizmo.INSTANCE.clearTrackedTransform(this);
 
@@ -2419,6 +2432,10 @@ public class UIPropTransform extends UITransform
 
         this.lastX = context.mouseX;
         this.lastY = context.mouseY;
+
+        /* The cursor was free to roam while typing; re-anchor the precision
+         * tracking here so the resumed drag doesn't inherit a stale lag. */
+        this.resetFineCursor(context.mouseX, context.mouseY);
 
         if (this.useRayDrag())
         {
@@ -2801,6 +2818,53 @@ public class UIPropTransform extends UITransform
         return label.get();
     }
 
+    /**
+     * Maintain the virtual cursor for the current frame. While Shift is held it
+     * advances at {@link #FINE_DRAG_FACTOR} of the real cursor — the rest of the
+     * motion piles into the lag offset; released, it tracks the cursor 1:1 again
+     * with no jump. Ray gestures read {@link #fineX}/{@link #fineY} so they all
+     * slow uniformly without any per-mode code.
+     */
+    private void updateFineCursor(int mouseX, int mouseY)
+    {
+        if (!this.fineHasLast)
+        {
+            this.resetFineCursor(mouseX, mouseY);
+
+            return;
+        }
+
+        if (Window.isShiftPressed())
+        {
+            float keep = 1F - FINE_DRAG_FACTOR;
+
+            this.fineOffsetX += (mouseX - this.fineLastX) * keep;
+            this.fineOffsetY += (mouseY - this.fineLastY) * keep;
+        }
+
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+    }
+
+    private void resetFineCursor(int mouseX, int mouseY)
+    {
+        this.fineOffsetX = 0F;
+        this.fineOffsetY = 0F;
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+        this.fineHasLast = true;
+    }
+
+    private int fineX(int mouseX)
+    {
+        return Math.round(mouseX - this.fineOffsetX);
+    }
+
+    private int fineY(int mouseY)
+    {
+        return Math.round(mouseY - this.fineOffsetY);
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -2822,12 +2886,18 @@ public class UIPropTransform extends UITransform
             int border = 5;
             int borderPadding = border + 1;
 
+            this.updateFineCursor(context.mouseX, context.mouseY);
+
             if (rawX <= border)
             {
                 Window.moveCursor(w - borderPadding, (int) mc.mouse.getY());
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
+
+                /* The wrap re-anchors the drag at the teleported position, so the
+                 * virtual cursor resets there too — no lag carries across the seam. */
+                this.resetFineCursor(this.lastX, context.mouseY);
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
@@ -2838,11 +2908,13 @@ public class UIPropTransform extends UITransform
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
 
+                this.resetFineCursor(this.lastX, context.mouseY);
+
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (this.useRayDrag())
             {
-                this.applyRayDrag(context.mouseX, context.mouseY);
+                this.applyRayDrag(this.fineX(context.mouseX), this.fineY(context.mouseY));
             }
             else
             {
@@ -2850,7 +2922,7 @@ public class UIPropTransform extends UITransform
                 Vector3f vector = this.getValue();
                 boolean all = this.mode == 1 && Window.isCtrlPressed();
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
-                float factor = (float) reference.getValueModifier();
+                float factor = (float) reference.getValueModifier() * (Window.isShiftPressed() ? FINE_DRAG_FACTOR : 1F);
 
                 if (this.mode == 0)
                 {
