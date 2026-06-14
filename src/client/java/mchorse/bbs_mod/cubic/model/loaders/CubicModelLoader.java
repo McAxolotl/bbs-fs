@@ -162,7 +162,7 @@ public class CubicModelLoader implements IModelLoader
             }
         }
 
-        if (materials.isEmpty() || materials.get(0).useTexture)
+        if (materials.isEmpty() || (materials.size() == 1 && materials.get(0).useTexture))
         {
             return;
         }
@@ -201,6 +201,8 @@ public class CubicModelLoader implements IModelLoader
         /* Load pixels */
         for (OBJMaterial material : materials)
         {
+            Pixels newPixels = null;
+
             if (material.useTexture)
             {
                 List<Link> materialTextures = IModelLoader.getLinks(links, (a) ->
@@ -210,31 +212,33 @@ public class CubicModelLoader implements IModelLoader
                     return string.startsWith(model.toString()) && string.contains("/" + material.name + "/") && string.endsWith(".png");
                 });
 
-                Link link = materialTextures.get(0);
-
-                try (InputStream stream = provider.getAsset(link))
+                if (!materialTextures.isEmpty())
                 {
-                    Pixels newPixels = Pixels.fromPNGStream(stream);
-                    Area area = new Area();
-
-                    pixels.put(material, new Pair<>(newPixels, area));
-                    area.setSize(newPixels.width, newPixels.height);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
+                    try (InputStream stream = provider.getAsset(materialTextures.get(0)))
+                    {
+                        newPixels = Pixels.fromPNGStream(stream);
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
                 }
             }
-            else
+
+            /* Flat color fallback for non-textured materials, and for textured
+             * materials whose texture couldn't be located or read - this keeps
+             * every material present in the atlas so UV remapping never resolves
+             * to a missing entry. */
+            if (newPixels == null)
             {
-                Pixels newPixels = Pixels.fromSize(1, 1);
-                Area area = new Area();
-                Color set = new Color().set(material.r, material.g, material.b, 1F);
-
-                newPixels.setColor(0, 0, set);
-                pixels.put(material, new Pair<>(newPixels, area));
-                area.setSize(newPixels.width, newPixels.height);
+                newPixels = Pixels.fromSize(1, 1);
+                newPixels.setColor(0, 0, new Color().set(material.r, material.g, material.b, 1F));
             }
+
+            Area area = new Area();
+
+            pixels.put(material, new Pair<>(newPixels, area));
+            area.setSize(newPixels.width, newPixels.height);
         }
 
         /* Pack boxes to occupy the least space */
@@ -306,6 +310,11 @@ public class CubicModelLoader implements IModelLoader
             for (MeshOBJ mesh : value.meshes)
             {
                 Pair<Pixels, Area> pair = pixels.get(mesh.material);
+
+                if (pair == null)
+                {
+                    continue;
+                }
 
                 for (int i = 0, c = mesh.triangles; i < c; i++)
                 {
