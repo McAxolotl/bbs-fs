@@ -39,6 +39,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransfo
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -364,6 +366,43 @@ public class UIReplaysEditorUtils
             String title = path.isEmpty() ? "Physics/" + rootBone : path + "/Physics/" + rootBone;
 
             addTargetSheet(out, properties, id, title, Colors.MAGENTA, Icons.TIME);
+        }
+    }
+
+    /**
+     * One texture track per model material (OBJ material name / BOBJ mesh name), enumerated from
+     * the loaded model. Each is a LINK channel layered over the material's static default at
+     * playback - mirrors the bone tracks. Lives in the Model category beside the main texture track.
+     */
+    public static void addMaterialTextureSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        Link formDefault = modelForm.texture.get() != null ? modelForm.texture.get() : model.texture;
+
+        for (String material : model.materials)
+        {
+            if (material == null || material.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toMaterialTextureKey(path, material);
+            String title = path.isEmpty() ? "Texture/" + material : path + "/Texture/" + material;
+            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
+
+            /* Seed the sheet's value with the material's current default texture (folder/Kd, else the
+             * form/model default) so a new keyframe starts there instead of null - the texture picker
+             * then opens at that texture rather than the root. */
+            ValueLink property = new ValueLink(id, model.getMaterialTexture(material, formDefault));
+
+            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL));
         }
     }
 

@@ -827,6 +827,10 @@ public class UIReplaysEditor extends UIElement
         {
             if (this.category == ReplayCategory.MODEL)
             {
+                List<UIKeyframeSheet> materialSheets = new ArrayList<>();
+                UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
+                orderedFormSheets.addAll(materialSheets);
+
                 List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
                 orderedFormSheets.addAll(physicsSheets);

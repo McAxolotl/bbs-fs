@@ -356,7 +356,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         final Link resolvedDefault = defaultTexture;
 
-        model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) -> model.getMaterialTexture(material, resolvedDefault));
+        model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
+        {
+            /* Animated per-material track wins; otherwise fall back to the material's static
+             * default (folder/Kd) and finally the form/model default texture. */
+            Link override = this.form.materialTextureOverrides.get(material);
+
+            return override != null ? override : model.getMaterialTexture(material, resolvedDefault);
+        });
 
         if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
