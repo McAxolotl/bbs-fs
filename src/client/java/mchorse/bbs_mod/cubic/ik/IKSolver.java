@@ -83,12 +83,13 @@ final class IKSolver
 
         boolean constrained = limits != null && rootParentRotation != null;
 
-        /* A pole on an unconstrained chain rolls the WHOLE chain (Blender-style):
-         * the bend goes to a stable canonical side and the renderer rigidly rolls
-         * the chain onto the pole, geometry included. Constrained chains keep the
-         * old behaviour — the limit search needs positions pre-aimed at the pole,
-         * and a bone-level roll would be eaten by the clamps. */
-        boolean geometryRoll = applyPole && polePoint != null && !constrained;
+        /* A pole rolls the WHOLE chain (Blender-style): the bend is oriented to its
+         * stable natural side and the renderer rigidly rolls the chain onto the
+         * pole, geometry included. Constrained chains roll too — the roll rides on
+         * the chain root, above the limited joints, so it reorients the whole limb
+         * onto the pole without touching any joint's local rotation (a hinge stays
+         * a hinge). The limit solve shapes the bend; the pole only rolls. */
+        boolean geometryRoll = applyPole && polePoint != null;
         float roll = 0F;
 
         if (n == 3)
@@ -100,7 +101,14 @@ final class IKSolver
 
             if (geometryRoll)
             {
-                roll = orientBendForRoll(positions, hinge, polePoint);
+                orientBendToNatural(positions, hinge);
+
+                if (constrained)
+                {
+                    solveBendForLimits(positions, limits, rootParentRotation);
+                }
+
+                roll = poleRoll(positions, polePoint);
             }
             else
             {
@@ -115,10 +123,19 @@ final class IKSolver
         else if (constrained)
         {
             /* Longer chain: angle-space CCD keeps each joint in its DOF, then the
-             * pole rotates the whole chain about root->tip — that preserves every
+             * pole rolls the whole chain about root->tip — that preserves every
              * joint's local rotation, so it can't break the limits. */
             solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation);
-            orientBend(positions, hinge, polePoint);
+
+            if (geometryRoll)
+            {
+                orientBendToNatural(positions, hinge);
+                roll = poleRoll(positions, polePoint);
+            }
+            else
+            {
+                orientBend(positions, hinge, polePoint);
+            }
         }
         else
         {
@@ -132,7 +149,8 @@ final class IKSolver
 
             if (geometryRoll)
             {
-                roll = orientBendForRoll(positions, hinge, polePoint);
+                orientBendToNatural(positions, hinge);
+                roll = poleRoll(positions, polePoint);
             }
             else
             {
@@ -684,18 +702,53 @@ final class IKSolver
 
     /**
      * Orients the bend to the chain's NATURAL bend direction (the captured rest
-     * hinge, {@code axis x hinge}) and returns the roll, in radians, from that
-     * direction to the pole about the root-to-tip axis. The renderer applies the
-     * roll as a rigid rotation of the whole chain — so the natural bend plus the
-     * roll lands the chain on the pole exactly, the way Blender rolls the chain
-     * with the pole instead of only re-aiming the bend. Measuring from the rest
-     * bend (not an axis-only canonical side) keeps the roll at zero when the pole
-     * sits at the natural elbow, so the geometry carries no baseline twist; the
-     * hinge is captured from the pre-solve pose, so it doesn't breathe within the
-     * frame and the angle can only flip at the antipode of the rest bend. Falls
-     * back to the axis-only side direction for a straight rest limb with no hinge.
+     * hinge, {@code axis x hinge}) — a stable zero independent of the pole. The
+     * renderer later rolls the whole chain from here onto the pole, so anchoring
+     * the baked bend to the rest side keeps the geometry free of any baseline
+     * twist; the hinge comes from the pre-solve pose, so it doesn't breathe within
+     * the frame. Falls back to the axis-only side for a straight rest limb with no
+     * hinge. A constrained chain shapes the bend further (limit clamp) after this.
      */
-    private static float orientBendForRoll(List<Vector3f> p, Vector3f hinge, Vector3f polePoint)
+    private static void orientBendToNatural(List<Vector3f> p, Vector3f hinge)
+    {
+        int n = p.size();
+
+        if (n < 3)
+        {
+            return;
+        }
+
+        Vector3f root = p.get(0);
+        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
+
+        if (!normalize(axis))
+        {
+            return;
+        }
+
+        Vector3f reference = hinge != null ? new Vector3f(axis).cross(hinge) : null;
+
+        if (reference == null || !project(reference, axis))
+        {
+            reference = sideAxis(axis);
+        }
+
+        if (reference != null)
+        {
+            orientBendTo(p, root, axis, reference);
+        }
+    }
+
+    /**
+     * The roll, in radians, from the chain's CURRENT bend to the pole about the
+     * root-to-tip axis — the rigid rotation the renderer applies so the whole
+     * chain (geometry included) swings onto the pole, the way Blender rolls the
+     * chain with the pole instead of only re-aiming the bend. Measured from
+     * wherever the bend currently sits, so it composes cleanly after a limit clamp
+     * has shaped a constrained joint: the clamp fixes the hinge, the roll rides on
+     * the root above it and aims the whole limb at the pole.
+     */
+    private static float poleRoll(List<Vector3f> p, Vector3f polePoint)
     {
         int n = p.size();
 
@@ -712,14 +765,9 @@ final class IKSolver
             return 0F;
         }
 
-        Vector3f reference = hinge != null ? new Vector3f(axis).cross(hinge) : null;
+        Vector3f bend = new Vector3f(p.get(1)).sub(root);
 
-        if (reference == null || !project(reference, axis))
-        {
-            reference = sideAxis(axis);
-        }
-
-        if (reference == null)
+        if (!project(bend, axis))
         {
             return 0F;
         }
@@ -731,9 +779,7 @@ final class IKSolver
             return 0F;
         }
 
-        orientBendTo(p, root, axis, reference);
-
-        return signedAngle(reference, poleDir, axis);
+        return signedAngle(bend, poleDir, axis);
     }
 
     /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */
