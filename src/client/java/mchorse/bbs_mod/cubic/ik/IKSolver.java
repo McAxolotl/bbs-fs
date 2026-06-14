@@ -41,18 +41,28 @@ final class IKSolver
     {
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance)
+    /**
+     * Solver output: the solved joint {@code positions} plus the pole {@code roll}
+     * (radians) the renderer applies as a rigid rotation of the whole chain about
+     * the root-to-tip axis. The roll is non-zero only for unconstrained chains with
+     * a pole target — see {@link #orientBendForRoll}.
+     */
+    public record Solution(List<Vector3f> positions, float roll)
+    {
+    }
+
+    public static Solution solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance)
     {
         return solve(positions, target, applyPole, polePoint, softness, maxIterations, tolerance, null, null);
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
+    public static Solution solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
     {
         int n = positions.size();
 
         if (n < 2)
         {
-            return positions;
+            return new Solution(positions, 0F);
         }
 
         float total = 0F;
@@ -64,7 +74,7 @@ final class IKSolver
 
         if (total <= EPS)
         {
-            return positions;
+            return new Solution(positions, 0F);
         }
 
         Vector3f root = new Vector3f(positions.get(0));
@@ -73,17 +83,33 @@ final class IKSolver
 
         boolean constrained = limits != null && rootParentRotation != null;
 
+        /* A pole on an unconstrained chain rolls the WHOLE chain (Blender-style):
+         * the bend goes to a stable canonical side and the renderer rigidly rolls
+         * the chain onto the pole, geometry included. Constrained chains keep the
+         * old behaviour — the limit search needs positions pre-aimed at the pole,
+         * and a bone-level roll would be eaten by the clamps. */
+        boolean geometryRoll = applyPole && polePoint != null && !constrained;
+        float roll = 0F;
+
         if (n == 3)
         {
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
             solveTwoBone(positions, root, goal);
-            orientBend(positions, hinge, polePoint);
 
-            if (constrained)
+            if (geometryRoll)
             {
-                solveBendForLimits(positions, limits, rootParentRotation);
+                roll = orientBendForRoll(positions, polePoint);
+            }
+            else
+            {
+                orientBend(positions, hinge, polePoint);
+
+                if (constrained)
+                {
+                    solveBendForLimits(positions, limits, rootParentRotation);
+                }
             }
         }
         else if (constrained)
@@ -103,10 +129,18 @@ final class IKSolver
              * frame. FABRIK distributes the bend evenly and lands on the same
              * shape for the same input — a rope drapes instead of coiling. */
             solveFabrik(positions, root, goal, maxIterations, tolerance);
-            orientBend(positions, hinge, polePoint);
+
+            if (geometryRoll)
+            {
+                roll = orientBendForRoll(positions, polePoint);
+            }
+            else
+            {
+                orientBend(positions, hinge, polePoint);
+            }
         }
 
-        return positions;
+        return new Solution(positions, roll);
     }
 
     /**
@@ -614,14 +648,6 @@ final class IKSolver
             return;
         }
 
-        /* Current bend direction = where the elbow points off the limb axis. */
-        Vector3f current = new Vector3f(p.get(1)).sub(root);
-
-        if (!project(current, axis))
-        {
-            return;
-        }
-
         Vector3f desired = new Vector3f();
 
         if (polePoint != null)
@@ -653,6 +679,65 @@ final class IKSolver
             return;
         }
 
+        orientBendTo(p, root, axis, desired);
+    }
+
+    /**
+     * Orients the bend to a STABLE canonical side (independent of the pole and the
+     * posed hinge) and returns the roll, in radians, from that side to the pole
+     * about the root-to-tip axis. The renderer applies that roll as a rigid
+     * rotation of the whole chain — so the canonical bend plus the roll lands the
+     * chain on the pole exactly, the way Blender rolls the chain with the pole
+     * instead of only re-aiming the bend. The reference is the axis-only side
+     * direction, never the breathing hinge or the solved seed, so the angle cannot
+     * slam across the +-180 branch as the pose wobbles.
+     */
+    private static float orientBendForRoll(List<Vector3f> p, Vector3f polePoint)
+    {
+        int n = p.size();
+
+        if (n < 3)
+        {
+            return 0F;
+        }
+
+        Vector3f root = p.get(0);
+        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
+
+        if (!normalize(axis))
+        {
+            return 0F;
+        }
+
+        Vector3f side = sideAxis(axis);
+
+        if (side == null)
+        {
+            return 0F;
+        }
+
+        Vector3f poleDir = new Vector3f(polePoint).sub(root);
+
+        if (!project(poleDir, axis))
+        {
+            return 0F;
+        }
+
+        orientBendTo(p, root, axis, side);
+
+        return signedAngle(side, poleDir, axis);
+    }
+
+    /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */
+    private static void orientBendTo(List<Vector3f> p, Vector3f root, Vector3f axis, Vector3f desired)
+    {
+        Vector3f current = new Vector3f(p.get(1)).sub(root);
+
+        if (!project(current, axis))
+        {
+            return;
+        }
+
         float theta = signedAngle(current, desired, axis);
 
         if (Math.abs(theta) < EPS)
@@ -663,7 +748,7 @@ final class IKSolver
         Quaternionf q = new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, theta);
         Vector3f rel = new Vector3f();
 
-        for (int i = 1; i < n - 1; i++)
+        for (int i = 1; i < p.size() - 1; i++)
         {
             rel.set(p.get(i)).sub(root);
             q.transform(rel);
@@ -699,21 +784,28 @@ final class IKSolver
         /* Straight limb: derive a stable side axis from the limb direction. */
         Vector3f limb = new Vector3f(p.get(n - 1)).sub(a);
 
-        if (!normalize(limb))
+        return normalize(limb) ? sideAxis(limb) : null;
+    }
+
+    /**
+     * A fixed side direction perpendicular to {@code axis}, derived from the axis
+     * alone ({@code axis x worldForward}, falling back to {@code worldUp}). Depends
+     * only on the limb/target direction, so — unlike the posed hinge — it never
+     * breathes with the animation. Used as the straight-limb hinge fallback and as
+     * the stable zero for the pole roll.
+     */
+    private static Vector3f sideAxis(Vector3f axis)
+    {
+        Vector3f side = new Vector3f(axis).cross(0F, 0F, 1F);
+
+        if (normalize(side))
         {
-            return null;
+            return side;
         }
 
-        Vector3f hinge = new Vector3f(limb).cross(0F, 0F, 1F);
+        side = new Vector3f(axis).cross(0F, 1F, 0F);
 
-        if (normalize(hinge))
-        {
-            return hinge;
-        }
-
-        hinge = new Vector3f(limb).cross(0F, 1F, 0F);
-
-        return normalize(hinge) ? hinge : null;
+        return normalize(side) ? side : null;
     }
 
     private static float clamp(float value, float min, float max)
