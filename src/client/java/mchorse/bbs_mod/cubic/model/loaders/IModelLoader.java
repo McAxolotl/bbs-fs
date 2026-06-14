@@ -53,5 +53,28 @@ public interface IModelLoader
         return newLinks;
     }
 
+    /**
+     * First PNG inside a folder named after the material ({@code <model>/.../<material>/...}),
+     * or null if the material has no such folder. Used to resolve per-material default textures
+     * for both OBJ (material name) and BOBJ (mesh name) models.
+     */
+    public static Link findMaterialTexture(Collection<Link> links, Link model, String material)
+    {
+        String prefix = model.toString();
+        String folder = "/" + material + "/";
+
+        for (Link link : links)
+        {
+            String string = link.toString();
+
+            if (string.startsWith(prefix) && string.contains(folder) && string.endsWith(".png"))
+            {
+                return link;
+            }
+        }
+
+        return null;
+    }
+
     public ModelInstance load(String id, ModelManager models, Link model, Collection<Link> links, MapType config);
 }

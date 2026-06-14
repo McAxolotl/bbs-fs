@@ -129,10 +129,11 @@ public class CubicModelLoader implements IModelLoader
     }
 
     /**
-     * Load each material's default texture into the model instance. Textures live under
-     * {@code <model>/textures/<material>/} (first PNG wins); a material with no such file
-     * gets a 1x1 swatch of its flat diffuse (Kd) color. OBJ UVs stay normalized (0..1) into
-     * each material's own texture, so the model's texture sheet is kept at 1x1.
+     * Load each material's default texture into the model instance. Textures live in a folder
+     * named after the material, either {@code <model>/<material>/} or {@code <model>/textures/<material>/}
+     * (first PNG wins); a material with no such file gets a 1x1 swatch of its flat diffuse (Kd)
+     * color. OBJ UVs stay normalized (0..1) into each material's own texture, so the model's
+     * texture sheet is kept at 1x1.
      */
     private void loadMaterialTextures(AssetProvider provider, Collection<Link> links, Link model, ModelInstance newModel, Model theModel, Map<String, MeshesOBJ> compile)
     {
@@ -161,7 +162,7 @@ public class CubicModelLoader implements IModelLoader
         {
             newModel.materials.add(material.name);
 
-            Link texture = this.findMaterialTexture(links, model, material.name);
+            Link texture = IModelLoader.findMaterialTexture(links, model, material.name);
 
             if (texture == null)
             {
@@ -170,25 +171,6 @@ public class CubicModelLoader implements IModelLoader
 
             newModel.materialTextures.put(material.name, texture);
         }
-    }
-
-    /** First PNG under {@code <model>/textures/<material>/}, or null if the material has no texture folder. */
-    private Link findMaterialTexture(Collection<Link> links, Link model, String material)
-    {
-        String prefix = model.toString();
-        String folder = "/textures/" + material + "/";
-
-        for (Link link : links)
-        {
-            String string = link.toString();
-
-            if (string.startsWith(prefix) && string.contains(folder) && string.endsWith(".png"))
-            {
-                return link;
-            }
-        }
-
-        return null;
     }
 
     /**

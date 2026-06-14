@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.cubic;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
@@ -422,16 +423,31 @@ public class ModelInstance implements IModelInstance
         }
         else if (this.model instanceof BOBJModel model)
         {
-            BOBJModelVAO vao = model.getVao();
+            List<BOBJModelVAO> vaos = model.getVaos();
 
-            if (vao != null)
+            if (!vaos.isEmpty())
             {
                 stack.push();
                 stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180F));
 
-                vao.armature.setupMatrices();
-                vao.updateMesh(stencilMap);
-                vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                model.getArmature().setupMatrices();
+
+                /* One draw per mesh; bind that mesh's resolved texture (mesh name = material). */
+                for (BOBJModelVAO vao : vaos)
+                {
+                    if (textureResolver != null)
+                    {
+                        Link link = textureResolver.apply(vao.data.mesh.name);
+
+                        if (link != null)
+                        {
+                            BBSModClient.getTextures().bindTexture(link);
+                        }
+                    }
+
+                    vao.updateMesh(stencilMap);
+                    vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                }
 
                 stack.pop();
             }
