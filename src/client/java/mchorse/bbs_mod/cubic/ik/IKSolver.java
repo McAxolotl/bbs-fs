@@ -100,7 +100,7 @@ final class IKSolver
 
             if (geometryRoll)
             {
-                roll = orientBendForRoll(positions, polePoint);
+                roll = orientBendForRoll(positions, hinge, polePoint);
             }
             else
             {
@@ -132,7 +132,7 @@ final class IKSolver
 
             if (geometryRoll)
             {
-                roll = orientBendForRoll(positions, polePoint);
+                roll = orientBendForRoll(positions, hinge, polePoint);
             }
             else
             {
@@ -683,16 +683,19 @@ final class IKSolver
     }
 
     /**
-     * Orients the bend to a STABLE canonical side (independent of the pole and the
-     * posed hinge) and returns the roll, in radians, from that side to the pole
-     * about the root-to-tip axis. The renderer applies that roll as a rigid
-     * rotation of the whole chain — so the canonical bend plus the roll lands the
-     * chain on the pole exactly, the way Blender rolls the chain with the pole
-     * instead of only re-aiming the bend. The reference is the axis-only side
-     * direction, never the breathing hinge or the solved seed, so the angle cannot
-     * slam across the +-180 branch as the pose wobbles.
+     * Orients the bend to the chain's NATURAL bend direction (the captured rest
+     * hinge, {@code axis x hinge}) and returns the roll, in radians, from that
+     * direction to the pole about the root-to-tip axis. The renderer applies the
+     * roll as a rigid rotation of the whole chain — so the natural bend plus the
+     * roll lands the chain on the pole exactly, the way Blender rolls the chain
+     * with the pole instead of only re-aiming the bend. Measuring from the rest
+     * bend (not an axis-only canonical side) keeps the roll at zero when the pole
+     * sits at the natural elbow, so the geometry carries no baseline twist; the
+     * hinge is captured from the pre-solve pose, so it doesn't breathe within the
+     * frame and the angle can only flip at the antipode of the rest bend. Falls
+     * back to the axis-only side direction for a straight rest limb with no hinge.
      */
-    private static float orientBendForRoll(List<Vector3f> p, Vector3f polePoint)
+    private static float orientBendForRoll(List<Vector3f> p, Vector3f hinge, Vector3f polePoint)
     {
         int n = p.size();
 
@@ -709,9 +712,14 @@ final class IKSolver
             return 0F;
         }
 
-        Vector3f side = sideAxis(axis);
+        Vector3f reference = hinge != null ? new Vector3f(axis).cross(hinge) : null;
 
-        if (side == null)
+        if (reference == null || !project(reference, axis))
+        {
+            reference = sideAxis(axis);
+        }
+
+        if (reference == null)
         {
             return 0F;
         }
@@ -723,9 +731,9 @@ final class IKSolver
             return 0F;
         }
 
-        orientBendTo(p, root, axis, side);
+        orientBendTo(p, root, axis, reference);
 
-        return signedAngle(side, poleDir, axis);
+        return signedAngle(reference, poleDir, axis);
     }
 
     /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */
