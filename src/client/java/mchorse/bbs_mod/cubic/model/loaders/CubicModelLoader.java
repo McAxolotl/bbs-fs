@@ -166,6 +166,8 @@ public class CubicModelLoader implements IModelLoader
 
             if (texture == null)
             {
+                /* No texture yet: surface an empty folder for it and render the flat Kd color meanwhile. */
+                IModelLoader.ensureMaterialFolder(provider, model, material.name);
                 texture = LinkUtils.color(material.r, material.g, material.b);
             }
 

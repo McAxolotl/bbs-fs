@@ -82,6 +82,11 @@ public class BOBJModelLoader implements IModelLoader
                     {
                         instance.materialTextures.put(material, texture);
                     }
+                    else
+                    {
+                        /* No texture yet: surface an empty folder for this mesh to drop one into. */
+                        IModelLoader.ensureMaterialFolder(models.provider, model, material);
+                    }
                 }
 
                 if (id.startsWith("emoticons/"))

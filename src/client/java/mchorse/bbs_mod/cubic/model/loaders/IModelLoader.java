@@ -3,8 +3,10 @@ package mchorse.bbs_mod.cubic.model.loaders;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -74,6 +76,21 @@ public interface IModelLoader
         }
 
         return null;
+    }
+
+    /**
+     * Create an empty {@code <model>/textures/<material>/} folder so a model loaded without textures
+     * surfaces a per-material folder the user can drop textures into (picked up on the next load).
+     * No-op when the model's source can't provide files.
+     */
+    public static void ensureMaterialFolder(AssetProvider provider, Link model, String material)
+    {
+        File folder = provider.getFile(model.combine("textures/" + material));
+
+        if (folder != null)
+        {
+            folder.mkdirs();
+        }
     }
 
     public ModelInstance load(String id, ModelManager models, Link model, Collection<Link> links, MapType config);

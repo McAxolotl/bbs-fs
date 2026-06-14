@@ -384,7 +384,6 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        Link formDefault = modelForm.texture.get() != null ? modelForm.texture.get() : model.texture;
 
         for (String material : model.materials)
         {
@@ -397,10 +396,17 @@ public class UIReplaysEditorUtils
             String title = path.isEmpty() ? "Texture/" + material : path + "/Texture/" + material;
             KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
 
-            /* Seed the sheet's value with the material's current default texture (folder/Kd, else the
-             * form/model default) so a new keyframe starts there instead of null - the texture picker
-             * then opens at that texture rather than the root. */
-            ValueLink property = new ValueLink(id, model.getMaterialTexture(material, formDefault));
+            /* Seed the sheet's value with the material's current default texture (editor pick, else
+             * folder/Kd, else the form/model default) so a new keyframe starts there instead of null -
+             * the texture picker then opens at that texture rather than the root. */
+            Link materialDefault = modelForm.materialTextures.getLink(material);
+
+            if (materialDefault == null)
+            {
+                materialDefault = model.getMaterialTexture(material, model.texture);
+            }
+
+            ValueLink property = new ValueLink(id, materialDefault);
 
             out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL));
         }

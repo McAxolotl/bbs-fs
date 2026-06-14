@@ -64,11 +64,9 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Supplier;
 
 public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITickable
@@ -356,13 +354,30 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         final Link resolvedDefault = defaultTexture;
 
+        /* The form's single "Default" texture (form.texture) only applies when the model exposes no
+         * materials (e.g. cubic). Once there's a material list, materials fall back only to the model's
+         * base texture - the Default is hidden in the editor and must not affect them here either. */
+        final Link materialFallback = model.materials.isEmpty() ? resolvedDefault : model.texture;
+
         model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
         {
-            /* Animated per-material track wins; otherwise fall back to the material's static
-             * default (folder/Kd) and finally the form/model default texture. */
+            /* Resolution order: animated per-material track > editor-picked static per-material
+             * texture > the material's loaded default (folder/Kd) > the model base texture. */
             Link override = this.form.materialTextureOverrides.get(material);
 
-            return override != null ? override : model.getMaterialTexture(material, resolvedDefault);
+            if (override != null)
+            {
+                return override;
+            }
+
+            Link picked = this.form.materialTextures.getLink(material);
+
+            if (picked != null)
+            {
+                return picked;
+            }
+
+            return model.getMaterialTexture(material, materialFallback);
         });
 
         if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)

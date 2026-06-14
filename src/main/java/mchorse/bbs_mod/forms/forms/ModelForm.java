@@ -10,6 +10,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueData;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
+import mchorse.bbs_mod.settings.values.core.ValueLinks;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class ModelForm extends Form
 {
     public final ValueLink texture = new ValueLink("texture", null);
+    public final ValueLinks materialTextures = new ValueLinks("material_textures");
     public final ValueString model = new ValueString("model", "");
     public final ValuePose pose = new ValuePose("pose", new Pose());
     public final ValuePose poseOverlay = new ValuePose("pose_overlay", new Pose());
@@ -56,6 +58,8 @@ public class ModelForm extends Form
         super();
 
         this.add(this.texture);
+        this.materialTextures.invisible();
+        this.add(this.materialTextures);
         this.add(this.model);
         this.add(this.pose);
         this.add(this.poseOverlay);
