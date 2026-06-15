@@ -5,7 +5,7 @@ import java.util.Map;
 public record ModelPhysicsConfig(Map<String, Bone> bones)
 {
     public static final float DEFAULT_WEIGHT = 1F;
-    public static final float DEFAULT_STIFFNESS = 0.2F;
+    public static final float DEFAULT_STIFFNESS = 0F;
 
     public record Bone(String end, String targetBone, float gravity, float damping, float stiffness, int iterations, boolean relativeGravity, float relativeGravityRotateX, float relativeGravityRotateY, float relativeGravityRotateZ, boolean collisions, float radius, float weight)
     {
