@@ -82,6 +82,8 @@ public class UIPixelsEditor extends UICanvasEditor
             int minY = Math.min(this.y1, this.y2);
             int maxY = Math.max(this.y1, this.y2);
 
+            int i = 0;
+
             return x >= minX && x <= maxX && y >= minY && y <= maxY;
         }
     }
@@ -258,44 +260,37 @@ public class UIPixelsEditor extends UICanvasEditor
             return;
         }
 
-        int minX = this.pixels.width;
-        int minY = this.pixels.height;
-        int maxX = -1;
-        int maxY = -1;
+        /* The selection mask lives in document space, but the layer's pixels are shifted by its
+         * move-tool offset, so map each opaque pixel to document coordinates (and skip anything the
+         * offset pushed off-canvas). */
+        int ox = this.getActiveOffsetX();
+        int oy = this.getActiveOffsetY();
+
+        boolean[][] mask = this.createSelectionMask();
+        boolean any = false;
 
         for (int x = 0; x < this.pixels.width; x++)
         {
             for (int y = 0; y < this.pixels.height; y++)
             {
                 Color color = this.pixels.getColor(x, y);
+
                 if (color != null && color.a > 0F)
                 {
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
+                    int dx = x + ox;
+                    int dy = y + oy;
+
+                    if (dx >= 0 && dy >= 0 && dx < this.w && dy < this.h)
+                    {
+                        mask[dx][dy] = true;
+                        any = true;
+                    }
                 }
             }
         }
 
-        if (maxX >= minX && maxY >= minY)
+        if (any)
         {
-            this.selections.clear();
-            
-            // To make the selection rect inclusive of the last pixel, we need to add 1 to the bottom right coordinates
-            boolean[][] mask = this.createSelectionMask();
-            for (int x = minX; x <= maxX; x++)
-            {
-                for (int y = minY; y <= maxY; y++)
-                {
-                    Color color = this.pixels.getColor(x, y);
-                    if (color != null && color.a > 0F)
-                    {
-                        mask[x][y] = true;
-                    }
-                }
-            }
-            
             this.selections = this.buildSelectionsFromMask(mask);
             this.hasSelection = !this.selections.isEmpty();
             this.currentSelectionSubtract = false;
