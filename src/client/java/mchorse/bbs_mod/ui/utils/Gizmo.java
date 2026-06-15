@@ -978,7 +978,9 @@ public class Gizmo
         }
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        if (!BBSSettings.rotateHideRings.get()) {
+
+        if (!BBSSettings.rotateHideRings.get())
+        {
             if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
             if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
             if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
@@ -1185,7 +1187,8 @@ public class Gizmo
         {
             this.updateVbos();
 
-            if (!BBSSettings.rotateHideRings.get()) {
+            if (!BBSSettings.rotateHideRings.get())
+            {
                 if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
                 if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
                 if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
