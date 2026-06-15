@@ -965,6 +965,8 @@ public class UIKeys
     public static final IKey SNOWSTORM_SPACE_VELOCITY = L10n.lang("bbs.ui.snowstorm.space.velocity");
     public static final IKey SNOWSTORM_TITLE = L10n.lang("bbs.ui.snowstorm.title");
     public static final IKey TEXTURES_COPY = L10n.lang("bbs.ui.textures.copy");
+    public static final IKey TEXTURES_COPY_IMAGE = L10n.lang("bbs.ui.textures.copy_image");
+    public static final IKey TEXTURES_PASTE_IMAGE = L10n.lang("bbs.ui.textures.paste_image");
     public static final IKey TEXTURES_CREATE_MCMETA = L10n.lang("bbs.ui.textures.create_mcmeta");
     public static final IKey TEXTURES_DOWNLOAD = L10n.lang("bbs.ui.textures.download");
     public static final IKey TEXTURES_DOWNLOAD_DESCRIPTION = L10n.lang("bbs.ui.textures.download-description");
@@ -1001,6 +1003,9 @@ public class UIKeys
     public static final IKey TEXTURES_LAYERS_CONTEXT_REMOVE = L10n.lang("bbs.ui.textures.layers.context.remove");
     public static final IKey TEXTURES_LAYERS_CONTEXT_RENAME = L10n.lang("bbs.ui.textures.layers.context.rename");
     public static final IKey TEXTURES_LAYERS_CONTEXT_SELECT = L10n.lang("bbs.ui.textures.layers.context.select");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_COPY = L10n.lang("bbs.ui.textures.layers.context.copy");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_COPY_MERGED = L10n.lang("bbs.ui.textures.layers.context.copy_merged");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_PASTE = L10n.lang("bbs.ui.textures.layers.context.paste");
     public static final IKey TEXTURES_LAYERS_ADD_IMAGE = L10n.lang("bbs.ui.textures.layers.add_image");
     public static final IKey TEXTURES_LAYERS_ADD_EMPTY = L10n.lang("bbs.ui.textures.layers.add_empty");
     public static final IKey TEXTURES_LAYERS_FROM_SELECTION = L10n.lang("bbs.ui.textures.layers.from_selection");

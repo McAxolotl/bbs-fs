@@ -88,6 +88,7 @@ public class Keys
     public static final KeyCombo PIXEL_TOOL_FILL = new KeyCombo("tool_fill", UIKeys.TEXTURES_KEYS_TOOL_FILL, GLFW.GLFW_KEY_F).categoryKey("pixels");
     public static final KeyCombo PIXEL_TOOL_SELECTION = new KeyCombo("tool_selection", UIKeys.TEXTURES_TOOLS_SELECTION, GLFW.GLFW_KEY_M).categoryKey("pixels");
     public static final KeyCombo PIXEL_DESELECT = new KeyCombo("deselect", UIKeys.TEXTURES_DESELECT, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("pixels");
+    public static final KeyCombo PIXEL_COPY_HEX = new KeyCombo("copy_hex", UIKeys.TEXTURES_VIEWER_CONTEXT_COPY_HEX, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("pixels");
     public static final KeyCombo PIXEL_BRUSH_DEC = new KeyCombo("brush_dec", UIKeys.TEXTURES_KEYS_BRUSH_DEC, GLFW.GLFW_KEY_LEFT_BRACKET).repeatable().categoryKey("pixels");
     public static final KeyCombo PIXEL_BRUSH_INC = new KeyCombo("brush_inc", UIKeys.TEXTURES_KEYS_BRUSH_INC, GLFW.GLFW_KEY_RIGHT_BRACKET).repeatable().categoryKey("pixels");
 

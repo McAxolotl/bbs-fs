@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.textures.layers;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.graphics.window.ImageClipboard;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
@@ -89,6 +90,11 @@ public class UILayersPanel extends UIElement
         {
             menu.action(Icons.ADD, UIKeys.TEXTURES_LAYERS_ADD_EMPTY, this::addLayer);
             menu.action(Icons.IMAGE, UIKeys.TEXTURES_LAYERS_ADD_IMAGE, this::addImageLayer);
+
+            if (ImageClipboard.hasImage())
+            {
+                menu.action(Icons.PASTE, UIKeys.TEXTURES_LAYERS_CONTEXT_PASTE, () -> this.currentEditor.pasteImage());
+            }
 
             if (this.currentEditor.hasSelection())
             {

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.textures;
 
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.graphics.window.ImageClipboard;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
@@ -127,7 +128,9 @@ public class UIPixelsEditor extends UICanvasEditor
         Supplier<Boolean> texture = () -> this.pixels != null;
         Supplier<Boolean> editing = () -> this.editing;
 
-        this.keys().register(Keys.COPY, this::copyPixel).label(UIKeys.TEXTURES_VIEWER_CONTEXT_COPY_HEX).inside().active(texture).category(category);
+        this.keys().register(Keys.COPY, this::copyImage).label(UIKeys.TEXTURES_COPY_IMAGE).inside().active(texture).category(category);
+        this.keys().register(Keys.PIXEL_COPY_HEX, this::copyPixel).label(UIKeys.TEXTURES_VIEWER_CONTEXT_COPY_HEX).inside().active(texture).category(category);
+        this.keys().register(Keys.PASTE, this::pasteImage).label(UIKeys.TEXTURES_PASTE_IMAGE).inside().active(editing).category(category);
         this.keys().register(Keys.UNDO, this::undo).inside().active(editing).category(category);
         this.keys().register(Keys.REDO, this::redo).inside().active(editing).category(category);
         this.keys().register(Keys.PIXEL_DESELECT, this::clearSelection).inside().active(editing).category(category);
@@ -1095,6 +1098,188 @@ public class UIPixelsEditor extends UICanvasEditor
         mutation.run();
 
         this.undoManager.pushUndo(new LayerStateUndo(before, this.document.toData(), mergeTag));
+    }
+
+    /**
+     * Ctrl+C: copy the active layer's pixels to the clipboard as an image. With a selection, only the
+     * selected region is copied (cropped to its bounding box, unselected pixels left transparent).
+     * Falls back to the displayed pixels in viewer mode (no document). Hex-pixel copy lives on
+     * Ctrl+Shift+C ({@link #copyPixel()}). Returns {@code false} when there is nothing to copy.
+     */
+    private boolean copyImage()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+        Pixels source = layer != null ? layer.pixels : this.pixels;
+
+        if (source == null)
+        {
+            return false;
+        }
+
+        Pixels copy;
+
+        if (this.hasSelection())
+        {
+            copy = this.extractSelection(source, layer != null ? layer.offsetX : 0, layer != null ? layer.offsetY : 0);
+
+            if (copy == null)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            copy = source.createCopy(0, 0, source.width, source.height);
+        }
+
+        ImageClipboard.copy(copy);
+        copy.delete();
+        UIUtils.playClick();
+
+        return true;
+    }
+
+    /**
+     * Copy the merged (flattened) visible layers to the clipboard as an image, respecting the current
+     * selection (only the selected region, cropped to its bounding box). No-op when there's nothing to
+     * flatten.
+     */
+    public void copyMerged()
+    {
+        Pixels flat = this.flattenLayers();
+
+        if (flat == null)
+        {
+            return;
+        }
+
+        if (this.hasSelection())
+        {
+            Pixels cropped = this.extractSelection(flat, 0, 0);
+
+            if (cropped != null)
+            {
+                ImageClipboard.copy(cropped);
+                cropped.delete();
+                UIUtils.playClick();
+            }
+        }
+        else
+        {
+            ImageClipboard.copy(flat);
+            UIUtils.playClick();
+        }
+
+        flat.delete();
+    }
+
+    /**
+     * Extract the current selection from a document-space {@code source} into a new Pixels cropped to
+     * the selection's bounding box (unselected pixels left transparent). {@code offsetX/Y} map document
+     * coordinates into the source (0 for a document-sized image; the layer's offset for a layer).
+     * Returns {@code null} when the selection is empty.
+     */
+    private Pixels extractSelection(Pixels source, int offsetX, int offsetY)
+    {
+        int w = this.document != null ? this.document.width : source.width;
+        int h = this.document != null ? this.document.height : source.height;
+        int minX = w, minY = h, maxX = -1, maxY = -1;
+
+        for (int dx = 0; dx < w; dx++)
+        {
+            for (int dy = 0; dy < h; dy++)
+            {
+                if (this.isInsideSelection(dx, dy))
+                {
+                    if (dx < minX) minX = dx;
+                    if (dy < minY) minY = dy;
+                    if (dx > maxX) maxX = dx;
+                    if (dy > maxY) maxY = dy;
+                }
+            }
+        }
+
+        if (maxX < minX || maxY < minY)
+        {
+            return null;
+        }
+
+        Pixels copy = Pixels.fromSize(maxX - minX + 1, maxY - minY + 1);
+
+        for (int dx = minX; dx <= maxX; dx++)
+        {
+            for (int dy = minY; dy <= maxY; dy++)
+            {
+                if (!this.isInsideSelection(dx, dy))
+                {
+                    continue;
+                }
+
+                int lx = dx - offsetX;
+                int ly = dy - offsetY;
+
+                if (lx < 0 || ly < 0 || lx >= source.width || ly >= source.height)
+                {
+                    continue;
+                }
+
+                Color color = source.getColor(lx, ly);
+
+                if (color != null)
+                {
+                    copy.setColor(dx - minX, dy - minY, color);
+                }
+            }
+        }
+
+        return copy;
+    }
+
+    /**
+     * Ctrl+V (and the layers panel's "paste as layer"): paste a clipboard image as a new layer above
+     * the active one, centered on the canvas and clipped to it. No-op when the clipboard holds no
+     * image. Recorded as a single undo step; refreshes the layers list.
+     */
+    public void pasteImage()
+    {
+        if (this.document == null)
+        {
+            return;
+        }
+
+        Pixels pasted = ImageClipboard.paste();
+
+        if (pasted == null)
+        {
+            return;
+        }
+
+        this.recordLayerChange(null, () ->
+        {
+            int w = this.document.width;
+            int h = this.document.height;
+            Pixels layerPixels = Pixels.fromSize(w, h);
+
+            layerPixels.draw(pasted, (w - pasted.width) / 2, (h - pasted.height) / 2);
+            layerPixels.rewindBuffer();
+
+            int index = this.document.activeLayerIndex + 1;
+
+            if (index < 0)
+            {
+                index = this.document.layers.size();
+            }
+
+            this.document.layers.add(index, new TextureLayer(UIKeys.TEXTURES_LAYERS_DEFAULT_NAME.format(String.valueOf(this.document.layers.size() + 1)).get(), layerPixels));
+            this.setActiveLayer(index);
+            this.clearSelection();
+            this.wasChanged();
+        });
+
+        this.layersChangedCallback.run();
+
+        pasted.delete();
+        UIUtils.playClick();
     }
 
     private void copyPixel()
