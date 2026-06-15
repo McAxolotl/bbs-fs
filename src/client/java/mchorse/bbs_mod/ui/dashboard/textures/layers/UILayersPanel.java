@@ -17,6 +17,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.Pixels;
 
 public class UILayersPanel extends UIElement
@@ -155,7 +156,7 @@ public class UILayersPanel extends UIElement
                         newPixels.draw(loaded, 0, 0);
                         loaded.delete();
 
-                        TextureLayer layer = new TextureLayer(mchorse.bbs_mod.utils.StringUtils.fileName(path), newPixels);
+                        TextureLayer layer = new TextureLayer(StringUtils.fileName(path), newPixels);
 
                         document.layers.add(layer);
                         this.currentEditor.setActiveLayer(document.layers.size() - 1);

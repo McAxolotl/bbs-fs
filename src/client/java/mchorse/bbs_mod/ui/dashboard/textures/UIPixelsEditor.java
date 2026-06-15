@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.textures;
 
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.ImageClipboard;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -25,8 +26,12 @@ import mchorse.bbs_mod.utils.resources.Pixels;
 import mchorse.bbs_mod.utils.undo.IUndo;
 import mchorse.bbs_mod.utils.undo.UndoManager;
 import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
+import net.minecraft.client.gl.GlUniform;
+import net.minecraft.client.gl.ShaderProgram;
 import org.joml.Vector2d;
 import org.joml.Vector2i;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -147,6 +152,7 @@ public class UIPixelsEditor extends UICanvasEditor
             this.hasSelection = false;
             this.selections.clear();
             this.currentSelection = null;
+            this.invalidateSelectionMask();
         }
     }
 
@@ -294,6 +300,7 @@ public class UIPixelsEditor extends UICanvasEditor
             this.selections = this.buildSelectionsFromMask(mask);
             this.hasSelection = !this.selections.isEmpty();
             this.currentSelectionSubtract = false;
+            this.invalidateSelectionMask();
         }
         else
         {
@@ -346,7 +353,7 @@ public class UIPixelsEditor extends UICanvasEditor
             if (this.temporaryFlat == null)
             {
                 this.temporaryFlat = new Texture();
-                this.temporaryFlat.setFilter(org.lwjgl.opengl.GL11.GL_NEAREST);
+                this.temporaryFlat.setFilter(GL11.GL_NEAREST);
             }
             this.temporaryFlat.bind();
             this.temporaryFlat.updateTexture(flat);
@@ -937,74 +944,107 @@ public class UIPixelsEditor extends UICanvasEditor
         this.hasSelection = !this.selections.isEmpty();
         this.currentSelection = null;
         this.currentSelectionSubtract = false;
+        this.invalidateSelectionMask();
     }
 
-    private int getSelectionScreenX(int x)
+    /** Mark the GPU selection mask stale so it's rebuilt before the next render. */
+    private void invalidateSelectionMask()
     {
-        return (int) Math.round(this.scaleX.to(x - this.w / 2D));
+        this.selectionMaskDirty = true;
     }
 
-    private int getSelectionScreenY(int y)
+    /**
+     * Rebuild the GPU selection mask from the current selection (committed rects plus the in-progress
+     * drag rectangle): white where selected, transparent elsewhere. Runs only on selection change (or
+     * each frame during an active drag); the per-frame render just samples this texture in a shader.
+     */
+    private void updateSelectionMaskTexture()
     {
-        return (int) Math.round(this.scaleY.to(y - this.h / 2D));
-    }
+        boolean[][] mask = this.buildSelectionMask();
 
-    private int getSelectionPatternColor(int x, int y)
-    {
-        int phase = (int) (System.currentTimeMillis() / 150L);
+        this.fillSelectionMask(mask, this.currentSelection, !this.currentSelectionSubtract);
 
-        return ((x + y + phase) & 1) == 0 ? Colors.WHITE : 0xff000000;
-    }
-
-    private void renderSelectionHorizontalEdge(UIContext context, int x, int y)
-    {
-        int sx1 = this.getSelectionScreenX(x);
-        int sx2 = this.getSelectionScreenX(x + 1);
-        int sy = this.getSelectionScreenY(y);
-
-        context.batcher.box(sx1, sy, sx2, sy + 1, this.getSelectionPatternColor(x, y));
-    }
-
-    private void renderSelectionVerticalEdge(UIContext context, int x, int y)
-    {
-        int sx = this.getSelectionScreenX(x);
-        int sy1 = this.getSelectionScreenY(y);
-        int sy2 = this.getSelectionScreenY(y + 1);
-
-        context.batcher.box(sx, sy1, sx + 1, sy2, this.getSelectionPatternColor(x, y));
-    }
-
-    private void renderSelectionOutline(UIContext context, boolean[][] mask)
-    {
-        for (int y = 0; y <= this.h; y++)
+        if (this.selectionMaskPixels == null || this.selectionMaskPixels.width != this.w || this.selectionMaskPixels.height != this.h)
         {
-            for (int x = 0; x < this.w; x++)
+            if (this.selectionMaskPixels != null)
             {
-                boolean above = y > 0 && mask[x][y - 1];
-                boolean below = y < this.h && mask[x][y];
-                boolean boundary = above != below;
-
-                if (boundary)
-                {
-                    this.renderSelectionHorizontalEdge(context, x, y);
-                }
+                this.selectionMaskPixels.delete();
             }
+
+            this.selectionMaskPixels = Pixels.fromSize(this.w, this.h);
         }
 
-        for (int x = 0; x <= this.w; x++)
+        Color color = new Color();
+
+        for (int x = 0; x < this.w; x++)
         {
             for (int y = 0; y < this.h; y++)
             {
-                boolean left = x > 0 && mask[x - 1][y];
-                boolean right = x < this.w && mask[x][y];
-                boolean boundary = left != right;
+                float value = mask[x][y] ? 1F : 0F;
 
-                if (boundary)
-                {
-                    this.renderSelectionVerticalEdge(context, x, y);
-                }
+                color.set(value, value, value, value);
+                this.selectionMaskPixels.setColor(x, y, color);
             }
         }
+
+        if (this.selectionMaskTexture == null)
+        {
+            this.selectionMaskTexture = new Texture();
+            this.selectionMaskTexture.bind();
+            this.selectionMaskTexture.setFilter(GL11.GL_NEAREST);
+            this.selectionMaskTexture.setWrap(GL12.GL_CLAMP_TO_EDGE);
+        }
+
+        this.selectionMaskPixels.rewindBuffer();
+        this.selectionMaskTexture.bind();
+        this.selectionMaskTexture.updateTexture(this.selectionMaskPixels);
+    }
+
+    /**
+     * Draw the selection outline by sampling the mask texture in the {@code selection} shader, which
+     * marks border texels (selected texels adjacent to an unselected one) with an animated
+     * marching-ants pattern, placed on the selected (inner) side. One textured quad over the document
+     * area &mdash; no per-pixel CPU work.
+     */
+    private void renderSelection(UIContext context, Area area)
+    {
+        if (this.selectionMaskDirty || this.currentSelection != null)
+        {
+            this.updateSelectionMaskTexture();
+            this.selectionMaskDirty = false;
+        }
+
+        ShaderProgram shader = BBSShaders.getSelectionProgram();
+
+        if (shader == null || this.selectionMaskTexture == null)
+        {
+            return;
+        }
+
+        GlUniform phase = shader.getUniform("Phase");
+
+        if (phase != null)
+        {
+            /* Only the parity matters for the marching ants, so toggle 0/1 (avoids float precision
+             * loss from feeding a huge millisecond count into the shader). */
+            phase.set((float) ((System.currentTimeMillis() / 150L) % 2L));
+        }
+
+        GlUniform scale = shader.getUniform("Scale");
+
+        if (scale != null)
+        {
+            /* Screen pixels per document pixel, so the shader can keep the outline a constant
+             * on-screen size regardless of canvas size / zoom. */
+            scale.set(area.w / (float) this.selectionMaskTexture.width);
+        }
+
+        context.batcher.texturedBox(
+            () -> shader, this.selectionMaskTexture.id, Colors.WHITE,
+            area.x, area.y, area.w, area.h,
+            0, 0, this.selectionMaskTexture.width, this.selectionMaskTexture.height,
+            this.selectionMaskTexture.width, this.selectionMaskTexture.height
+        );
     }
 
     protected void wasChanged()
@@ -1333,6 +1373,20 @@ public class UIPixelsEditor extends UICanvasEditor
             this.temporaryFlat.delete();
             this.temporaryFlat = null;
         }
+
+        if (this.selectionMaskTexture != null)
+        {
+            this.selectionMaskTexture.delete();
+            this.selectionMaskTexture = null;
+        }
+
+        if (this.selectionMaskPixels != null)
+        {
+            this.selectionMaskPixels.delete();
+            this.selectionMaskPixels = null;
+        }
+
+        this.selectionMaskDirty = true;
     }
 
     /**
@@ -1621,11 +1675,7 @@ public class UIPixelsEditor extends UICanvasEditor
         if (this.hasSelection || this.currentSelection != null)
         {
             context.batcher.clip(this.area, context);
-            boolean[][] mask = this.buildSelectionMask();
-
-            this.fillSelectionMask(mask, this.currentSelection, !this.currentSelectionSubtract);
-            this.renderSelectionOutline(context, mask);
-
+            this.renderSelection(context, area);
             context.batcher.unclip(context);
         }
 
@@ -1694,6 +1744,12 @@ public class UIPixelsEditor extends UICanvasEditor
     }
 
     private Texture temporaryFlat;
+
+    /** GPU mask of the current selection (white = selected); the outline shader reads it. Rebuilt only
+     * when the selection changes (or every frame during an active drag), not on every render. */
+    private Texture selectionMaskTexture;
+    private Pixels selectionMaskPixels;
+    private boolean selectionMaskDirty = true;
 
     protected Texture getRenderTexture(UIContext context)
     {
