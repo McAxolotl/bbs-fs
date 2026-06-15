@@ -43,6 +43,7 @@ public class UILayersPanel extends UIElement
 
         this.addLayer = new UIIcon(Icons.ADD, (b) -> this.openAddLayerMenu());
         this.addLayer.tooltip(UIKeys.TEXTURES_LAYERS_ADD);
+        this.addLayer.h(UIConstants.CONTROL_HEIGHT);
 
         this.opacity = new UITrackpad((v) ->
         {
