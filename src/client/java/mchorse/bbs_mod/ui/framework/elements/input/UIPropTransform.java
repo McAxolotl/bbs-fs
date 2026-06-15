@@ -463,6 +463,11 @@ public class UIPropTransform extends UITransform
             UIUtils.playClick();
         }).category(category);
 
+        if (this.supportsMirror())
+        {
+            this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).category(category);
+        }
+
         return this;
     }
 

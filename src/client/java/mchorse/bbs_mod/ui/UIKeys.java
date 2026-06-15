@@ -1089,6 +1089,7 @@ public class UIKeys
     public static final IKey TRANSFORMS_KEYS_TOGGLE_AXES = L10n.lang("bbs.ui.transforms.keys.toggle_axes");
     public static final IKey TRANSFORMS_KEYS_HIDE_GIZMO = L10n.lang("bbs.ui.transforms.keys.hide_gizmo");
     public static final IKey TRANSFORMS_KEYS_TOGGLE_FIX = L10n.lang("bbs.ui.transforms.keys.toggle_fix");
+    public static final IKey TRANSFORMS_KEYS_MIRROR_EDIT = L10n.lang("bbs.ui.transforms.keys.mirror_edit");
     public static final IKey TRANSFORMS_COMBINED = L10n.lang("bbs.ui.transforms.combined");
     public static final IKey TRANSFORMS_ROTATE = L10n.lang("bbs.ui.transforms.rotate");
     public static final IKey TRANSFORMS_SCALE = L10n.lang("bbs.ui.transforms.scale");
