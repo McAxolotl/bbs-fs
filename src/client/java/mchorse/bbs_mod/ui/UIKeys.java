@@ -547,6 +547,7 @@ public class UIKeys
     public static final IKey GENERAL_CLOSE = L10n.lang("bbs.ui.close");
     public static final IKey GENERAL_CONFIRM = L10n.lang("bbs.ui.confirm");
     public static final IKey GENERAL_COPY = L10n.lang("bbs.ui.copy");
+    public static final IKey GENERAL_CUT = L10n.lang("bbs.ui.cut");
     public static final IKey GENERAL_DOWNLOAD = L10n.lang("bbs.ui.download");
     public static final IKey GENERAL_DUPE = L10n.lang("bbs.ui.dupe");
     public static final IKey GENERAL_EDIT = L10n.lang("bbs.ui.edit");
@@ -1005,6 +1006,7 @@ public class UIKeys
     public static final IKey TEXTURES_LAYERS_CONTEXT_SELECT = L10n.lang("bbs.ui.textures.layers.context.select");
     public static final IKey TEXTURES_LAYERS_CONTEXT_COPY = L10n.lang("bbs.ui.textures.layers.context.copy");
     public static final IKey TEXTURES_LAYERS_CONTEXT_COPY_MERGED = L10n.lang("bbs.ui.textures.layers.context.copy_merged");
+    public static final IKey TEXTURES_LAYERS_CONTEXT_CUT = L10n.lang("bbs.ui.textures.layers.context.cut");
     public static final IKey TEXTURES_LAYERS_CONTEXT_PASTE = L10n.lang("bbs.ui.textures.layers.context.paste");
     public static final IKey TEXTURES_LAYERS_ADD_IMAGE = L10n.lang("bbs.ui.textures.layers.add_image");
     public static final IKey TEXTURES_LAYERS_ADD_EMPTY = L10n.lang("bbs.ui.textures.layers.add_empty");

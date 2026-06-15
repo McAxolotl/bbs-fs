@@ -66,14 +66,20 @@ public class UILayerElement extends UIElement
         boolean canMoveDown = this.index > 0;
         boolean canDelete = this.panel.currentEditor.getDocument().layers.size() > 1;
 
-        /* Clipboard: copy/paste at the very top. */
+        /* Clipboard: copy merged / copy / cut / paste at the very top. */
+        menu.action(Icons.IMAGE, UIKeys.TEXTURES_LAYERS_CONTEXT_COPY_MERGED, () -> this.panel.currentEditor.copyMerged());
+
         menu.action(Icons.COPY, UIKeys.TEXTURES_LAYERS_CONTEXT_COPY, () ->
         {
             ImageClipboard.copy(this.layer.pixels);
             UIUtils.playClick();
         });
 
-        menu.action(Icons.IMAGE, UIKeys.TEXTURES_LAYERS_CONTEXT_COPY_MERGED, () -> this.panel.currentEditor.copyMerged());
+        menu.action(Icons.CUT, UIKeys.TEXTURES_LAYERS_CONTEXT_CUT, () ->
+        {
+            this.panel.currentEditor.setActiveLayer(this.index);
+            this.panel.currentEditor.cut();
+        });
 
         if (ImageClipboard.hasImage())
         {

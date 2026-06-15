@@ -137,6 +137,7 @@ public class UIPixelsEditor extends UICanvasEditor
 
         this.keys().register(Keys.COPY, this::copyImage).label(UIKeys.TEXTURES_COPY_IMAGE).inside().active(texture).category(category);
         this.keys().register(Keys.PIXEL_COPY_HEX, this::copyPixel).label(UIKeys.TEXTURES_VIEWER_CONTEXT_COPY_HEX).inside().active(texture).category(category);
+        this.keys().register(Keys.CUT, this::cut).label(UIKeys.GENERAL_CUT).inside().active(editing).category(category);
         this.keys().register(Keys.PASTE, this::pasteImage).label(UIKeys.TEXTURES_PASTE_IMAGE).inside().active(editing).category(category);
         this.keys().register(Keys.UNDO, this::undo).inside().active(editing).category(category);
         this.keys().register(Keys.REDO, this::redo).inside().active(editing).category(category);
@@ -1172,6 +1173,44 @@ public class UIPixelsEditor extends UICanvasEditor
         UIUtils.playClick();
 
         return true;
+    }
+
+    /**
+     * Ctrl+X / layers "cut": copy the selection (or the whole active layer when nothing is selected) to
+     * the clipboard, then erase that region from the active layer (set transparent). The layer itself
+     * stays. Recorded as one undo step.
+     */
+    public void cut()
+    {
+        TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+        if (layer == null || layer.pixels == null || !this.copyImage())
+        {
+            return;
+        }
+
+        this.recordLayerChange(null, () ->
+        {
+            Pixels pixels = layer.pixels;
+            Color transparent = new Color(0F, 0F, 0F, 0F);
+            boolean selection = this.hasSelection();
+            int ox = layer.offsetX;
+            int oy = layer.offsetY;
+
+            for (int x = 0; x < pixels.width; x++)
+            {
+                for (int y = 0; y < pixels.height; y++)
+                {
+                    if (!selection || this.isInsideSelection(x + ox, y + oy))
+                    {
+                        pixels.setColor(x, y, transparent);
+                    }
+                }
+            }
+
+            layer.updateTexture();
+            this.wasChanged();
+        });
     }
 
     /**
