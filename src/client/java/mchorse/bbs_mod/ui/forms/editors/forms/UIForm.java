@@ -76,6 +76,18 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         return this.getOrigin(transition, FormUtils.getPath(this.form), TransformSpace.LOCAL);
     }
 
+    /**
+     * Origin for the body part gizmo mode: always the edited form's OWN root frame (where the body
+     * part actually renders &mdash; attach bone &middot; part transform &middot; form transform),
+     * ignoring any type-specific override like the model's selected pose bone. The drag math stays
+     * correct for editing the body part transform because the attach bone is constant w.r.t. it and
+     * the form's own transform cancels in the Jacobian/rotate-axes derivatives.
+     */
+    public Matrix4f getBodyPartGizmoOrigin(float transition, TransformSpace space)
+    {
+        return this.getOrigin(transition, FormUtils.getPath(this.form), space);
+    }
+
     protected Matrix4f getOrigin(float transition, String path, TransformSpace space)
     {
         Form root = FormUtils.getRoot(this.form);

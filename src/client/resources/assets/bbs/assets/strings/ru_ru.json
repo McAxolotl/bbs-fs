@@ -705,6 +705,7 @@
 	"bbs.ui.forms.crop.right": "Обрезать справа",
 	"bbs.ui.forms.crop.title": "Редактор обрезки",
 	"bbs.ui.forms.crop.top": "Обрезать сверху",
+	"bbs.ui.forms.editor.body_part_gizmo": "Редактировать трансформ части тела через гизмо",
 	"bbs.ui.forms.editor.bone": "Кость",
 	"bbs.ui.forms.editor.context.add": "Добавить часть тела",
 	"bbs.ui.forms.editor.context.copy": "Скопировать эту часть тела",
