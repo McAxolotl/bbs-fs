@@ -323,6 +323,8 @@ public class UIKeys
     public static final IKey FILM_REPLAY_CONTEXT_MOVE_HERE = L10n.lang("bbs.ui.film.replay.context.move_here");
     public static final IKey FILM_REPLAY_FILTER_SHEETS = L10n.lang("bbs.ui.film.replay.filter_sheets");
     public static final IKey FILM_REPLAY_FILTER_SHEETS_TITLE = L10n.lang("bbs.ui.film.replay.filter_sheets-title");
+    public static final IKey FILM_REPLAY_FILTER_SHEETS_DISABLE_ALL = L10n.lang("bbs.ui.film.replay.filter_sheets-disable_all");
+    public static final IKey FILM_REPLAY_FILTER_SHEETS_ENABLE_ALL = L10n.lang("bbs.ui.film.replay.filter_sheets-enable_all");
     public static final IKey FILM_REPLAY_FP = L10n.lang("bbs.ui.film.replay.fp");
     public static final IKey FILM_REPLAY_LABEL = L10n.lang("bbs.ui.film.replay.label");
     public static final IKey FILM_REPLAY_LOOPING = L10n.lang("bbs.ui.film.replay.looping");

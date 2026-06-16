@@ -632,6 +632,8 @@
 	"bbs.ui.film.replay.context.move_here": "Move replay here",
 	"bbs.ui.film.replay.filter_sheets": "Filter tracks...",
 	"bbs.ui.film.replay.filter_sheets-title": "Keyframe tracks",
+	"bbs.ui.film.replay.filter_sheets-disable_all": "Disable all",
+	"bbs.ui.film.replay.filter_sheets-enable_all": "Enable all",
 	"bbs.ui.film.replay.fp": "First person playback",
 	"bbs.ui.film.replay.label": "Replay display name",
 	"bbs.ui.film.replay.looping": "Looping",
