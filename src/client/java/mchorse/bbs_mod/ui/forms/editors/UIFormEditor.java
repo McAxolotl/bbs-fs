@@ -104,10 +104,10 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     public UIElement forms;
     public UIForms formsList;
     private UIIcon addFormList;
-    private UIIcon pickFormList;
     private UIIcon copyFormList;
     private UIIcon pasteFormList;
     private UIIcon removeFormList;
+    public UIBodyPartEditor bodyPartEditor;
 
     /* Sidebar icons */
     public UIElement icons;
@@ -206,7 +206,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             });
 
         UIElement listSection = new UIElement();
-        listSection.relative(this.forms).w(1F).h(1F);
+        listSection.relative(this.forms).w(1F).h(0.5F);
         UIElement listToolbarBg = new UIElement()
         {
             @Override
@@ -217,10 +217,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         };
         listToolbarBg.relative(listSection).xy(0, 0).w(1F).h(20);
         this.addFormList = new UIIcon(Icons.ADD, (b) -> this.addBodyPart(new BodyPart("")));
-        this.addFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_ADD);
-        this.pickFormList = new UIIcon(Icons.EDIT, (b) -> this.pickBodyPartForm());
-        this.pickFormList.tooltip(UIKeys.FORMS_EDITOR_PICK_FORM);
-        this.pickFormList.keys().register(Keys.FORMS_EDIT, this.pickFormList::clickItself);
+        this.addFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_ADD, Direction.LEFT);
         this.copyFormList = new UIIcon(Icons.COPY, (b) ->
         {
             if (this.copyPasteController.copy())
@@ -228,15 +225,15 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                 this.updateFormListButtons();
             }
         });
-        this.copyFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_COPY);
+        this.copyFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_COPY, Direction.LEFT);
         this.pasteFormList = new UIIcon(Icons.PASTE, (b) -> this.copyPasteController.paste(0, 0));
-        this.pasteFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_PASTE);
+        this.pasteFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_PASTE, Direction.LEFT);
         this.removeFormList = new UIIcon(Icons.REMOVE, (b) -> this.removeBodyPart());
-        this.removeFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_REMOVE);
+        this.removeFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_REMOVE, Direction.LEFT);
 
         UIElement listToolbar = new UIElement();
         listToolbar.relative(listSection).w(1F).h(20).row(0).padding(0).height(20);
-        for (UIIcon icon : new UIIcon[] {this.addFormList, this.pickFormList, this.copyFormList, this.pasteFormList, this.removeFormList})
+        for (UIIcon icon : new UIIcon[] {this.addFormList, this.copyFormList, this.pasteFormList, this.removeFormList})
         {
             UIElement cell = new UIElement();
             icon.relative(cell).x(0.5F).y(0.5F).anchor(0.5F, 0.5F);
@@ -245,6 +242,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
         this.formsList.relative(listSection).y(20).h(1F, -20).w(1F);
         listSection.add(listToolbarBg, listToolbar, this.formsList);
+
+        this.bodyPartEditor = new UIBodyPartEditor(this);
+        this.bodyPartEditor.relative(this.forms).w(1F).y(0.5F).h(0.5F);
 
         this.formEditor = new UIElement();
         this.formEditor.full(this);
@@ -335,7 +335,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         draggable.relative(this.forms).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
-        this.forms.add(background, listSection, draggable);
+        this.forms.add(background, listSection, this.bodyPartEditor, draggable);
         this.formEditor.add(this.forms);
         this.statesEditor.add(backgroundStates, this.openStates, this.plause, this.shiftDuration, this.statesKeyframes);
         this.add(this.renderer, this.formEditor, this.statesEditor, this.icons);
@@ -457,7 +457,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             return;
         }
 
-        if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.editor.pickBodyPartBone(pair);
+        if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
         else if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else this.pickFormBone(pair.a, pair.b);
@@ -623,7 +623,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
         this.addFormList.setEnabled(current != null && current.getForm() != null);
-        this.pickFormList.setEnabled(current != null && current.part != null);
         this.copyFormList.setEnabled(this.copyPasteController.canCopy());
         this.pasteFormList.setEnabled(this.copyPasteController.canPaste());
         this.removeFormList.setEnabled(current != null && current.part != null);
@@ -633,42 +632,18 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     {
         if (entry == null)
         {
+            this.bodyPartEditor.setVisible(false);
             return;
+        }
+
+        this.bodyPartEditor.setVisible(entry.part != null);
+
+        if (entry.part != null)
+        {
+            this.bodyPartEditor.setPart(entry.part, entry.form);
         }
 
         this.switchEditor(entry.getForm());
-    }
-
-    private void pickBodyPartForm()
-    {
-        UIForms.FormEntry current = this.formsList.getCurrentFirst();
-
-        if (current == null || current.part == null)
-        {
-            return;
-        }
-
-        BodyPart part = current.part;
-
-        this.openFormList(part.getForm(), (f) ->
-        {
-            part.setForm(FormUtils.copy(f));
-
-            Form partForm = part.getForm();
-
-            if (partForm instanceof ModelForm m)
-            {
-                m.boneTracks.set(false);
-            }
-
-            if (partForm != null && partForm.getFormId().contains("particle"))
-            {
-                part.useTarget.set(true);
-            }
-
-            this.refreshFormList();
-            this.switchEditor(partForm);
-        });
     }
 
     public void openFormList(Form current, Consumer<Form> callback)
@@ -698,6 +673,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
 
         form = FormUtils.copy(form);
+
+        this.bodyPartEditor.setVisible(false);
 
         if (this.switchEditor(form))
         {

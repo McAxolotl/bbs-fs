@@ -410,7 +410,6 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_BILLBOARD_SHADING = L10n.lang("bbs.ui.forms.editors.billboard.shading");
     public static final IKey FORMS_EDITORS_BILLBOARD_TITLE = L10n.lang("bbs.ui.forms.editors.billboard.title");
     public static final IKey FORMS_EDITORS_BILLBOARD_UV_SHIFT = L10n.lang("bbs.ui.forms.editors.billboard.uv_shift");
-    public static final IKey FORMS_EDITORS_BODY_PART_TITLE = L10n.lang("bbs.ui.forms.editors.body_part.title");
     public static final IKey FORMS_EDITORS_BLOCK_PROPERTIES = L10n.lang("bbs.ui.forms.editors.block.title");
     public static final IKey FORMS_EDITORS_BLOCK_TITLE = L10n.lang("bbs.ui.forms.editors.block.title");
     public static final IKey FORMS_EDITORS_EXTRUDED_TITLE = L10n.lang("bbs.ui.forms.editors.extruded.title");
