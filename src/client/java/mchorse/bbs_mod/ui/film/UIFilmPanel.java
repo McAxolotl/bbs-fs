@@ -2513,6 +2513,19 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.appear();
 
+        /* appear() also fires while the dashboard is being lazily constructed (the
+         * teleport/record keybinds create it on first use), at which point there's no
+         * context and the editor isn't actually shown. Running the side effects below
+         * there leaks editor state into the plain world — most importantly it adds the
+         * film camera controller (runner) to the GLOBAL camera controller, which then
+         * hijacks the world view and is never removed (the screen is never closed),
+         * freezing the screen until another BBS screen resets the camera controller.
+         * So only do this once the panel is genuinely on screen. */
+        if (this.getContext() == null)
+        {
+            return;
+        }
+
         BBSRendering.setCustomSize(true);
         MorphRenderer.hidePlayer = true;
 
@@ -2522,10 +2535,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.setFlight(false);
         cameraController.add(this.runner);
 
-        if (this.getContext() != null)
-        {
-            this.getContext().menu.getRoot().add(this.secretPlay);
-        }
+        this.getContext().menu.getRoot().add(this.secretPlay);
     }
 
     @Override
