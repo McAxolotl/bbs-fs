@@ -751,6 +751,8 @@
 	"bbs.ui.forms.editors.general.animatable-tooltip": "Эта опция влияет если эту форму (и её части тела) можно анимировать через ключевые кадры",
 	"bbs.ui.forms.editors.general.bone_tracks": "Треки костей",
 	"bbs.ui.forms.editors.general.bone_tracks-tooltip": "Если включено, в редакторе поз и реплеях отображаются отдельные треки для каждой кости",
+	"bbs.ui.forms.editors.general.filter_tracks": "Отфильтровать треки...",
+	"bbs.ui.forms.editors.general.filter_tracks-tooltip": "Выбор, какие треки этой формы показываются на таймлайне. Настройка хранится у каждой формы отдельно, поэтому каждый бодипарт может скрыть свои треки",
 	"bbs.ui.forms.editors.general.display": "Ярлык",
 	"bbs.ui.forms.editors.general.hitbox": "Хитбокс",
 	"bbs.ui.forms.editors.general.hitbox_eye_height": "Множитель уровня глаз хитбокса",

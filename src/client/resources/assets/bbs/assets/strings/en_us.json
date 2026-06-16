@@ -751,6 +751,8 @@
 	"bbs.ui.forms.editors.general.animatable-tooltip": "Whether this form provides keyframe tracks for animation",
 	"bbs.ui.forms.editors.general.bone_tracks": "Limb tracks",
 	"bbs.ui.forms.editors.general.bone_tracks-tooltip": "When enabled, separate keyframe tracks for each limb are shown in pose keyframe editor and replays",
+	"bbs.ui.forms.editors.general.filter_tracks": "Filter tracks...",
+	"bbs.ui.forms.editors.general.filter_tracks-tooltip": "Pick which keyframe tracks of this form are shown on the timeline. The choice is stored per form, so each body part can hide its own tracks",
 	"bbs.ui.forms.editors.general.display": "Display name",
 	"bbs.ui.forms.editors.general.hitbox": "Hitbox",
 	"bbs.ui.forms.editors.general.hitbox_eye_height": "Hitbox eye height",

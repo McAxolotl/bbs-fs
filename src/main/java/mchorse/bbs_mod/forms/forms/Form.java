@@ -19,6 +19,7 @@ import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.entity.LivingEntity;
@@ -32,6 +33,7 @@ public abstract class Form extends ValueGroup
 {
     public final ValueBoolean visible = new ValueBoolean("visible", true);
     public final ValueBoolean animatable = new ValueBoolean("animatable", true);
+    public final ValueStringKeys disabledTracks = new ValueStringKeys("disabled_tracks");
     public final ValueString trackName = new ValueString("track_name", "");
     public final ValueFloat lighting = new ValueFloat("lighting", 1F);
     public final ValueString name = new ValueString("name", "");
@@ -71,6 +73,7 @@ public abstract class Form extends ValueGroup
         super("");
 
         this.animatable.invisible();
+        this.disabledTracks.invisible();
         this.trackName.invisible();
         this.name.invisible();
         this.uiScale.invisible();
@@ -79,6 +82,7 @@ public abstract class Form extends ValueGroup
 
         this.add(this.visible);
         this.add(this.animatable);
+        this.add(this.disabledTracks);
         this.add(this.trackName);
         this.add(this.lighting);
         this.add(this.name);
