@@ -28,10 +28,11 @@ public class ModelGroup implements IMapSerializable
     public Transform initial = new Transform();
     public Transform current = new Transform();
 
-    /* Transient rigid roll about the IK chain's root-to-tip axis, applied raw in
-     * the render matrix so the pole rolls the whole chain (geometry included)
-     * without round-tripping through the swing/twist euler reconstruction. */
-    public Quaternionf ikRoll;
+    /* Transient full local orientation an IK solve gives this bone, applied raw in
+     * the render matrix IN PLACE OF the euler rotate triple — so the pole owns the
+     * whole orientation (swing and roll) without round-tripping through euler. Null
+     * when the bone is not IK-driven this frame. */
+    public Quaternionf ikOrient;
 
     public ModelGroup(String id)
     {
@@ -43,7 +44,7 @@ public class ModelGroup implements IMapSerializable
         this.lighting = 0F;
         this.color.set(1F, 1F, 1F);
         this.current.copy(this.initial);
-        this.ikRoll = null;
+        this.ikOrient = null;
     }
 
     @Override

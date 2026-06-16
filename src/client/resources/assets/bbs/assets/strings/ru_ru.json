@@ -799,6 +799,7 @@
 	"bbs.ui.forms.editors.model.ik.chain_length": "Длина цепочки",
 	"bbs.ui.forms.editors.model.ik.pole": "Полюс",
 	"bbs.ui.forms.editors.model.ik.pole_target": "Цель полюса: %s",
+	"bbs.ui.forms.editors.model.ik.pole_angle": "Угол полюса",
 	"bbs.ui.forms.editors.model.ik.softness": "Мягкость",
 	"bbs.ui.forms.editors.model.ik.weight": "Влияние",
 	"bbs.ui.forms.editors.model.ik.context.copy": "Скопировать IK",

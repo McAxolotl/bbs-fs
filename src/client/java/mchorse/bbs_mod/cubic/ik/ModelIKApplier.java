@@ -9,6 +9,7 @@ import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -24,6 +25,7 @@ final class ModelIKApplier
 {
     private static final int MAX_ITERATIONS = 12;
     private static final float TOLERANCE = 1.0e-4f;
+    private static final float EPS = 1.0e-6f;
 
     private ModelIKApplier()
     {
@@ -100,6 +102,10 @@ final class ModelIKApplier
         float softness = control != null ? control.softness : chain.softness();
         float weight = control != null ? control.weight : chain.weight();
 
+        /* Pole angle is config-only for now (the `ik` track makes it animatable in a
+         * later pass), so it is read straight from the chain, not the control override. */
+        float poleAngle = (float) Math.toRadians(chain.poleAngle());
+
         if (weight <= 0F)
         {
             return;
@@ -144,114 +150,140 @@ final class ModelIKApplier
         Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets);
         IKSolver.Limit[] limits = buildLimits(model, chainIds, boneLimits);
 
-        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
 
-        Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
-        ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
-
-        float roll = controllerRoll(model, chain.target(), targetFrame, solved);
-        applyChainRoll(model, chainIds, solved, rootParentRotation, roll, weight);
+        /* A cubic two-bone limb gets the Blender treatment: the pole owns the full
+         * orientation (swing and roll), written raw to ikOrient so it bypasses euler
+         * entirely — no gimbal, no 180-degree shortest-arc flip, no FK-twist mismatch.
+         * Everything else (BOBJ, longer cubic chains) keeps the euler reconstruction. */
+        if (model instanceof Model cubic && chainIds.size() == 3)
+        {
+            buildChainOrientations(cubic, chainIds, solved, rootParentRotation, weight);
+        }
+        else
+        {
+            Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
+            ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
+        }
     }
 
     /**
-     * The roll, in radians, the IK target CONTROLLER asks of the chain: the twist
-     * of the controller bone's pose (its rotation relative to its rest) about the
-     * solved root-to-tip axis. Rotating the controller rolls the whole chain to
-     * match — geometry included — which is how the chain is rotated now that the
-     * pole only AIMS the bend. Zero at the controller's rest rotation, so it bakes
-     * no baseline twist. Cubic only (rides on the cubic {@code ikRoll}); 0 otherwise.
+     * Gives each cubic IK bone the full local orientation of the solved two-bone
+     * limb, written raw to {@link ModelGroup#ikOrient} — the renderer applies it in
+     * place of the bone's euler rotate, so the pole owns the whole orientation. Never
+     * touches {@code bone.current.rotate}: IK lives entirely in the transient field,
+     * so the FK pose (read by the gizmo, saved, and blended below) stays intact.
+     *
+     * <p>Each bone's local rotation maps its rest frame to its solved frame, both
+     * built from a segment direction and the chain's bend normal (see {@link
+     * Matrices#orientMirroredX}). The rest normal is the rest bend normal in local
+     * space ({@code restDir0 x restDir1}), so at rest the two frames coincide and the
+     * orientation is identity — no baseline twist. The parent world frame is walked
+     * root-to-tip exactly as the renderer would, advancing by each bone's rendered
+     * orientation; with {@code weight < 1} that orientation is slerped from the FK
+     * rotation, so children inherit the same frame the renderer establishes.
      */
-    private static float controllerRoll(IModel model, String targetId, PivotFrame targetFrame, List<Vector3f> solved)
+    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight)
     {
-        if (targetFrame == null || targetFrame.worldRotation() == null || solved.size() < 3 || !(model instanceof Model cubic))
-        {
-            return 0F;
-        }
+        Vector3f restDir0 = restDirection(model, chainIds, 0);
+        Vector3f restDir1 = restDirection(model, chainIds, 1);
 
-        ModelGroup target = cubic.getGroup(targetId);
-
-        if (target == null)
-        {
-            return 0F;
-        }
-
-        Vector3f axis = new Vector3f(solved.get(solved.size() - 1)).sub(solved.get(0));
-
-        if (axis.lengthSquared() < 1.0e-12f)
-        {
-            return 0F;
-        }
-
-        axis.normalize();
-
-        /* World-space rotation the user applied to the controller, relative to its
-         * rest: worldRotation . restLocal^-1 . parentRotation^-1 (= parentRot .
-         * poseDelta . parentRot^-1). The rest cancels, so a controller at rest gives
-         * identity → zero twist → no baseline roll. restLocal uses the renderer's
-         * Z*Y*X euler order so it matches the collected world rotation exactly. */
-        Vector3f r = target.initial.rotate;
-        Quaternionf restLocal = new Quaternionf().rotationZYX((float) Math.toRadians(r.z), (float) Math.toRadians(r.y), (float) Math.toRadians(r.x));
-        Quaternionf delta = new Quaternionf(targetFrame.worldRotation())
-            .mul(restLocal.conjugate())
-            .mul(new Quaternionf(targetFrame.parentRotation()).conjugate());
-
-        return twistAngle(delta, axis);
-    }
-
-    /**
-     * The rotation angle of {@code q} about the unit {@code axis} — the twist
-     * component from a swing-twist decomposition, in radians, in [-pi, pi]. Pure
-     * quaternion math (no euler), so it has no gimbal/180-degree wall; ambiguous
-     * only at an exact 180-degree swing off the axis.
-     */
-    private static float twistAngle(Quaternionf q, Vector3f axis)
-    {
-        if (q.w < 0F)
-        {
-            q.set(-q.x, -q.y, -q.z, -q.w);
-        }
-
-        float d = q.x * axis.x + q.y * axis.y + q.z * axis.z;
-
-        return 2F * (float) Math.atan2(d, q.w);
-    }
-
-    /**
-     * Stores the controller roll as a transient rigid rotation on the chain's root
-     * bone. Applied raw in the render matrix (never written back to a euler bone),
-     * it rolls the whole chain about the root-to-tip axis — geometry included —
-     * without the +-180 instability of carrying a roll through the swing/twist euler
-     * reconstruction. The axis passes through the root pivot, so the tip stays put
-     * and the hierarchy rolls rigidly. Cubic only; cleared each frame by
-     * {@link ModelGroup#reset()}.
-     */
-    private static void applyChainRoll(IModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float roll, float weight)
-    {
-        if (roll == 0F || chainIds.isEmpty() || !(model instanceof Model cubic))
+        if (restDir0 == null || restDir1 == null)
         {
             return;
         }
 
-        ModelGroup rootBone = cubic.getGroup(chainIds.get(0));
+        Vector3f restNormal = new Vector3f(restDir0).cross(restDir1);
 
-        if (rootBone == null)
+        if (restNormal.lengthSquared() < 1.0e-10f)
         {
-            return;
+            /* Straight rest limb: the rest bend plane is undefined. This perpendicular
+             * is the only baseline-twist convention that needs in-game tuning — a real
+             * limb's rest is bent, so the cross product above usually wins. */
+            restNormal = stablePerpendicular(restDir0);
+        }
+        else
+        {
+            restNormal.normalize();
         }
 
-        Vector3f axis = new Vector3f(solved.get(solved.size() - 1)).sub(solved.get(0));
+        Vector3f bendNormal = bendNormal(solved);
+        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
 
-        if (axis.lengthSquared() < 1.0e-12f)
+        for (int i = 0; i < chainIds.size() - 1; i++)
         {
-            return;
+            ModelGroup bone = model.getGroup(chainIds.get(i));
+
+            if (bone == null)
+            {
+                return;
+            }
+
+            Vector3f segWorld = new Vector3f(solved.get(i + 1)).sub(solved.get(i));
+
+            if (segWorld.lengthSquared() < EPS * EPS)
+            {
+                continue;
+            }
+
+            segWorld.normalize();
+
+            Quaternionf invParent = new Quaternionf(parentWorld).conjugate();
+            Vector3f segLocal = invParent.transform(new Vector3f(segWorld));
+            Vector3f normalLocal = invParent.transform(new Vector3f(bendNormal));
+
+            Vector3f restDir = i == 0 ? restDir0 : restDir1;
+            Quaternionf localRot = Matrices.orientMirroredX(restDir, restNormal, segLocal, normalLocal);
+            Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : fkLocal(bone).slerp(localRot, weight);
+
+            bone.ikOrient = oriented;
+
+            /* Advance by the orientation the renderer will actually apply (the blended
+             * one), so a child bone decomposes its segment against the SAME parent frame
+             * the renderer establishes. At weight 1 this is the full IK rotation. */
+            parentWorld.mul(oriented);
+        }
+    }
+
+    /** The bone's FK local rotation (its euler rotate as a quaternion), the blend base when IK weight is below one. */
+    private static Quaternionf fkLocal(ModelGroup bone)
+    {
+        Vector3f r = bone.current.rotate;
+
+        return Matrices.toQuaternionZYXDegrees(r.x, r.y, r.z);
+    }
+
+    /**
+     * The solved chain's bend-plane normal, {@code (P1-P0) x (P2-P0)} — the side the
+     * pole aimed the elbow towards, already baked into the positions. Falls back to a
+     * stable side axis when the solved limb is straight (no bend plane).
+     */
+    private static Vector3f bendNormal(List<Vector3f> p)
+    {
+        Vector3f a = p.get(0);
+        Vector3f normal = new Vector3f(p.get(1)).sub(a).cross(new Vector3f(p.get(2)).sub(a));
+
+        if (normal.lengthSquared() > EPS * EPS)
+        {
+            return normal.normalize();
         }
 
-        /* The renderer multiplies ikRoll in the root bone's PARENT frame (before
-         * the bone's own rotation), so express the world root->tip axis there. */
-        axis.normalize();
-        new Quaternionf(rootParentRotation).conjugate().transform(axis);
+        Vector3f limb = new Vector3f(p.get(2)).sub(a);
 
-        rootBone.ikRoll = new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, roll * weight);
+        return limb.lengthSquared() < EPS * EPS ? new Vector3f(0F, 0F, 1F) : stablePerpendicular(limb.normalize());
+    }
+
+    /** A deterministic unit perpendicular to {@code dir}, cross with world Z (falling back to world Y when parallel). */
+    private static Vector3f stablePerpendicular(Vector3f dir)
+    {
+        Vector3f perp = new Vector3f(dir).cross(0F, 0F, 1F);
+
+        if (perp.lengthSquared() < EPS * EPS)
+        {
+            perp.set(dir).cross(0F, 1F, 0F);
+        }
+
+        return perp.normalize();
     }
 
     /**

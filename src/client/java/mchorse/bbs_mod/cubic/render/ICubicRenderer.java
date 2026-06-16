@@ -28,7 +28,13 @@ public interface ICubicRenderer
 
     public static void rotateGroup(MatrixStack stack, ModelGroup group)
     {
-        if (group.ikRoll != null) stack.multiply(group.ikRoll);
+        if (group.ikOrient != null)
+        {
+            stack.multiply(group.ikOrient);
+
+            return;
+        }
+
         if (group.current.rotate.z != 0F) stack.multiply(RotationAxis.POSITIVE_Z.rotation(MathUtils.toRad(group.current.rotate.z)));
         if (group.current.rotate.y != 0F) stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.toRad(group.current.rotate.y)));
         if (group.current.rotate.x != 0F) stack.multiply(RotationAxis.POSITIVE_X.rotation(MathUtils.toRad(group.current.rotate.x)));

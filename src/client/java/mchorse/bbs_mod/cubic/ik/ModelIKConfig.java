@@ -6,6 +6,7 @@ public record ModelIKConfig(List<Chain> chains)
 {
     public static final float DEFAULT_WEIGHT = 1F;
     public static final String DEFAULT_POLE_TARGET = "";
+    public static final float DEFAULT_POLE_ANGLE = 0F;
     public static final float DEFAULT_SOFTNESS = 0.05F;
     public static final int DEFAULT_CHAIN_LENGTH = 0;
 
@@ -15,10 +16,10 @@ public record ModelIKConfig(List<Chain> chains)
      * hierarchy ({@code 0} = up to the root). When {@code pole} is on, the bend is
      * aimed at {@code poleTarget} (a bone the limb keeps pointing its elbow
      * towards); with no pole target the bend side is oriented automatically; when
-     * off, the bend is left to the raw position solve. The pole only AIMS the bend
-     * — rolling the whole chain is done by rotating the {@code target} controller.
+     * off, the bend is left to the raw position solve. {@code poleAngle} (degrees)
+     * then rolls the aimed bend about the limb axis — Blender's pole angle.
      */
-    public record Chain(String tip, String target, int chainLength, boolean pole, String poleTarget, float softness, float weight, boolean enabled)
+    public record Chain(String tip, String target, int chainLength, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean enabled)
     {
         public Chain
         {
