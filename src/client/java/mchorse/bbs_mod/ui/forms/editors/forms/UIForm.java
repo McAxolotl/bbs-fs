@@ -4,12 +4,14 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIBodyPartFormPanel;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIFormPanel;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIGeneralFormPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -20,6 +22,7 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Matrix4f;
@@ -32,6 +35,7 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public T form;
     public UIFormPanel<T> defaultPanel;
     public UIGeneralFormPanel generalPanel;
+    public UIBodyPartFormPanel bodyPartPanel;
 
     private UIPropTransform general;
 
@@ -99,6 +103,8 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         this.generalPanel = panel;
         this.general = panel.transform;
         this.general.hotkeyDrag(() -> this.editor == null ? null : this.editor.buildHotkeyDrag(this.general));
+
+        this.bodyPartPanel = new UIBodyPartFormPanel(this);
     }
 
     public void setEditor(UIFormEditor editor)
@@ -120,12 +126,41 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     {
         this.form = form;
 
+        this.updateBodyPartPanel(form);
+
         for (UIFormPanel<T> panel : this.panels)
         {
             panel.startEdit(form);
         }
 
         this.setPanel(this.findPanel(preferredPanel));
+    }
+
+    /**
+     * Registers the body part panel as the last tab when the edited form is attached to a parent
+     * body part. The editor is rebuilt from scratch on every form switch, so the panel only ever
+     * needs adding (never removing) &mdash; the root form simply never gets it.
+     */
+    private void updateBodyPartPanel(T form)
+    {
+        boolean hasParent = form != null && form.getParent() instanceof BodyPart;
+
+        if (hasParent && !this.panels.contains(this.bodyPartPanel))
+        {
+            this.registerPanel(this.bodyPartPanel, UIKeys.FORMS_EDITORS_BODY_PART_TITLE, Icons.WRENCH);
+        }
+    }
+
+    /**
+     * Routes a viewport bone pick (Ctrl + click on a parent bone) to the body part panel, which sets
+     * the bone this form attaches to. No-op when the form has no parent (panel not registered).
+     */
+    public void pickBodyPartBone(Pair<Form, String> pair)
+    {
+        if (this.panels.contains(this.bodyPartPanel))
+        {
+            this.bodyPartPanel.pickBone(pair);
+        }
     }
 
     private UIFormPanel<T> findPanel(Class<?> panelClass)

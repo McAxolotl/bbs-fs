@@ -749,6 +749,7 @@
 	"bbs.ui.forms.editors.billboard.shading": "Затемнение",
 	"bbs.ui.forms.editors.billboard.title": "Смотрит на игрока",
 	"bbs.ui.forms.editors.billboard.uv_shift": "UV развёртка",
+	"bbs.ui.forms.editors.body_part.title": "Часть тела",
 	"bbs.ui.forms.editors.block.title": "Блок",
 	"bbs.ui.forms.editors.extruded.title": "Выпуклый",
 	"bbs.ui.forms.editors.framebuffer.title": "Фреймбуфер",
