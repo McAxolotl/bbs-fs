@@ -71,6 +71,7 @@ public class ServerNetwork
     public static final Identifier CLIENT_SELECTED_SLOT = new Identifier(BBSMod.MOD_ID, "c15");
     public static final Identifier CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = new Identifier(BBSMod.MOD_ID, "c16");
     public static final Identifier CLIENT_REFRESH_MODEL_BLOCKS = new Identifier(BBSMod.MOD_ID, "c17");
+    public static final Identifier CLIENT_REQUEST_FILM_RESYNC = new Identifier(BBSMod.MOD_ID, "c18");
 
     public static final Identifier SERVER_MODEL_BLOCK_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "s1");
     public static final Identifier SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = new Identifier(BBSMod.MOD_ID, "s2");
@@ -653,6 +654,19 @@ public class ServerNetwork
         buf.writeString(filmId);
 
         ServerPlayNetworking.send(player, CLIENT_STOP_FILM_PACKET, buf);
+    }
+
+    /**
+     * Ask the editing client to re-send the whole film, used when a per-property
+     * sync targets a path the server doesn't have (client/server desync).
+     */
+    public static void requestFilmResync(ServerPlayerEntity player, String filmId)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeString(filmId);
+
+        ServerPlayNetworking.send(player, CLIENT_REQUEST_FILM_RESYNC, buf);
     }
 
     public static void sendManagerData(ServerPlayerEntity player, int callbackId, RepositoryOperation op, BaseType data)

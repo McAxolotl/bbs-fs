@@ -83,6 +83,7 @@ public class ClientNetwork
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (client, handler, buf, responseSender) -> handleSelectedSlotPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, (client, handler, buf, responseSender) -> handleAnimationStateModelBlockPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_REFRESH_MODEL_BLOCKS, (client, handler, buf, responseSender) -> handleRefreshModelBlocksPacket(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_REQUEST_FILM_RESYNC, (client, handler, buf, responseSender) -> handleRequestFilmResync(client, buf));
     }
 
     /* Handlers */
@@ -177,6 +178,24 @@ public class ClientNetwork
         String filmId = buf.readString();
 
         client.execute(() -> Films.stopFilm(filmId));
+    }
+
+    private static void handleRequestFilmResync(MinecraftClient client, PacketByteBuf buf)
+    {
+        String filmId = buf.readString();
+
+        client.execute(() ->
+        {
+            UIFilmPanel panel = BBSModClient.getDashboard().getPanel(UIFilmPanel.class);
+            Film film = panel == null ? null : panel.getData();
+
+            /* Server lost track of a path we edited — re-send the whole film
+             * (root path) so it can rebuild its copy via film.fromData(...). */
+            if (film != null && film.getId().equals(filmId))
+            {
+                sendSyncData(filmId, film);
+            }
+        });
     }
 
     private static void handleHandshakePacket(MinecraftClient client, PacketByteBuf buf)

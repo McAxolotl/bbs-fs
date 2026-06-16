@@ -160,12 +160,25 @@ public class BBSRendering
 
     public static void setCustomSize(boolean customSize, int w, int h)
     {
+        int newWidth = !customSize ? 0 : w;
+        int newHeight = !customSize ? 0 : h;
+
+        /* No-op when nothing actually changes. A redundant setCustomSize(false)
+         * — e.g. a film panel disappearing while custom size is already off, which
+         * happens when the dashboard is first lazily created by the teleport/record
+         * keybinds — must NOT resize the vanilla framebuffers: that stalls the GPU
+         * and freezes the screen for a frame even though the state didn't change. */
+        if (BBSRendering.customSize == customSize && width == newWidth && height == newHeight)
+        {
+            return;
+        }
+
         LOGGER.info("[BBS film] setCustomSize customSize={} w={} h={} (stored width/height will be {})",
             customSize, w, h, customSize ? w + "/" + h : "0/0");
         BBSRendering.customSize = customSize;
 
-        width = !customSize ? 0 : w;
-        height = !customSize ? 0 : h;
+        width = newWidth;
+        height = newHeight;
 
         if (!customSize)
         {
