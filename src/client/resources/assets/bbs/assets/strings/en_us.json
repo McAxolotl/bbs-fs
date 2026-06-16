@@ -749,8 +749,6 @@
 	"bbs.ui.forms.editors.extruded.title": "Extruded",
 	"bbs.ui.forms.editors.framebuffer.title": "Framebuffer",
 	"bbs.ui.forms.editors.general": "General",
-	"bbs.ui.forms.editors.general.animatable": "Animatable",
-	"bbs.ui.forms.editors.general.animatable-tooltip": "Whether this form provides keyframe tracks for animation",
 	"bbs.ui.forms.editors.general.bone_tracks": "Limb tracks",
 	"bbs.ui.forms.editors.general.bone_tracks-tooltip": "When enabled, separate keyframe tracks for each limb are shown in pose keyframe editor and replays",
 	"bbs.ui.forms.editors.general.filter_tracks": "Filter tracks...",

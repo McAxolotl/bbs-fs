@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays.overlays;
 
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
@@ -32,6 +33,12 @@ public class UIKeyframeSheetFilterOverlayPanel extends UIOverlayPanel
     public UIKeyframeSheetFilterOverlayPanel(Set<String> disabled, Set<String> keys, Map<String, Integer> keyToColor)
     {
         super(UIKeys.FILM_REPLAY_FILTER_SHEETS_TITLE);
+
+        /* Expand the legacy "hide everything" sentinel into concrete keys so the toggles below stay consistent. */
+        if (!keys.isEmpty() && disabled.remove(Form.DISABLED_ALL))
+        {
+            disabled.addAll(keys);
+        }
 
         UIButton toggleAll = new UIButton(this.toggleAllLabel(disabled, keys), (b) ->
         {

@@ -31,8 +31,10 @@ import java.util.List;
 
 public abstract class Form extends ValueGroup
 {
+    /** Sentinel in {@link #disabledTracks} meaning every track of this form is hidden on the timeline. */
+    public static final String DISABLED_ALL = "*";
+
     public final ValueBoolean visible = new ValueBoolean("visible", true);
-    public final ValueBoolean animatable = new ValueBoolean("animatable", true);
     public final ValueStringKeys disabledTracks = new ValueStringKeys("disabled_tracks");
     public final ValueString trackName = new ValueString("track_name", "");
     public final ValueFloat lighting = new ValueFloat("lighting", 1F);
@@ -72,7 +74,6 @@ public abstract class Form extends ValueGroup
     {
         super("");
 
-        this.animatable.invisible();
         this.disabledTracks.invisible();
         this.trackName.invisible();
         this.name.invisible();
@@ -81,7 +82,6 @@ public abstract class Form extends ValueGroup
         this.additiveColor.invisible();
 
         this.add(this.visible);
-        this.add(this.animatable);
         this.add(this.disabledTracks);
         this.add(this.trackName);
         this.add(this.lighting);
@@ -365,6 +365,13 @@ public abstract class Form extends ValueGroup
         {
             /* Compatibility with state triggers */
             FormUtils.readOldStateTriggers(this, map);
+
+            /* The "animatable" toggle was removed; a disabled one meant the form had no tracks,
+             * which is now expressed by hiding every track of the form on the timeline. */
+            if (map.has("animatable") && !map.getBool("animatable", true))
+            {
+                this.disabledTracks.get().add(DISABLED_ALL);
+            }
         }
     }
 

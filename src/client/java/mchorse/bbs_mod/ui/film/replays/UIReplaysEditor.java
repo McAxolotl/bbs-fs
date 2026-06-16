@@ -524,7 +524,14 @@ public class UIReplaysEditor extends UIElement
 
             Form owner = getSheetForm(v);
 
-            return owner != null && owner.disabledTracks.get().contains(filterKey);
+            if (owner != null)
+            {
+                Set<String> ownerDisabled = owner.disabledTracks.get();
+
+                return ownerDisabled.contains(Form.DISABLED_ALL) || ownerDisabled.contains(filterKey);
+            }
+
+            return false;
         });
 
         Form lastForm = null;
