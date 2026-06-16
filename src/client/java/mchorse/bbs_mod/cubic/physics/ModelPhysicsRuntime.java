@@ -171,13 +171,6 @@ public final class ModelPhysicsRuntime
 
     private static void applyChain(World world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState, Map<String, Float> poseFixByBone)
     {
-        float weight = chain.weight();
-
-        if (weight <= 0F)
-        {
-            return;
-        }
-
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();
         int pointCount = pivotCount + 1;
@@ -186,6 +179,31 @@ public final class ModelPhysicsRuntime
         {
             return;
         }
+
+        /* The film physics track layers a per-chain control over the config, keyed by the chain's
+         * root bone, replacing its dynamic scalars wholesale (mirrors the IK track). */
+        PhysicsControl control = null;
+
+        if (instance != null && instance.form instanceof ModelForm modelForm && !modelForm.physicsControlOverrides.isEmpty())
+        {
+            control = modelForm.physicsControlOverrides.get(ids.get(0));
+        }
+
+        if (control != null && !control.enabled)
+        {
+            return;
+        }
+
+        float weight = control != null ? control.weight : chain.weight();
+
+        if (weight <= 0F)
+        {
+            return;
+        }
+
+        float gravity = control != null ? control.gravity : chain.gravity();
+        float damping = control != null ? control.damping : chain.damping();
+        float stiffness = control != null ? control.stiffness : chain.stiffness();
 
         float poseFix = getChainPoseFix(ids, chain.targetBone(), poseFixByBone);
         weight *= (1F - poseFix);
@@ -272,7 +290,7 @@ public final class ModelPhysicsRuntime
         }
 
         computePoseTargets(model, ids, chainFrames, chain.restLengths(), anchor, anchorRotation, target != null, state);
-        step(world, age, transition, model, ids, chain, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
+        step(world, age, transition, model, ids, chain, gravity, damping, stiffness, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
         Vector3f[] positions = renderInterpolate(state, state.renderAlpha, anchor, anchorRotation, target);
         ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);
     }
@@ -458,7 +476,7 @@ public final class ModelPhysicsRuntime
         }
     }
 
-    private static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    private static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -517,8 +535,8 @@ public final class ModelPhysicsRuntime
             return;
         }
 
-        float gravity = BASE_GRAVITY * chain.gravity();
-        float damping = clamp01(chain.damping());
+        float gravity = BASE_GRAVITY * gravityMul;
+        float damping = clamp01(dampingValue);
         int iterations = chain.iterations();
         boolean collisions = chain.collisions() && world != null && chain.radius() > 0F;
         float radius = chain.radius();
@@ -574,7 +592,7 @@ public final class ModelPhysicsRuntime
         /* Per-point spring-back fraction toward the animated pose, applied once per sub-step. The base
          * stiffness falls off toward the tip and is converted to a per-sub-step fraction so the pull
          * over a whole tick stays the same no matter how many sub-steps run. */
-        float[] stiffStep = computeStiffnessSteps(clamp01(chain.stiffness()), state.pos.length, h);
+        float[] stiffStep = computeStiffnessSteps(clamp01(stiffnessValue), state.pos.length, h);
 
         /* Per-bone swing limits, as the cosine of the widest deviation each bone may take from its pose
          * direction. refDir holds that pose direction per segment, rebuilt each sub-step from the sliding

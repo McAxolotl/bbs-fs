@@ -338,6 +338,36 @@ public class UIReplaysEditorUtils
         }
     }
 
+    /**
+     * One physics-controls track per form (only if it has physics chains): a single
+     * keyframe sheet whose value holds the per-chain scalars (weight, gravity,
+     * damping, stiffness, enabled), keyed by root bone and layered over the form's
+     * physics config at playback — mirrors {@link #addIKControlSheet}. It is not a
+     * form property, so it carries its owning form for the editor to list chains.
+     */
+    public static void addPhysicsControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = PerLimbService.toPhysicsControlKey(path);
+        String title = path.isEmpty() ? "physics" : path + "/physics";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.GREEN, false, channel, null).icon(Icons.DROP).form(modelForm));
+    }
+
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
@@ -449,6 +479,7 @@ public class UIReplaysEditorUtils
         if (form instanceof ModelForm modelForm)
         {
             addMaterialTextureSheets(modelForm, properties, sheets);
+            addPhysicsControlSheet(modelForm, properties, sheets);
             addPhysicsTargetSheets(modelForm, properties, sheets);
             addBoneTrackSheets(modelForm, properties, sheets);
             addIKControlSheet(modelForm, properties, sheets);

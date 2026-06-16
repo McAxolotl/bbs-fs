@@ -10,6 +10,8 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -114,7 +116,8 @@ public class UIReplaysEditor extends UIElement
         PLAYER(Icons.PLAYER, L10n.lang("bbs.ui.film.replays.category.player"), L10n.lang("bbs.ui.film.replays.category.player.tooltip")),
         MODEL(Icons.BLOCK, L10n.lang("bbs.ui.film.replays.category.model"), L10n.lang("bbs.ui.film.replays.category.model.tooltip")),
         POSE(Icons.POSE, L10n.lang("bbs.ui.film.replays.category.pose"), L10n.lang("bbs.ui.film.replays.category.pose.tooltip")),
-        IK(Icons.LIMB, L10n.lang("bbs.ui.film.replays.category.ik"), L10n.lang("bbs.ui.film.replays.category.ik.tooltip"));
+        IK(Icons.LIMB, L10n.lang("bbs.ui.film.replays.category.ik"), L10n.lang("bbs.ui.film.replays.category.ik.tooltip")),
+        PHYSICS(Icons.DROP, L10n.lang("bbs.ui.film.replays.category.physics"), L10n.lang("bbs.ui.film.replays.category.physics.tooltip"));
 
         public final Icon icon;
         public final IKey label;
@@ -377,6 +380,8 @@ public class UIReplaysEditor extends UIElement
             .category(UIKeys.FILM_REPLAY_TITLE);
         this.keys().register(Keys.REPLAYS_TAB_4, () -> this.setCategory(ReplayCategory.IK))
             .category(UIKeys.FILM_REPLAY_TITLE);
+        this.keys().register(Keys.REPLAYS_TAB_5, () -> this.setCategory(ReplayCategory.PHYSICS))
+            .category(UIKeys.FILM_REPLAY_TITLE);
 
         this.add(this.iconBar, this.actionsToggle);
         this.markContainer();
@@ -492,6 +497,7 @@ public class UIReplaysEditor extends UIElement
         }
 
         this.updateIKTab();
+        this.updatePhysicsTab();
 
         List<UIKeyframeSheet> sheets = new ArrayList<>();
         Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
@@ -500,6 +506,7 @@ public class UIReplaysEditor extends UIElement
         this.collectCuratedSheets(sheets);
         this.collectFormPropertySheets(sheets, poseTabs, poseTabDepths);
         this.collectIKSheets(sheets);
+        this.collectPhysicsSheets(sheets);
 
         this.keys.clear();
 
@@ -767,6 +774,36 @@ public class UIReplaysEditor extends UIElement
         }
     }
 
+    /** Physics tracks live in their own category; like IK they are not form properties, so collect them by walking the form tree. */
+    private void collectPhysicsSheets(List<UIKeyframeSheet> sheets)
+    {
+        if (this.category != ReplayCategory.PHYSICS)
+        {
+            return;
+        }
+
+        this.collectPhysicsSheets(sheets, this.replay.form.get());
+    }
+
+    private void collectPhysicsSheets(List<UIKeyframeSheet> sheets, Form form)
+    {
+        if (form == null)
+        {
+            return;
+        }
+
+        if (form instanceof ModelForm modelForm)
+        {
+            UIReplaysEditorUtils.addPhysicsControlSheet(modelForm, this.replay.properties, sheets);
+            UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, sheets);
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            this.collectPhysicsSheets(sheets, part.getForm());
+        }
+    }
+
     /** Show the IK tab only when the record actually has IK; bounce an active IK category back to Model when it does not. */
     private void updateIKTab()
     {
@@ -830,6 +867,64 @@ public class UIReplaysEditor extends UIElement
         return false;
     }
 
+    /** Show the Physics tab only when the record actually has physics chains; bounce an active Physics category back to Model when it does not. */
+    private void updatePhysicsTab()
+    {
+        UIIcon button = this.tabButtons.get(ReplayCategory.PHYSICS);
+
+        if (button == null)
+        {
+            return;
+        }
+
+        boolean hasPhysics = this.formHasPhysics(this.replay.form.get());
+        boolean present = button.getParent() != null;
+
+        if (hasPhysics && !present)
+        {
+            this.iconBar.add(button);
+            this.iconBar.resize();
+        }
+        else if (!hasPhysics && present)
+        {
+            button.removeFromParent();
+            this.iconBar.resize();
+        }
+
+        if (!hasPhysics && this.category == ReplayCategory.PHYSICS)
+        {
+            this.category = ReplayCategory.MODEL;
+        }
+    }
+
+    private boolean formHasPhysics(Form form)
+    {
+        if (form == null)
+        {
+            return false;
+        }
+
+        if (form instanceof ModelForm modelForm && modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null && config.bones() != null && !config.bones().isEmpty())
+            {
+                return true;
+            }
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            if (this.formHasPhysics(part.getForm()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void flushForm(List<UIKeyframeSheet> sheets, List<UIKeyframeSheet> formSheets, Form form, Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs, Map<UIKeyframeSheet, Integer> poseTabDepths)
     {
         String path = FormUtils.getPath(form);
@@ -855,10 +950,6 @@ public class UIReplaysEditor extends UIElement
                 List<UIKeyframeSheet> materialSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
                 orderedFormSheets.addAll(materialSheets);
-
-                List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
-                UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
-                orderedFormSheets.addAll(physicsSheets);
             }
 
             if (this.category == ReplayCategory.POSE)

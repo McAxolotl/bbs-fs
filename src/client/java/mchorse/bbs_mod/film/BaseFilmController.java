@@ -19,6 +19,8 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.graphics.Draw;
@@ -969,6 +971,12 @@ public abstract class BaseFilmController
                 continue;
             }
 
+            if (PerLimbService.isPhysicsControlChannel(id))
+            {
+                this.applyPhysicsControls(root, PerLimbService.parsePhysicsControlFormPath(id), channel, tick);
+                continue;
+            }
+
             PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
 
             if (ikPath != null)
@@ -1020,6 +1028,35 @@ public abstract class BaseFilmController
         for (Map.Entry<String, IKControl> entry : controls.controls.entrySet())
         {
             modelForm.ikControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new IKControl()).copy(entry.getValue());
+        }
+    }
+
+    private void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    {
+        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return;
+        }
+
+        Object value = segment.createInterpolated();
+
+        if (!(value instanceof PhysicsControls controls))
+        {
+            return;
+        }
+
+        for (Map.Entry<String, PhysicsControl> entry : controls.controls.entrySet())
+        {
+            modelForm.physicsControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new PhysicsControl()).copy(entry.getValue());
         }
     }
 
@@ -1087,6 +1124,7 @@ public abstract class BaseFilmController
             modelForm.poleTargetOverrides.clear();
             modelForm.ikControlOverrides.clear();
             modelForm.physicsTargetOverrides.clear();
+            modelForm.physicsControlOverrides.clear();
         }
 
         for (BodyPart part : form.parts.getAllTyped())

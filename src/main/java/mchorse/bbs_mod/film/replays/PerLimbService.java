@@ -10,6 +10,7 @@ public class PerLimbService
     public static final String IK_CONTROLS = "ik_controls";
     public static final String POLE_TARGETS = "pole_targets";
     public static final String PHYSICS_TARGETS = "physics_targets";
+    public static final String PHYSICS_CONTROLS = "physics_controls";
 
     public static record PoseBonePath(String formPath, String bone)
     {}
@@ -279,5 +280,45 @@ public class PerLimbService
         }
 
         return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
+    }
+
+    public static boolean isPhysicsControlChannel(String id)
+    {
+        return id != null && id.contains(PHYSICS_CONTROLS);
+    }
+
+    /** The physics-controls channel is one per form (not per chain); this returns its owning form path. */
+    public static String parsePhysicsControlFormPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(PHYSICS_CONTROLS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return formPath;
+    }
+
+    public static String toPhysicsControlKey(String formPath)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return PHYSICS_CONTROLS;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_CONTROLS;
     }
 }
