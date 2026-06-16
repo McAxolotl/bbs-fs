@@ -144,22 +144,86 @@ final class ModelIKApplier
         Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets);
         IKSolver.Limit[] limits = buildLimits(model, chainIds, boneLimits);
 
-        IKSolver.Solution solution = IKSolver.solve(currentPositions, target, pole, polePoint, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
-        List<Vector3f> solved = solution.positions();
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
 
         Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
         ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
-        applyChainRoll(model, chainIds, solved, rootParentRotation, solution.roll(), weight);
+
+        float roll = controllerRoll(model, chain.target(), targetFrame, solved);
+        applyChainRoll(model, chainIds, solved, rootParentRotation, roll, weight);
     }
 
     /**
-     * Stores the pole roll as a transient rigid rotation on the chain's root bone.
-     * Applied raw in the render matrix (never written back to a euler bone), it
-     * rolls the whole chain about the root-to-tip axis the way Blender's pole does —
-     * geometry included — without the +-180 instability of carrying a roll through
-     * the swing/twist euler reconstruction. The axis passes through the root pivot,
-     * so the tip stays put and the hierarchy rolls rigidly. Cubic only; cleared each
-     * frame by {@link ModelGroup#reset()}.
+     * The roll, in radians, the IK target CONTROLLER asks of the chain: the twist
+     * of the controller bone's pose (its rotation relative to its rest) about the
+     * solved root-to-tip axis. Rotating the controller rolls the whole chain to
+     * match — geometry included — which is how the chain is rotated now that the
+     * pole only AIMS the bend. Zero at the controller's rest rotation, so it bakes
+     * no baseline twist. Cubic only (rides on the cubic {@code ikRoll}); 0 otherwise.
+     */
+    private static float controllerRoll(IModel model, String targetId, PivotFrame targetFrame, List<Vector3f> solved)
+    {
+        if (targetFrame == null || targetFrame.worldRotation() == null || solved.size() < 3 || !(model instanceof Model cubic))
+        {
+            return 0F;
+        }
+
+        ModelGroup target = cubic.getGroup(targetId);
+
+        if (target == null)
+        {
+            return 0F;
+        }
+
+        Vector3f axis = new Vector3f(solved.get(solved.size() - 1)).sub(solved.get(0));
+
+        if (axis.lengthSquared() < 1.0e-12f)
+        {
+            return 0F;
+        }
+
+        axis.normalize();
+
+        /* World-space rotation the user applied to the controller, relative to its
+         * rest: worldRotation . restLocal^-1 . parentRotation^-1 (= parentRot .
+         * poseDelta . parentRot^-1). The rest cancels, so a controller at rest gives
+         * identity → zero twist → no baseline roll. restLocal uses the renderer's
+         * Z*Y*X euler order so it matches the collected world rotation exactly. */
+        Vector3f r = target.initial.rotate;
+        Quaternionf restLocal = new Quaternionf().rotationZYX((float) Math.toRadians(r.z), (float) Math.toRadians(r.y), (float) Math.toRadians(r.x));
+        Quaternionf delta = new Quaternionf(targetFrame.worldRotation())
+            .mul(restLocal.conjugate())
+            .mul(new Quaternionf(targetFrame.parentRotation()).conjugate());
+
+        return twistAngle(delta, axis);
+    }
+
+    /**
+     * The rotation angle of {@code q} about the unit {@code axis} — the twist
+     * component from a swing-twist decomposition, in radians, in [-pi, pi]. Pure
+     * quaternion math (no euler), so it has no gimbal/180-degree wall; ambiguous
+     * only at an exact 180-degree swing off the axis.
+     */
+    private static float twistAngle(Quaternionf q, Vector3f axis)
+    {
+        if (q.w < 0F)
+        {
+            q.set(-q.x, -q.y, -q.z, -q.w);
+        }
+
+        float d = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+
+        return 2F * (float) Math.atan2(d, q.w);
+    }
+
+    /**
+     * Stores the controller roll as a transient rigid rotation on the chain's root
+     * bone. Applied raw in the render matrix (never written back to a euler bone),
+     * it rolls the whole chain about the root-to-tip axis — geometry included —
+     * without the +-180 instability of carrying a roll through the swing/twist euler
+     * reconstruction. The axis passes through the root pivot, so the tip stays put
+     * and the hierarchy rolls rigidly. Cubic only; cleared each frame by
+     * {@link ModelGroup#reset()}.
      */
     private static void applyChainRoll(IModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float roll, float weight)
     {

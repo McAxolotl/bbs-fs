@@ -12,10 +12,11 @@ public record ModelIKConfig(List<Chain> chains)
     /**
      * One IK constraint, modeled after Blender: it lives on the {@code tip}
      * bone, reaches {@code target}, spans {@code chainLength} bones up the
-     * hierarchy ({@code 0} = up to the root). When {@code pole} is on, the bend
-     * is aimed at {@code poleTarget} (a bone the limb keeps pointing its elbow
-     * towards); with no pole target the bend side is oriented automatically;
-     * when off, the bend is left to the raw position solve.
+     * hierarchy ({@code 0} = up to the root). When {@code pole} is on, the bend is
+     * aimed at {@code poleTarget} (a bone the limb keeps pointing its elbow
+     * towards); with no pole target the bend side is oriented automatically; when
+     * off, the bend is left to the raw position solve. The pole only AIMS the bend
+     * — rolling the whole chain is done by rotating the {@code target} controller.
      */
     public record Chain(String tip, String target, int chainLength, boolean pole, String poleTarget, float softness, float weight, boolean enabled)
     {

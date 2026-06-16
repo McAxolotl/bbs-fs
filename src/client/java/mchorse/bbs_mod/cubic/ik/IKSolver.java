@@ -41,28 +41,18 @@ final class IKSolver
     {
     }
 
-    /**
-     * Solver output: the solved joint {@code positions} plus the pole {@code roll}
-     * (radians) the renderer applies as a rigid rotation of the whole chain about
-     * the root-to-tip axis. The roll is non-zero only for unconstrained chains with
-     * a pole target — see {@link #orientBendForRoll}.
-     */
-    public record Solution(List<Vector3f> positions, float roll)
-    {
-    }
-
-    public static Solution solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance)
     {
         return solve(positions, target, applyPole, polePoint, softness, maxIterations, tolerance, null, null);
     }
 
-    public static Solution solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
     {
         int n = positions.size();
 
         if (n < 2)
         {
-            return new Solution(positions, 0F);
+            return positions;
         }
 
         float total = 0F;
@@ -74,7 +64,7 @@ final class IKSolver
 
         if (total <= EPS)
         {
-            return new Solution(positions, 0F);
+            return positions;
         }
 
         Vector3f root = new Vector3f(positions.get(0));
@@ -83,59 +73,30 @@ final class IKSolver
 
         boolean constrained = limits != null && rootParentRotation != null;
 
-        /* A pole rolls the WHOLE chain (Blender-style): the bend is oriented to its
-         * stable natural side and the renderer rigidly rolls the chain onto the
-         * pole, geometry included. Constrained chains roll too — the roll rides on
-         * the chain root, above the limited joints, so it reorients the whole limb
-         * onto the pole without touching any joint's local rotation (a hinge stays
-         * a hinge). The limit solve shapes the bend; the pole only rolls. */
-        boolean geometryRoll = applyPole && polePoint != null;
-        float roll = 0F;
-
+        /* The pole only AIMS the bend (where the elbow points) — it never rolls the
+         * chain about its own axis. Rolling the whole chain (geometry included) is
+         * the controller bone's job: rotate the IK target and the renderer rolls
+         * the chain to match (see ModelIKApplier.controllerRoll). */
         if (n == 3)
         {
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
             solveTwoBone(positions, root, goal);
+            orientBend(positions, hinge, polePoint);
 
-            if (geometryRoll)
+            if (constrained)
             {
-                orientBendToNatural(positions, hinge);
-
-                if (constrained)
-                {
-                    solveBendForLimits(positions, limits, rootParentRotation);
-                }
-
-                roll = poleRoll(positions, polePoint);
-            }
-            else
-            {
-                orientBend(positions, hinge, polePoint);
-
-                if (constrained)
-                {
-                    solveBendForLimits(positions, limits, rootParentRotation);
-                }
+                solveBendForLimits(positions, limits, rootParentRotation);
             }
         }
         else if (constrained)
         {
             /* Longer chain: angle-space CCD keeps each joint in its DOF, then the
-             * pole rolls the whole chain about root->tip — that preserves every
-             * joint's local rotation, so it can't break the limits. */
+             * pole re-aims the bend about root->tip — that preserves every joint's
+             * local rotation, so it can't break the limits. */
             solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation);
-
-            if (geometryRoll)
-            {
-                orientBendToNatural(positions, hinge);
-                roll = poleRoll(positions, polePoint);
-            }
-            else
-            {
-                orientBend(positions, hinge, polePoint);
-            }
+            orientBend(positions, hinge, polePoint);
         }
         else
         {
@@ -146,19 +107,10 @@ final class IKSolver
              * frame. FABRIK distributes the bend evenly and lands on the same
              * shape for the same input — a rope drapes instead of coiling. */
             solveFabrik(positions, root, goal, maxIterations, tolerance);
-
-            if (geometryRoll)
-            {
-                orientBendToNatural(positions, hinge);
-                roll = poleRoll(positions, polePoint);
-            }
-            else
-            {
-                orientBend(positions, hinge, polePoint);
-            }
+            orientBend(positions, hinge, polePoint);
         }
 
-        return new Solution(positions, roll);
+        return positions;
     }
 
     /**
@@ -640,14 +592,14 @@ final class IKSolver
     }
 
     /**
-     * Rotates the whole chain about the root-to-tip axis so the bend points at
-     * the pole target. With no pole target it instead keeps the captured hinge
-     * orientation (the limb behaves like a hinge and never inverts). Either way
-     * the bend DIRECTION is aimed: at the pole point's perpendicular projection,
-     * or — for the hinge — at {@code axis x hinge}, which is the bend direction
-     * matching the bend-plane normal the hinge represents (so it stays
-     * perpendicular to the limb as it swings and can't flip). The root and tip
-     * lie on the axis, so reach is preserved.
+     * Aims the bend about the root-to-tip axis: at the pole point when there is a
+     * pole target (the elbow points at a stable external reference, so it can't
+     * flip as the target swings), otherwise at {@code axis x hinge} — the bend
+     * direction matching the captured hinge so the limb behaves like a hinge and
+     * never inverts. POSITION-level only: it moves where the elbow points, it does
+     * NOT roll the chain about its own axis (that is the controller bone's job, see
+     * ModelIKApplier.controllerRoll). The root and tip lie on the axis, so reach is
+     * preserved.
      */
     private static void orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint)
     {
@@ -698,88 +650,6 @@ final class IKSolver
         }
 
         orientBendTo(p, root, axis, desired);
-    }
-
-    /**
-     * Orients the bend to the chain's NATURAL bend direction (the captured rest
-     * hinge, {@code axis x hinge}) — a stable zero independent of the pole. The
-     * renderer later rolls the whole chain from here onto the pole, so anchoring
-     * the baked bend to the rest side keeps the geometry free of any baseline
-     * twist; the hinge comes from the pre-solve pose, so it doesn't breathe within
-     * the frame. Falls back to the axis-only side for a straight rest limb with no
-     * hinge. A constrained chain shapes the bend further (limit clamp) after this.
-     */
-    private static void orientBendToNatural(List<Vector3f> p, Vector3f hinge)
-    {
-        int n = p.size();
-
-        if (n < 3)
-        {
-            return;
-        }
-
-        Vector3f root = p.get(0);
-        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
-
-        if (!normalize(axis))
-        {
-            return;
-        }
-
-        Vector3f reference = hinge != null ? new Vector3f(axis).cross(hinge) : null;
-
-        if (reference == null || !project(reference, axis))
-        {
-            reference = sideAxis(axis);
-        }
-
-        if (reference != null)
-        {
-            orientBendTo(p, root, axis, reference);
-        }
-    }
-
-    /**
-     * The roll, in radians, from the chain's CURRENT bend to the pole about the
-     * root-to-tip axis — the rigid rotation the renderer applies so the whole
-     * chain (geometry included) swings onto the pole, the way Blender rolls the
-     * chain with the pole instead of only re-aiming the bend. Measured from
-     * wherever the bend currently sits, so it composes cleanly after a limit clamp
-     * has shaped a constrained joint: the clamp fixes the hinge, the roll rides on
-     * the root above it and aims the whole limb at the pole.
-     */
-    private static float poleRoll(List<Vector3f> p, Vector3f polePoint)
-    {
-        int n = p.size();
-
-        if (n < 3)
-        {
-            return 0F;
-        }
-
-        Vector3f root = p.get(0);
-        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
-
-        if (!normalize(axis))
-        {
-            return 0F;
-        }
-
-        Vector3f bend = new Vector3f(p.get(1)).sub(root);
-
-        if (!project(bend, axis))
-        {
-            return 0F;
-        }
-
-        Vector3f poleDir = new Vector3f(polePoint).sub(root);
-
-        if (!project(poleDir, axis))
-        {
-            return 0F;
-        }
-
-        return signedAngle(bend, poleDir, axis);
     }
 
     /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */
