@@ -16,6 +16,7 @@ public final class ModelIKIO
     private static final String KEY_SOFTNESS = "softness";
     private static final String KEY_WEIGHT = "weight";
     private static final String KEY_ENABLED = "enabled";
+    private static final String KEY_TIP_ROTATION = "tip_rotation";
 
     private static final boolean DEFAULT_ENABLED = true;
     private static final boolean DEFAULT_POLE = true;
@@ -55,8 +56,9 @@ public final class ModelIKIO
             float softness = (float) entry.getDouble(KEY_SOFTNESS, ModelIKConfig.DEFAULT_SOFTNESS);
             float weight = (float) entry.getDouble(KEY_WEIGHT, ModelIKConfig.DEFAULT_WEIGHT);
             boolean enabled = entry.getBool(KEY_ENABLED, DEFAULT_ENABLED);
+            boolean tipRotation = entry.getBool(KEY_TIP_ROTATION, ModelIKConfig.DEFAULT_TIP_ROTATION);
 
-            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleTarget, poleAngle, softness, weight, enabled));
+            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleTarget, poleAngle, softness, weight, enabled, tipRotation));
         }
 
         return chains.isEmpty() ? null : new ModelIKConfig(chains);
@@ -112,6 +114,11 @@ public final class ModelIKIO
                 if (chain.weight() != ModelIKConfig.DEFAULT_WEIGHT)
                 {
                     entry.putDouble(KEY_WEIGHT, chain.weight());
+                }
+
+                if (chain.tipRotation() != ModelIKConfig.DEFAULT_TIP_ROTATION)
+                {
+                    entry.putBool(KEY_TIP_ROTATION, chain.tipRotation());
                 }
 
                 ik.put(chain.tip(), entry);

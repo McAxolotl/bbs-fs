@@ -802,6 +802,7 @@
 	"bbs.ui.forms.editors.model.ik.pole_angle": "Pole angle",
 	"bbs.ui.forms.editors.model.ik.softness": "Softness",
 	"bbs.ui.forms.editors.model.ik.weight": "Influence",
+	"bbs.ui.forms.editors.model.ik.tip_rotation": "Tip follows target",
 	"bbs.ui.forms.editors.model.ik.context.copy": "Copy IK",
 	"bbs.ui.forms.editors.model.ik.context.paste": "Paste IK",
 	"bbs.ui.forms.editors.model.ik.context.reset": "Reset IK",

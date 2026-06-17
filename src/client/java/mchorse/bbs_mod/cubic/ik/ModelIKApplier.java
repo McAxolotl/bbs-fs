@@ -117,10 +117,20 @@ final class ModelIKApplier
         }
 
         List<String> chainIds = chain.chainRootToEffector();
-        List<Vector3f> currentPositions = new ArrayList<>(chainIds.size());
+
+        /* Auto-tail (foot IK): with "tip follows target" on, a chain ending in a bare
+         * marker bone (no geometry, no children) treats that marker as the EFFECTOR's tail
+         * — the bone before it becomes the orientable end, and the IK reaches the tail. So
+         * the foot turns to the controller while the leg above bends to plant the tail (the
+         * foot's bottom) on the target. Off, or no marker: the chain is used as-is. */
+        boolean tipRotation = chain.tipRotation();
+        String tailId = tipRotation ? autoTailId(model, chainIds) : null;
+        List<String> workIds = tailId == null ? chainIds : chainIds.subList(0, chainIds.size() - 1);
+
+        List<Vector3f> currentPositions = new ArrayList<>(workIds.size());
         Quaternionf rootParentRotation = null;
 
-        for (String id : chainIds)
+        for (String id : workIds)
         {
             PivotFrame frame = frames.get(id);
 
@@ -142,10 +152,8 @@ final class ModelIKApplier
             return;
         }
 
-        /* The film's target/pole overrides ride a 0..1 weight that eases them in/out
-         * across a "None" keyframe: at weight 1 the override wins, below it the point
-         * slides from the config position (the bone's own frame) — so fading a target
-         * in/out glides from where the bone already is, never from world origin. */
+        /* The film's target/pole overrides ride a 0..1 weight that eases them in/out across
+         * a "None" keyframe, so fading a target glides from the bone's own frame, not origin. */
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
         Vector3f target = new Vector3f(targetFrame.position());
 
@@ -154,28 +162,85 @@ final class ModelIKApplier
             target.lerp(override, weightOf(targetWeights, chain.target()));
         }
 
+        /* "Tip follows target": the effector copies the controller's orientation. Null = keep FK. */
+        Quaternionf tipTarget = tipRotation && targetFrame.worldRotation() != null ? new Quaternionf(targetFrame.worldRotation()) : null;
+
+        /* Foot IK: back the reach off so the effector's TAIL (the marker), not its pivot,
+         * lands on the target once the effector is turned to the controller's orientation. */
+        if (tailId != null && tipTarget != null)
+        {
+            shiftTargetForTail(target, tipTarget, workIds.get(workIds.size() - 1), tailId, frames);
+        }
+
         Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets, poleWeights);
-        IKSolver.Limit[] limits = buildLimits(model, chainIds, boneLimits);
+        IKSolver.Limit[] limits = buildLimits(model, workIds, boneLimits);
 
         List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
 
-        /* A chain of two or more bones gets the Blender treatment: the pole owns the
-         * full orientation (swing and roll), written raw to ikOrient so it bypasses euler
-         * entirely — no gimbal, no 180-degree shortest-arc flip, no FK-twist mismatch.
-         * A single bone (size 2) keeps the euler reconstruction. */
-        if (model instanceof Model cubic && chainIds.size() >= 3)
+        /* A chain of two or more bones gets the Blender treatment: the pole owns the full
+         * orientation (swing and roll), written raw to ikOrient so it bypasses euler
+         * entirely — no gimbal, no 180-degree flip, no FK-twist mismatch. A single bone
+         * (size 2) keeps the euler reconstruction. */
+        if (model instanceof Model cubic && workIds.size() >= 3)
         {
-            buildChainOrientations(cubic, chainIds, solved, rootParentRotation, weight);
+            buildChainOrientations(cubic, workIds, solved, rootParentRotation, weight, tipTarget);
         }
-        else if (model instanceof BOBJModel bobj && chainIds.size() >= 3)
+        else if (model instanceof BOBJModel bobj && workIds.size() >= 3)
         {
-            buildChainOrientationsBobj(bobj, chainIds, solved, rootParentRotation, weight);
+            buildChainOrientationsBobj(bobj, workIds, solved, rootParentRotation, weight, tipTarget);
         }
         else
         {
             Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
-            ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, chainIds, solvedArray, weight);
+            ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, workIds, solvedArray, weight);
         }
+    }
+
+    /**
+     * The chain's trailing tail marker: a bare cubic end bone — no geometry, no children —
+     * that stands in for the effector's tail (the reach point a pivot-based bone can't
+     * express itself). Returns its id so the bone before it becomes the orientable end;
+     * {@code null} when there is none, the model is not cubic, or the chain is too short to
+     * keep a bendable run after dropping the tail.
+     */
+    private static String autoTailId(IModel model, List<String> chainIds)
+    {
+        if (chainIds.size() < 4 || !(model instanceof Model cubic))
+        {
+            return null;
+        }
+
+        String lastId = chainIds.get(chainIds.size() - 1);
+        ModelGroup last = cubic.getGroup(lastId);
+
+        if (last == null || !last.cubes.isEmpty() || !last.meshes.isEmpty() || !last.children.isEmpty())
+        {
+            return null;
+        }
+
+        return lastId;
+    }
+
+    /**
+     * Backs the IK target off by the effector's tail offset, turned to the controller's
+     * orientation, so the tail (the marker) — not the effector's pivot — lands on the
+     * original target once the effector is oriented to the controller. The offset is the
+     * tail's rest position in the effector's local frame (constant geometry).
+     */
+    private static void shiftTargetForTail(Vector3f target, Quaternionf tipTarget, String effectorId, String tailId, Map<String, PivotFrame> frames)
+    {
+        PivotFrame eff = frames.get(effectorId);
+        PivotFrame tail = frames.get(tailId);
+
+        if (eff == null || tail == null || eff.worldRotation() == null)
+        {
+            return;
+        }
+
+        Vector3f offsetLocal = new Quaternionf(eff.worldRotation()).conjugate().transform(new Vector3f(tail.position()).sub(eff.position()));
+        Vector3f shift = new Quaternionf(tipTarget).transform(offsetLocal);
+
+        target.sub(shift);
     }
 
     /**
@@ -197,7 +262,7 @@ final class ModelIKApplier
      * advancing by each bone's rendered (blended) orientation so children inherit the
      * same frame the renderer establishes.
      */
-    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight)
+    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget)
     {
         int bones = chainIds.size() - 1;
         Vector3f[] restDir = new Vector3f[bones];
@@ -244,6 +309,20 @@ final class ModelIKApplier
              * one), so a child bone decomposes its segment against the SAME parent frame
              * the renderer establishes. At weight 1 this is the full IK rotation. */
             parentWorld.mul(oriented);
+        }
+
+        /* Tip follows target: the effector (last id, not in the directed loop) copies the
+         * controller's world orientation. parentWorld is now the tip's parent frame. */
+        if (tipTarget != null)
+        {
+            ModelGroup tip = model.getGroup(chainIds.get(chainIds.size() - 1));
+
+            if (tip != null)
+            {
+                Quaternionf tipLocal = new Quaternionf(parentWorld).conjugate().mul(tipTarget);
+
+                tip.ikOrient = weight >= 1F - EPS ? tipLocal : fkLocal(tip).slerp(tipLocal, weight);
+            }
         }
     }
 
@@ -292,7 +371,7 @@ final class ModelIKApplier
      * coincide and the orientation is identity — no baseline twist. Same X-mirror as
      * cubic ({@link Matrices#orientMirroredX}).
      */
-    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight)
+    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget)
     {
         int bones = chainIds.size() - 1;
         Map<String, BOBJBone> bonesMap = model.getArmature().bones;
@@ -358,6 +437,23 @@ final class ModelIKApplier
             if (i + 1 < bones)
             {
                 originRot.mul(oriented).mul(relRot[i + 1]);
+            }
+        }
+
+        /* Tip follows target: the effector copies the controller's world orientation. Its
+         * parent frame is the last directed bone's frame advanced by its applied
+         * orientation and the tip's own relBoneMat. */
+        if (tipTarget != null)
+        {
+            BOBJBone tip = bonesMap.get(chainIds.get(chainIds.size() - 1));
+
+            if (tip != null)
+            {
+                Quaternionf tipRelRot = tip.relBoneMat.getNormalizedRotation(new Quaternionf());
+                Quaternionf tipParent = new Quaternionf(originRot).mul(chainBones[bones - 1].ikOrient).mul(tipRelRot);
+                Quaternionf tipLocal = tipParent.conjugate().mul(tipTarget);
+
+                tip.ikOrient = weight >= 1F - EPS ? new Quaternionf(tipLocal) : bobjFkLocal(tip).slerp(tipLocal, weight);
             }
         }
     }
