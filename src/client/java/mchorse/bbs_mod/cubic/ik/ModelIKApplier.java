@@ -152,11 +152,11 @@ final class ModelIKApplier
 
         List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
 
-        /* A cubic two-bone limb gets the Blender treatment: the pole owns the full
-         * orientation (swing and roll), written raw to ikOrient so it bypasses euler
-         * entirely — no gimbal, no 180-degree shortest-arc flip, no FK-twist mismatch.
-         * Everything else (BOBJ, longer cubic chains) keeps the euler reconstruction. */
-        if (model instanceof Model cubic && chainIds.size() == 3)
+        /* A cubic chain of two or more bones gets the Blender treatment: the pole owns
+         * the full orientation (swing and roll), written raw to ikOrient so it bypasses
+         * euler entirely — no gimbal, no 180-degree shortest-arc flip, no FK-twist
+         * mismatch. A single bone (size 2) and BOBJ keep the euler reconstruction. */
+        if (model instanceof Model cubic && chainIds.size() >= 3)
         {
             buildChainOrientations(cubic, chainIds, solved, rootParentRotation, weight);
         }
@@ -168,49 +168,50 @@ final class ModelIKApplier
     }
 
     /**
-     * Gives each cubic IK bone the full local orientation of the solved two-bone
-     * limb, written raw to {@link ModelGroup#ikOrient} — the renderer applies it in
-     * place of the bone's euler rotate, so the pole owns the whole orientation. Never
-     * touches {@code bone.current.rotate}: IK lives entirely in the transient field,
-     * so the FK pose (read by the gizmo, saved, and blended below) stays intact.
+     * Gives each cubic IK bone the full local orientation of the solved chain, written
+     * raw to {@link ModelGroup#ikOrient} — the renderer applies it in place of the
+     * bone's euler rotate, so the pole owns the whole orientation. Never touches
+     * {@code bone.current.rotate}: IK lives entirely in the transient field, so the FK
+     * pose (read by the gizmo, saved, and blended below) stays intact.
      *
-     * <p>Each bone's local rotation maps its rest frame to its solved frame, both
-     * built from a segment direction and the chain's bend normal (see {@link
-     * Matrices#orientMirroredX}). The rest normal is the rest bend normal in local
-     * space ({@code restDir0 x restDir1}), so at rest the two frames coincide and the
-     * orientation is identity — no baseline twist. The parent world frame is walked
-     * root-to-tip exactly as the renderer would, advancing by each bone's rendered
-     * orientation; with {@code weight < 1} that orientation is slerped from the FK
-     * rotation, so children inherit the same frame the renderer establishes.
+     * <p>Each bone's local rotation maps its rest frame to its solved frame, both built
+     * from a segment direction and a roll-reference normal (see {@link
+     * Matrices#orientMirroredX}). The normal is carried along the chain by parallel
+     * transport — a minimal-twist frame, the way a bone inherits its parent's roll in
+     * Blender — seeded from the bend of the first joint, so the pole sets the roll and
+     * the rest of the chain follows it without per-joint flips. Rest and solved frames
+     * are built the SAME way, so at rest they coincide (identity, no baseline twist);
+     * for a two-bone chain the transport is a no-op and this is exactly the single bend
+     * normal. The parent world frame is walked root-to-tip as the renderer would,
+     * advancing by each bone's rendered (blended) orientation so children inherit the
+     * same frame the renderer establishes.
      */
     private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight)
     {
-        Vector3f restDir0 = restDirection(model, chainIds, 0);
-        Vector3f restDir1 = restDirection(model, chainIds, 1);
+        int bones = chainIds.size() - 1;
+        Vector3f[] restDir = new Vector3f[bones];
+        Vector3f[] segWorld = new Vector3f[bones];
 
-        if (restDir0 == null || restDir1 == null)
+        for (int i = 0; i < bones; i++)
         {
-            return;
+            Vector3f seg = new Vector3f(solved.get(i + 1)).sub(solved.get(i));
+
+            restDir[i] = restDirection(model, chainIds, i);
+
+            if (restDir[i] == null || seg.lengthSquared() < EPS * EPS)
+            {
+                return;
+            }
+
+            segWorld[i] = seg.normalize();
         }
 
-        Vector3f restNormal = new Vector3f(restDir0).cross(restDir1);
+        Vector3f[] restNormal = transportNormals(restDir);
+        Vector3f[] solvedNormal = transportNormals(segWorld);
 
-        if (restNormal.lengthSquared() < 1.0e-10f)
-        {
-            /* Straight rest limb: the rest bend plane is undefined. This perpendicular
-             * is the only baseline-twist convention that needs in-game tuning — a real
-             * limb's rest is bent, so the cross product above usually wins. */
-            restNormal = stablePerpendicular(restDir0);
-        }
-        else
-        {
-            restNormal.normalize();
-        }
-
-        Vector3f bendNormal = bendNormal(solved);
         Quaternionf parentWorld = new Quaternionf(rootParentRotation);
 
-        for (int i = 0; i < chainIds.size() - 1; i++)
+        for (int i = 0; i < bones; i++)
         {
             ModelGroup bone = model.getGroup(chainIds.get(i));
 
@@ -219,21 +220,11 @@ final class ModelIKApplier
                 return;
             }
 
-            Vector3f segWorld = new Vector3f(solved.get(i + 1)).sub(solved.get(i));
-
-            if (segWorld.lengthSquared() < EPS * EPS)
-            {
-                continue;
-            }
-
-            segWorld.normalize();
-
             Quaternionf invParent = new Quaternionf(parentWorld).conjugate();
-            Vector3f segLocal = invParent.transform(new Vector3f(segWorld));
-            Vector3f normalLocal = invParent.transform(new Vector3f(bendNormal));
+            Vector3f segLocal = invParent.transform(new Vector3f(segWorld[i]));
+            Vector3f normalLocal = invParent.transform(new Vector3f(solvedNormal[i]));
 
-            Vector3f restDir = i == 0 ? restDir0 : restDir1;
-            Quaternionf localRot = Matrices.orientMirroredX(restDir, restNormal, segLocal, normalLocal);
+            Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormal[i], segLocal, normalLocal);
             Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : fkLocal(bone).slerp(localRot, weight);
 
             bone.ikOrient = oriented;
@@ -245,32 +236,38 @@ final class ModelIKApplier
         }
     }
 
+    /**
+     * Carries a roll-reference normal along a chain of unit directions by parallel
+     * transport: seeded from the bend of the first two segments (a stable perpendicular
+     * when they are collinear), then rotated minimally from each segment to the next.
+     * The result is a per-bone normal that twists as little as possible along the chain
+     * — the same frame inheritance Blender gives a bone from its parent — and never
+     * flips the way a per-joint bend normal does when a joint straightens.
+     */
+    private static Vector3f[] transportNormals(Vector3f[] dirs)
+    {
+        int m = dirs.length;
+        Vector3f[] normals = new Vector3f[m];
+        Vector3f seed = m >= 2 ? new Vector3f(dirs[0]).cross(dirs[1]) : new Vector3f();
+
+        normals[0] = seed.lengthSquared() < 1.0e-10f ? stablePerpendicular(dirs[0]) : seed.normalize();
+
+        for (int i = 1; i < m; i++)
+        {
+            Vector3f n = new Quaternionf().rotationTo(dirs[i - 1], dirs[i]).transform(new Vector3f(normals[i - 1]));
+
+            normals[i] = n.normalize();
+        }
+
+        return normals;
+    }
+
     /** The bone's FK local rotation (its euler rotate as a quaternion), the blend base when IK weight is below one. */
     private static Quaternionf fkLocal(ModelGroup bone)
     {
         Vector3f r = bone.current.rotate;
 
         return Matrices.toQuaternionZYXDegrees(r.x, r.y, r.z);
-    }
-
-    /**
-     * The solved chain's bend-plane normal, {@code (P1-P0) x (P2-P0)} — the side the
-     * pole aimed the elbow towards, already baked into the positions. Falls back to a
-     * stable side axis when the solved limb is straight (no bend plane).
-     */
-    private static Vector3f bendNormal(List<Vector3f> p)
-    {
-        Vector3f a = p.get(0);
-        Vector3f normal = new Vector3f(p.get(1)).sub(a).cross(new Vector3f(p.get(2)).sub(a));
-
-        if (normal.lengthSquared() > EPS * EPS)
-        {
-            return normal.normalize();
-        }
-
-        Vector3f limb = new Vector3f(p.get(2)).sub(a);
-
-        return limb.lengthSquared() < EPS * EPS ? new Vector3f(0F, 0F, 1F) : stablePerpendicular(limb.normalize());
     }
 
     /** A deterministic unit perpendicular to {@code dir}, cross with world Z (falling back to world Y when parallel). */
