@@ -102,9 +102,7 @@ final class ModelIKApplier
         float softness = control != null ? control.softness : chain.softness();
         float weight = control != null ? control.weight : chain.weight();
 
-        /* Pole angle is config-only for now (the `ik` track makes it animatable in a
-         * later pass), so it is read straight from the chain, not the control override. */
-        float poleAngle = (float) Math.toRadians(chain.poleAngle());
+        float poleAngle = (float) Math.toRadians(control != null ? control.poleAngle : chain.poleAngle());
 
         if (weight <= 0F)
         {

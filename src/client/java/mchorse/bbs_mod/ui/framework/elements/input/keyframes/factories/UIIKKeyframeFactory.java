@@ -33,6 +33,7 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
     public UIStringList chains;
     public UITrackpad weight;
     public UITrackpad softness;
+    public UITrackpad poleAngle;
     public UIToggle enabled;
     public UIToggle pole;
 
@@ -64,6 +65,9 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
         this.softness = new UITrackpad((v) -> this.edit((control) -> control.softness = v.floatValue()));
         this.softness.limit(0D, 1D).increment(0.05D).values(0.05D, 0.01D, 0.1D);
 
+        this.poleAngle = new UITrackpad((v) -> this.edit((control) -> control.poleAngle = v.floatValue()));
+        this.poleAngle.limit(-180D, 180D).increment(5D).values(1D, 0.5D, 5D);
+
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_ENABLED, (b) -> this.edit((control) -> control.enabled = b.getValue()));
         this.pole = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_POLE, (b) -> this.edit((control) -> control.pole = b.getValue()));
 
@@ -75,6 +79,8 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
             this.weight,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SOFTNESS).marginTop(UIConstants.SECTION_GAP),
             this.softness,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE).marginTop(UIConstants.SECTION_GAP),
+            this.poleAngle,
             this.enabled,
             this.pole
         ));
@@ -113,6 +119,7 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
 
         this.weight.setEnabled(has);
         this.softness.setEnabled(has);
+        this.poleAngle.setEnabled(has);
         this.enabled.setEnabled(has);
         this.pole.setEnabled(has);
 
@@ -129,6 +136,7 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
         {
             this.weight.setValue(control.weight);
             this.softness.setValue(control.softness);
+            this.poleAngle.setValue(control.poleAngle);
             this.enabled.setValue(control.enabled);
             this.pole.setValue(control.pole);
         }
@@ -194,6 +202,7 @@ public class UIIKKeyframeFactory extends UIKeyframeFactory<IKControls>
                 {
                     control.weight = chain.weight();
                     control.softness = chain.softness();
+                    control.poleAngle = chain.poleAngle();
                     control.pole = chain.pole();
                     control.enabled = chain.enabled();
 

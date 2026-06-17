@@ -344,6 +344,7 @@ public class UIReplaysEditorUtils
 
                     control.weight = chain.weight();
                     control.softness = chain.softness();
+                    control.poleAngle = chain.poleAngle();
                     control.pole = chain.pole();
                     control.enabled = chain.enabled();
                 }
