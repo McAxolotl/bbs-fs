@@ -59,9 +59,18 @@ public final class ModelIKRuntime
         }
 
         Map<String, BoneConstraint> boneLimits = ModelConstraintsRuntime.getBones(instance);
-        Map<String, IKControl> controlOverrides = instance.form instanceof ModelForm form ? form.ikControlOverrides : null;
+        Map<String, IKControl> controlOverrides = null;
+        Map<String, Float> targetWeights = null;
+        Map<String, Float> poleWeights = null;
 
-        ModelIKApplier.apply(model, chains, controllerTargets, poleTargets, controlOverrides, boneLimits);
+        if (instance.form instanceof ModelForm form)
+        {
+            controlOverrides = form.ikControlOverrides;
+            targetWeights = form.ikTargetWeights;
+            poleWeights = form.poleTargetWeights;
+        }
+
+        ModelIKApplier.apply(model, chains, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
     }
 
     public static List<String> getControllers(ModelInstance instance)

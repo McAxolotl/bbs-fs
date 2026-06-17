@@ -1079,21 +1079,64 @@ public abstract class BaseFilmController
     {
         Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
-        if (form instanceof ModelForm modelForm)
+        if (!(form instanceof ModelForm modelForm))
         {
-            Vector3f position = resolveTargetPosition(channel, tick, transition);
-
-            if (position != null)
-            {
-                Map<String, Vector3f> overrides = switch (kind)
-                {
-                    case IK -> modelForm.ikTargetOverrides;
-                    case POLE -> modelForm.poleTargetOverrides;
-                };
-
-                overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
-            }
+            return;
         }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
+        {
+            return;
+        }
+
+        Map<String, Vector3f> overrides = switch (kind)
+        {
+            case IK -> modelForm.ikTargetOverrides;
+            case POLE -> modelForm.poleTargetOverrides;
+        };
+        Map<String, Float> weights = switch (kind)
+        {
+            case IK -> modelForm.ikTargetWeights;
+            case POLE -> modelForm.poleTargetWeights;
+        };
+
+        /* Resolve the BOUND side at its full position with a 0..1 fade weight, mirroring
+         * applyPhysicsTarget: feeding the fading anchor straight to getTotalMatrix would
+         * lerp the position from world origin across a "None" key, yanking the pole/target
+         * to (0,0,0). The applier eases the override in/out from the config position by the
+         * weight instead, so a fade glides from where the bone already is. */
+        Anchor resolve;
+        float weight;
+
+        if (anchor.previous != null && anchor.isFadeIn())
+        {
+            resolve = anchor.copy();
+            weight = anchor.x;
+        }
+        else if (anchor.previous != null && anchor.isFadeOut())
+        {
+            resolve = anchor.previous;
+            weight = 1F - anchor.x;
+        }
+        else
+        {
+            resolve = anchor;
+            weight = 1F;
+        }
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        {
+            return;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
+
+        overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
+        weights.put(targetId, weight);
     }
 
     /**
@@ -1153,41 +1196,14 @@ public abstract class BaseFilmController
         modelForm.physicsTargetWeights.put(rootBone, weight);
     }
 
-    private Vector3f resolveTargetPosition(KeyframeChannel<?> channel, float tick, float transition)
-    {
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null)
-        {
-            return null;
-        }
-
-        Object v = segment.createInterpolated();
-
-        if (!(v instanceof Anchor anchor))
-        {
-            return null;
-        }
-
-        IEntity targetEntity = this.entities.get(anchor.replay);
-
-        if (targetEntity == null)
-        {
-            return null;
-        }
-
-        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
-        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
-
-        return resolved.getTranslation(TEMP_VECTOR);
-    }
-
     private void clearTargetOverrides(Form form)
     {
         if (form instanceof ModelForm modelForm)
         {
             modelForm.ikTargetOverrides.clear();
             modelForm.poleTargetOverrides.clear();
+            modelForm.ikTargetWeights.clear();
+            modelForm.poleTargetWeights.clear();
             modelForm.ikControlOverrides.clear();
             modelForm.physicsTargetOverrides.clear();
             modelForm.physicsTargetWeights.clear();

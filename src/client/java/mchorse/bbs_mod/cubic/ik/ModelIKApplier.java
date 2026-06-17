@@ -31,7 +31,7 @@ final class ModelIKApplier
     {
     }
 
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
+    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
@@ -58,7 +58,7 @@ final class ModelIKApplier
             Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
             ModelPivotFrames.collect(model, wanted, frames);
 
-            applyChain(model, chain, frames, controllerTargets, poleTargets, controlOverrides, boneLimits);
+            applyChain(model, chain, frames, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
         }
     }
 
@@ -85,7 +85,7 @@ final class ModelIKApplier
         return depth;
     }
 
-    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
+    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
     {
         /* The film's `ik` track may override the chain's static config scalars.
          * IK weight is independent of pose `fix` — freezing a bone pins it to rest
@@ -144,10 +144,19 @@ final class ModelIKApplier
             return;
         }
 
+        /* The film's target/pole overrides ride a 0..1 weight that eases them in/out
+         * across a "None" keyframe: at weight 1 the override wins, below it the point
+         * slides from the config position (the bone's own frame) — so fading a target
+         * in/out glides from where the bone already is, never from world origin. */
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
-        Vector3f target = override != null ? new Vector3f(override) : new Vector3f(targetFrame.position());
+        Vector3f target = new Vector3f(targetFrame.position());
 
-        Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets);
+        if (override != null)
+        {
+            target.lerp(override, weightOf(targetWeights, chain.target()));
+        }
+
+        Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets, poleWeights);
         IKSolver.Limit[] limits = buildLimits(model, chainIds, boneLimits);
 
         List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation);
@@ -289,7 +298,7 @@ final class ModelIKApplier
      * the pole bone's current position. Returns {@code null} (automatic hinge)
      * when the chain has no pole or no pole target.
      */
-    private static Vector3f resolvePolePoint(boolean pole, String poleTarget, Map<String, PivotFrame> frames, Map<String, Vector3f> poleTargets)
+    private static Vector3f resolvePolePoint(boolean pole, String poleTarget, Map<String, PivotFrame> frames, Map<String, Vector3f> poleTargets, Map<String, Float> poleWeights)
     {
         if (!pole || poleTarget == null || poleTarget.isEmpty())
         {
@@ -297,15 +306,23 @@ final class ModelIKApplier
         }
 
         Vector3f override = poleTargets == null ? null : poleTargets.get(poleTarget);
+        PivotFrame frame = frames.get(poleTarget);
+        Vector3f config = frame == null ? null : new Vector3f(frame.position());
 
-        if (override != null)
+        if (override == null)
         {
-            return new Vector3f(override);
+            return config;
         }
 
-        PivotFrame frame = frames.get(poleTarget);
+        /* Slide the pole from its config bone to the keyframed target by the fade
+         * weight, so fading a pole in/out glides from the config pole, not origin. */
+        return config == null ? new Vector3f(override) : config.lerp(override, weightOf(poleWeights, poleTarget));
+    }
 
-        return frame == null ? null : new Vector3f(frame.position());
+    /** The override's 0..1 fade weight (1 = full override) — 1 when the chain has no weighted fade this frame. */
+    private static float weightOf(Map<String, Float> weights, String id)
+    {
+        return weights == null ? 1F : weights.getOrDefault(id, 1F);
     }
 
     /**
