@@ -1,4 +1,4 @@
-package mchorse.bbs_mod.cubic.ik;
+package mchorse.bbs_mod.cubic.physics;
 
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.MapType;
@@ -9,45 +9,45 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Keyframe value holding the per-chain {@link IKControl} scalars, keyed by the
- * chain's tip bone. Mirrors {@link mchorse.bbs_mod.utils.pose.Pose} (its
- * {@code Map<bone, PoseTransform>}), so the ordinary keyframe-track path handles
- * the IK track with the same union-of-keys interpolation as the pose track.
+ * Keyframe value holding the per-chain {@link PhysicsControl} scalars, keyed by the
+ * chain's root bone. Mirrors {@link mchorse.bbs_mod.cubic.ik.IKControls}, so the
+ * ordinary keyframe-track path handles the physics track with the same
+ * union-of-keys interpolation as the IK and pose tracks.
  */
-public class IKControls implements IMapSerializable
+public class PhysicsControls implements IMapSerializable
 {
     private static Set<String> keys = new HashSet<>();
 
-    public final Map<String, IKControl> controls = new HashMap<>();
+    public final Map<String, PhysicsControl> controls = new HashMap<>();
 
-    public IKControl get(String tip)
+    public PhysicsControl get(String root)
     {
-        IKControl control = this.controls.get(tip);
+        PhysicsControl control = this.controls.get(root);
 
         if (control == null)
         {
-            control = new IKControl();
+            control = new PhysicsControl();
 
-            this.controls.put(tip, control);
+            this.controls.put(root, control);
         }
 
         return control;
     }
 
-    public IKControls copy()
+    public PhysicsControls copy()
     {
-        IKControls controls = new IKControls();
+        PhysicsControls controls = new PhysicsControls();
 
         controls.copy(this);
 
         return controls;
     }
 
-    public void copy(IKControls other)
+    public void copy(PhysicsControls other)
     {
         this.controls.clear();
 
-        for (Map.Entry<String, IKControl> entry : other.controls.entrySet())
+        for (Map.Entry<String, PhysicsControl> entry : other.controls.entrySet())
         {
             if (!entry.getValue().isDefault())
             {
@@ -64,17 +64,17 @@ public class IKControls implements IMapSerializable
             return;
         }
 
-        MapType ik = new MapType();
+        MapType physics = new MapType();
 
-        for (Map.Entry<String, IKControl> entry : this.controls.entrySet())
+        for (Map.Entry<String, PhysicsControl> entry : this.controls.entrySet())
         {
             if (!entry.getValue().isDefault())
             {
-                ik.put(entry.getKey(), entry.getValue().toData());
+                physics.put(entry.getKey(), entry.getValue().toData());
             }
         }
 
-        data.put("ik", ik);
+        data.put("physics", physics);
     }
 
     @Override
@@ -82,13 +82,13 @@ public class IKControls implements IMapSerializable
     {
         this.controls.clear();
 
-        MapType ik = data.getMap("ik");
+        MapType physics = data.getMap("physics");
 
-        for (String key : ik.keys())
+        for (String key : physics.keys())
         {
-            IKControl control = new IKControl();
+            PhysicsControl control = new PhysicsControl();
 
-            control.fromData(ik.getMap(key));
+            control.fromData(physics.getMap(key));
 
             if (!control.isDefault())
             {
@@ -111,7 +111,7 @@ public class IKControls implements IMapSerializable
             return true;
         }
 
-        if (obj instanceof IKControls other)
+        if (obj instanceof PhysicsControls other)
         {
             keys.clear();
             keys.addAll(this.controls.keySet());
@@ -119,8 +119,8 @@ public class IKControls implements IMapSerializable
 
             for (String key : keys)
             {
-                IKControl a = this.controls.get(key);
-                IKControl b = other.controls.get(key);
+                PhysicsControl a = this.controls.get(key);
+                PhysicsControl b = other.controls.get(key);
 
                 if (a != null && b != null && !a.equals(b)) return false;
                 if (a == null && !b.isDefault()) return false;

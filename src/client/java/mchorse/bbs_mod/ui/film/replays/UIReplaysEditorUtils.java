@@ -13,9 +13,15 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
+import mchorse.bbs_mod.cubic.ik.IKControl;
+import mchorse.bbs_mod.cubic.ik.IKControls;
+import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
+import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -118,6 +124,10 @@ public class UIReplaysEditorUtils
         else if (property != null)
         {
             value = (T) sheet.channel.getFactory().copy(property.get());
+        }
+        else if (sheet.seed != null)
+        {
+            value = (T) sheet.seed.get();
         }
         else
         {
@@ -308,7 +318,40 @@ public class UIReplaysEditorUtils
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
 
-        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null).icon(Icons.LIMB).form(modelForm));
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null)
+            .icon(Icons.LIMB).form(modelForm).seed(() -> buildIKControls(modelForm)));
+    }
+
+    /** A fully populated IK-controls value seeded from the form's IK config (one entry per enabled chain), so a fresh keyframe matches what the editor shows instead of an empty container that drifts to defaults. */
+    private static IKControls buildIKControls(ModelForm modelForm)
+    {
+        IKControls controls = new IKControls();
+
+        if (modelForm.ik.get() instanceof MapType map)
+        {
+            ModelIKConfig config = ModelIKIO.fromData(map);
+
+            if (config != null && config.chains() != null)
+            {
+                for (ModelIKConfig.Chain chain : config.chains())
+                {
+                    if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
+                    {
+                        continue;
+                    }
+
+                    IKControl control = controls.get(chain.tip());
+
+                    control.weight = chain.weight();
+                    control.softness = chain.softness();
+                    control.poleAngle = chain.poleAngle();
+                    control.pole = chain.pole();
+                    control.enabled = chain.enabled();
+                }
+            }
+        }
+
+        return controls;
     }
 
     public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -336,6 +379,70 @@ public class UIReplaysEditorUtils
 
             addTargetSheet(out, properties, modelForm, id, title, Colors.ORANGE, null);
         }
+    }
+
+    /**
+     * One physics-controls track per form (only if it has physics chains): a single
+     * keyframe sheet whose value holds the per-chain scalars (weight, gravity,
+     * damping, stiffness, enabled), keyed by root bone and layered over the form's
+     * physics config at playback — mirrors {@link #addIKControlSheet}. It is not a
+     * form property, so it carries its owning form for the editor to list chains.
+     */
+    public static void addPhysicsControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = PerLimbService.toPhysicsControlKey(path);
+        String title = path.isEmpty() ? "physics" : path + "/physics";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.GREEN, false, channel, null)
+            .icon(Icons.DROP).form(modelForm).seed(() -> buildPhysicsControls(modelForm)));
+    }
+
+    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link #buildIKControls}. */
+    private static PhysicsControls buildPhysicsControls(ModelForm modelForm)
+    {
+        PhysicsControls controls = new PhysicsControls();
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null && config.bones() != null)
+            {
+                for (Map.Entry<String, ModelPhysicsConfig.Bone> entry : config.bones().entrySet())
+                {
+                    ModelPhysicsConfig.Bone bone = entry.getValue();
+
+                    if (bone == null)
+                    {
+                        continue;
+                    }
+
+                    PhysicsControl control = controls.get(entry.getKey());
+
+                    control.weight = bone.weight();
+                    control.gravity = bone.gravity();
+                    control.damping = bone.damping();
+                    control.stiffness = bone.stiffness();
+                }
+            }
+        }
+
+        return controls;
     }
 
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -449,6 +556,7 @@ public class UIReplaysEditorUtils
         if (form instanceof ModelForm modelForm)
         {
             addMaterialTextureSheets(modelForm, properties, sheets);
+            addPhysicsControlSheet(modelForm, properties, sheets);
             addPhysicsTargetSheets(modelForm, properties, sheets);
             addBoneTrackSheets(modelForm, properties, sheets);
             addIKControlSheet(modelForm, properties, sheets);

@@ -345,10 +345,14 @@ public class UIKeys
     public static final IKey FILM_REPLAY_REPLAY = L10n.lang("bbs.ui.film.replay.replay");
     public static final IKey FILM_REPLAY_SHADOW = L10n.lang("bbs.ui.film.replay.shadow");
     public static final IKey FILM_REPLAY_SHADOW_SIZE = L10n.lang("bbs.ui.film.replay.shadow_size");
+    public static final IKey FILM_REPLAY_SHADOW_FOLLOW = L10n.lang("bbs.ui.film.replay.shadow_follow");
+    public static final IKey FILM_REPLAY_SHADOW_FOLLOW_TOOLTIP = L10n.lang("bbs.ui.film.replay.shadow_follow_tooltip");
+    public static final IKey FILM_REPLAY_SHADOW_OFFSET = L10n.lang("bbs.ui.film.replay.shadow_offset");
     public static final IKey FILM_REPLAY_TAB_1 = L10n.lang("bbs.ui.film.replay.tab.1");
     public static final IKey FILM_REPLAY_TAB_2 = L10n.lang("bbs.ui.film.replay.tab.2");
     public static final IKey FILM_REPLAY_TAB_3 = L10n.lang("bbs.ui.film.replay.tab.3");
     public static final IKey FILM_REPLAY_TAB_4 = L10n.lang("bbs.ui.film.replay.tab.4");
+    public static final IKey FILM_REPLAY_TAB_5 = L10n.lang("bbs.ui.film.replay.tab.5");
     public static final IKey FILM_REPLAY_TITLE = L10n.lang("bbs.ui.film.replay.title");
     public static final IKey FILM_REPLAY_ACTIONS_TIMELINE = L10n.lang("bbs.ui.film.replays.actions_timeline");
     public static final IKey FILM_RESET_REPLAYS = L10n.lang("bbs.ui.film.reset_replays");
@@ -456,8 +460,10 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH = L10n.lang("bbs.ui.forms.editors.model.ik.chain_length");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE_TARGET = L10n.lang("bbs.ui.forms.editors.model.ik.pole_target");
+    public static final IKey FORMS_EDITORS_MODEL_IK_POLE_ANGLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole_angle");
     public static final IKey FORMS_EDITORS_MODEL_IK_SOFTNESS = L10n.lang("bbs.ui.forms.editors.model.ik.softness");
     public static final IKey FORMS_EDITORS_MODEL_IK_WEIGHT = L10n.lang("bbs.ui.forms.editors.model.ik.weight");
+    public static final IKey FORMS_EDITORS_MODEL_IK_TIP_ROTATION = L10n.lang("bbs.ui.forms.editors.model.ik.tip_rotation");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editors.model.ik.context.copy");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_PASTE = L10n.lang("bbs.ui.forms.editors.model.ik.context.paste");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_RESET = L10n.lang("bbs.ui.forms.editors.model.ik.context.reset");
@@ -516,6 +522,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_TITLE = L10n.lang("bbs.ui.forms.editors.vanilla_particle.title");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_VELOCITY = L10n.lang("bbs.ui.forms.editors.vanilla_particle.velocity");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_VERTICAL = L10n.lang("bbs.ui.forms.editors.vanilla_particle.vertical");
+    public static final IKey FORMS_EDITOR_BODY_PART_GIZMO = L10n.lang("bbs.ui.forms.editor.body_part_gizmo");
     public static final IKey FORMS_EDITOR_BONE = L10n.lang("bbs.ui.forms.editor.bone");
     public static final IKey FORMS_EDITOR_CONTEXT_ADD = L10n.lang("bbs.ui.forms.editor.context.add");
     public static final IKey FORMS_EDITOR_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editor.context.copy");

@@ -5,6 +5,7 @@ import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.PerLimbService;
@@ -19,6 +20,8 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.graphics.Draw;
@@ -208,7 +211,7 @@ public abstract class BaseFilmController
 
             FormRenderer renderer = FormUtilsClient.getRenderer(FormUtils.getRoot(form));
 
-            if (renderer != null && !BBSRendering.isIrisShadowPass())
+            if (renderer != null && !BBSRendering.isIrisShadowPass() && context.replay != null && context.replay.shadowFollow.get())
             {
                 Vector3f displacement = renderer.getShadowDisplacement(entity, transition);
 
@@ -220,6 +223,14 @@ public abstract class BaseFilmController
                     shadowY += displacement.y;
                     shadowZ += displacement.z;
                 }
+
+                /* Extra world-space nudge to seat the shadow on the model's real floor (added after the
+                 * form-local displacement is mapped to world, so it stays vertical regardless of facing). */
+                Point offset = context.replay.shadowOffset.get();
+
+                shadowX += offset.x;
+                shadowY += offset.y;
+                shadowZ += offset.z;
             }
 
             stack.push();
@@ -695,9 +706,10 @@ public abstract class BaseFilmController
             {
                 World world = MinecraftClient.getInstance().world;
                 IEntity entity = new StubEntity(world);
+                int ticks = replay.getTick(this.getTick());
 
                 entity.setForm(FormUtils.copy(replay.form.get()));
-                replay.keyframes.apply(0, entity);
+                replay.keyframes.apply(ticks, entity);
                 entity.setPrevX(entity.getX());
                 entity.setPrevY(entity.getY());
                 entity.setPrevZ(entity.getZ());
@@ -969,6 +981,12 @@ public abstract class BaseFilmController
                 continue;
             }
 
+            if (PerLimbService.isPhysicsControlChannel(id))
+            {
+                this.applyPhysicsControls(root, PerLimbService.parsePhysicsControlFormPath(id), channel, tick);
+                continue;
+            }
+
             PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
 
             if (ikPath != null)
@@ -989,7 +1007,7 @@ public abstract class BaseFilmController
 
             if (physicsPath != null)
             {
-                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, TargetKind.PHYSICS);
+                this.applyPhysicsTarget(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition);
             }
         }
     }
@@ -1023,60 +1041,159 @@ public abstract class BaseFilmController
         }
     }
 
+    private void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    {
+        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return;
+        }
+
+        Object value = segment.createInterpolated();
+
+        if (!(value instanceof PhysicsControls controls))
+        {
+            return;
+        }
+
+        for (Map.Entry<String, PhysicsControl> entry : controls.controls.entrySet())
+        {
+            modelForm.physicsControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new PhysicsControl()).copy(entry.getValue());
+        }
+    }
+
     private enum TargetKind
     {
-        IK, POLE, PHYSICS
+        IK, POLE
     }
 
     private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind)
     {
         Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
-        if (form instanceof ModelForm modelForm)
+        if (!(form instanceof ModelForm modelForm))
         {
-            Vector3f position = resolveTargetPosition(channel, tick, transition);
-
-            if (position != null)
-            {
-                Map<String, Vector3f> overrides = switch (kind)
-                {
-                    case IK -> modelForm.ikTargetOverrides;
-                    case POLE -> modelForm.poleTargetOverrides;
-                    case PHYSICS -> modelForm.physicsTargetOverrides;
-                };
-
-                overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
-            }
+            return;
         }
-    }
 
-    private Vector3f resolveTargetPosition(KeyframeChannel<?> channel, float tick, float transition)
-    {
         KeyframeSegment<?> segment = channel.find(tick);
 
-        if (segment == null)
+        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
         {
-            return null;
+            return;
         }
 
-        Object v = segment.createInterpolated();
-
-        if (!(v instanceof Anchor anchor))
+        Map<String, Vector3f> overrides = switch (kind)
         {
-            return null;
+            case IK -> modelForm.ikTargetOverrides;
+            case POLE -> modelForm.poleTargetOverrides;
+        };
+        Map<String, Float> weights = switch (kind)
+        {
+            case IK -> modelForm.ikTargetWeights;
+            case POLE -> modelForm.poleTargetWeights;
+        };
+
+        /* Resolve the BOUND side at its full position with a 0..1 fade weight, mirroring
+         * applyPhysicsTarget: feeding the fading anchor straight to getTotalMatrix would
+         * lerp the position from world origin across a "None" key, yanking the pole/target
+         * to (0,0,0). The applier eases the override in/out from the config position by the
+         * weight instead, so a fade glides from where the bone already is. */
+        Anchor resolve;
+        float weight;
+
+        if (anchor.previous != null && anchor.isFadeIn())
+        {
+            resolve = anchor.copy();
+            weight = anchor.x;
+        }
+        else if (anchor.previous != null && anchor.isFadeOut())
+        {
+            resolve = anchor.previous;
+            weight = 1F - anchor.x;
+        }
+        else
+        {
+            resolve = anchor;
+            weight = 1F;
         }
 
-        IEntity targetEntity = this.entities.get(anchor.replay);
-
-        if (targetEntity == null)
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
         {
-            return null;
+            return;
         }
 
-        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
-        return resolved.getTranslation(TEMP_VECTOR);
+        overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
+        weights.put(targetId, weight);
+    }
+
+    /**
+     * Physics target override with fade support. Unlike the IK/pole targets this also resolves a fade
+     * <em>weight</em>: when the binding crosses a no-target keyframe the shared anchor interpolation lerps the
+     * resolved matrix from world origin, which yanks the chain to (0,0,0). Instead we resolve the bound side at
+     * its full position and hand the physics solver a 0..1 weight so it can ease the chain in/out from its own
+     * tip (see {@link ModelPhysicsRuntime}).
+     */
+    private void applyPhysicsTarget(Form root, String formPath, String rootBone, KeyframeChannel<?> channel, float tick, float transition)
+    {
+        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
+        {
+            return;
+        }
+
+        /* Pick the bound side and how present it is. Fade in/out blends to/from "no target"; a straight switch
+         * between two real targets keeps the anchor's own lerp at full weight. */
+        Anchor resolve;
+        float weight;
+
+        if (anchor.previous != null && anchor.isFadeIn())
+        {
+            resolve = anchor.copy();
+            weight = anchor.x;
+        }
+        else if (anchor.previous != null && anchor.isFadeOut())
+        {
+            resolve = anchor.previous;
+            weight = 1F - anchor.x;
+        }
+        else
+        {
+            resolve = anchor;
+            weight = 1F;
+        }
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        {
+            return;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
+
+        modelForm.physicsTargetOverrides.computeIfAbsent(rootBone, (k) -> new Vector3f()).set(position);
+        modelForm.physicsTargetWeights.put(rootBone, weight);
     }
 
     private void clearTargetOverrides(Form form)
@@ -1085,8 +1202,12 @@ public abstract class BaseFilmController
         {
             modelForm.ikTargetOverrides.clear();
             modelForm.poleTargetOverrides.clear();
+            modelForm.ikTargetWeights.clear();
+            modelForm.poleTargetWeights.clear();
             modelForm.ikControlOverrides.clear();
             modelForm.physicsTargetOverrides.clear();
+            modelForm.physicsTargetWeights.clear();
+            modelForm.physicsControlOverrides.clear();
         }
 
         for (BodyPart part : form.parts.getAllTyped())

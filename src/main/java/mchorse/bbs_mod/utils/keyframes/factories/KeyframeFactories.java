@@ -14,6 +14,7 @@ public class KeyframeFactories
     public static final PoseTransformKeyframeFactory POSE_TRANSFORM = new PoseTransformKeyframeFactory();
     public static final PoseKeyframeFactory POSE = new PoseKeyframeFactory();
     public static final IKKeyframeFactory IK = new IKKeyframeFactory();
+    public static final PhysicsKeyframeFactory PHYSICS = new PhysicsKeyframeFactory();
     public static final BooleanKeyframeFactory BOOLEAN = new BooleanKeyframeFactory();
     public static final StringKeyframeFactory STRING = new StringKeyframeFactory();
     public static final FloatKeyframeFactory FLOAT = new FloatKeyframeFactory();
@@ -47,6 +48,7 @@ public class KeyframeFactories
         FACTORIES.put("pose_transform", POSE_TRANSFORM);
         FACTORIES.put("pose", POSE);
         FACTORIES.put("ik", IK);
+        FACTORIES.put("physics", PHYSICS);
         FACTORIES.put("boolean", BOOLEAN);
         FACTORIES.put("string", STRING);
         FACTORIES.put("float", FLOAT);

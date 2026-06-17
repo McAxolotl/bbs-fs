@@ -10,6 +10,8 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -69,6 +71,7 @@ import net.minecraft.world.World;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -103,6 +106,7 @@ public class UIReplaysEditor extends UIElement
     private UIFilmPanel filmPanel;
     private Film film;
     private Replay replay;
+    private boolean settingReplay;
     private Pair<Form, String> pendingPick;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
@@ -114,7 +118,8 @@ public class UIReplaysEditor extends UIElement
         PLAYER(Icons.PLAYER, L10n.lang("bbs.ui.film.replays.category.player"), L10n.lang("bbs.ui.film.replays.category.player.tooltip")),
         MODEL(Icons.BLOCK, L10n.lang("bbs.ui.film.replays.category.model"), L10n.lang("bbs.ui.film.replays.category.model.tooltip")),
         POSE(Icons.POSE, L10n.lang("bbs.ui.film.replays.category.pose"), L10n.lang("bbs.ui.film.replays.category.pose.tooltip")),
-        IK(Icons.LIMB, L10n.lang("bbs.ui.film.replays.category.ik"), L10n.lang("bbs.ui.film.replays.category.ik.tooltip"));
+        IK(Icons.LIMB, L10n.lang("bbs.ui.film.replays.category.ik"), L10n.lang("bbs.ui.film.replays.category.ik.tooltip")),
+        PHYSICS(Icons.DROP, L10n.lang("bbs.ui.film.replays.category.physics"), L10n.lang("bbs.ui.film.replays.category.physics.tooltip"));
 
         public final Icon icon;
         public final IKey label;
@@ -326,7 +331,7 @@ public class UIReplaysEditor extends UIElement
     {
         this.filmPanel = filmPanel;
         this.replayProperties = new UIReplayPropertiesPanel(filmPanel);
-        this.replaysList = new UIReplaysListPanel(filmPanel, (l) -> this.setReplay(l.isEmpty() ? null : l.get(0), false, false), this.replayProperties.getFormConsumer());
+        this.replaysList = new UIReplaysListPanel(filmPanel, (l) -> this.setReplay(l.isEmpty() ? null : l.get(0), false, OrbitReaction.SWITCH), this.replayProperties.getFormConsumer());
         this.replayProperties.attachReplayList(this.replaysList.replays);
 
         this.iconBar = new UIElement();
@@ -369,13 +374,15 @@ public class UIReplaysEditor extends UIElement
 
         this.setCategory(ReplayCategory.PLAYER);
 
-        this.keys().register(Keys.REPLAYS_TAB_1, () -> this.setCategory(ReplayCategory.PLAYER))
+        this.keys().register(Keys.REPLAYS_TAB_1, () -> this.setCategoryByPosition(0))
             .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_2, () -> this.setCategory(ReplayCategory.MODEL))
+        this.keys().register(Keys.REPLAYS_TAB_2, () -> this.setCategoryByPosition(1))
             .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_3, () -> this.setCategory(ReplayCategory.POSE))
+        this.keys().register(Keys.REPLAYS_TAB_3, () -> this.setCategoryByPosition(2))
             .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_4, () -> this.setCategory(ReplayCategory.IK))
+        this.keys().register(Keys.REPLAYS_TAB_4, () -> this.setCategoryByPosition(3))
+            .category(UIKeys.FILM_REPLAY_TITLE);
+        this.keys().register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
             .category(UIKeys.FILM_REPLAY_TITLE);
 
         this.add(this.iconBar, this.actionsToggle);
@@ -387,6 +394,33 @@ public class UIReplaysEditor extends UIElement
         this.actionsMode = false;
         this.category = c;
         this.updateChannelsList();
+    }
+
+    /**
+     * Select the category sitting at the given visual position in the tab bar. The IK and physics tabs are only
+     * present when the record has IK / physics, so a fixed key-to-category mapping would point past the gap; the
+     * number keys instead follow the tabs as the user sees them, left to right.
+     */
+    private void setCategoryByPosition(int index)
+    {
+        List<ReplayCategory> present = new ArrayList<>();
+
+        for (ReplayCategory category : ReplayCategory.values())
+        {
+            UIIcon button = this.tabButtons.get(category);
+
+            if (button != null && button.getParent() != null)
+            {
+                present.add(category);
+            }
+        }
+
+        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.x));
+
+        if (index >= 0 && index < present.size())
+        {
+            this.setCategory(present.get(index));
+        }
     }
 
     public ReplayCategory getCategory()
@@ -425,7 +459,7 @@ public class UIReplaysEditor extends UIElement
             }
 
             this.replaysList.replays.refreshReplayList();
-            this.setReplay(replays.isEmpty() ? null : replays.get(index), true, false);
+            this.setReplay(replays.isEmpty() ? null : replays.get(index), true, OrbitReaction.SWITCH);
         }
     }
 
@@ -436,31 +470,49 @@ public class UIReplaysEditor extends UIElement
 
     public void setReplay(Replay replay)
     {
-        this.setReplay(replay, true, false);
+        this.setReplay(replay, true, OrbitReaction.SWITCH);
     }
 
-    public void setReplay(Replay replay, boolean select, boolean resetOrbit)
+    public void setReplay(Replay replay, boolean select, OrbitReaction orbit)
     {
-        this.savePoseTabState(this.replay);
-
-        this.replay = replay;
-
-        if (resetOrbit)
+        /* Guard against re-entry: scrollToReplay() below picks the replay in the list,
+         * which fires the list's selection callback and calls setReplay() again. The
+         * outermost call owns the orbit reaction, so the nested call is redundant and
+         * must not override it (otherwise undo would teleport via the SWITCH callback). */
+        if (this.settingReplay)
         {
-            this.filmPanel.getController().orbit.reset();
-        }
-        else if (replay != null && BBSSettings.editorOrbitTeleportOnSwitch.get())
-        {
-            this.filmPanel.getController().orbit.teleportPivotToReplay();
+            return;
         }
 
-        this.replayProperties.setReplay(replay);
-        this.filmPanel.actionEditor.setClips(replay == null ? null : replay.actions);
-        this.updateChannelsList();
+        this.settingReplay = true;
 
-        if (select && replay != null)
+        try
         {
-            this.replaysList.replays.scrollToReplay(replay);
+            this.savePoseTabState(this.replay);
+
+            this.replay = replay;
+
+            if (orbit == OrbitReaction.RESET)
+            {
+                this.filmPanel.getController().orbit.reset();
+            }
+            else if (orbit == OrbitReaction.SWITCH && replay != null && BBSSettings.editorOrbitTeleportOnSwitch.get())
+            {
+                this.filmPanel.getController().orbit.teleportPivotToReplay();
+            }
+
+            this.replayProperties.setReplay(replay);
+            this.filmPanel.actionEditor.setClips(replay == null ? null : replay.actions);
+            this.updateChannelsList();
+
+            if (select && replay != null)
+            {
+                this.replaysList.replays.scrollToReplay(replay);
+            }
+        }
+        finally
+        {
+            this.settingReplay = false;
         }
     }
 
@@ -492,6 +544,7 @@ public class UIReplaysEditor extends UIElement
         }
 
         this.updateIKTab();
+        this.updatePhysicsTab();
 
         List<UIKeyframeSheet> sheets = new ArrayList<>();
         Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
@@ -500,6 +553,7 @@ public class UIReplaysEditor extends UIElement
         this.collectCuratedSheets(sheets);
         this.collectFormPropertySheets(sheets, poseTabs, poseTabDepths);
         this.collectIKSheets(sheets);
+        this.collectPhysicsSheets(sheets);
 
         this.keys.clear();
 
@@ -767,6 +821,36 @@ public class UIReplaysEditor extends UIElement
         }
     }
 
+    /** Physics tracks live in their own category; like IK they are not form properties, so collect them by walking the form tree. */
+    private void collectPhysicsSheets(List<UIKeyframeSheet> sheets)
+    {
+        if (this.category != ReplayCategory.PHYSICS)
+        {
+            return;
+        }
+
+        this.collectPhysicsSheets(sheets, this.replay.form.get());
+    }
+
+    private void collectPhysicsSheets(List<UIKeyframeSheet> sheets, Form form)
+    {
+        if (form == null)
+        {
+            return;
+        }
+
+        if (form instanceof ModelForm modelForm)
+        {
+            UIReplaysEditorUtils.addPhysicsControlSheet(modelForm, this.replay.properties, sheets);
+            UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, sheets);
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            this.collectPhysicsSheets(sheets, part.getForm());
+        }
+    }
+
     /** Show the IK tab only when the record actually has IK; bounce an active IK category back to Model when it does not. */
     private void updateIKTab()
     {
@@ -830,6 +914,64 @@ public class UIReplaysEditor extends UIElement
         return false;
     }
 
+    /** Show the Physics tab only when the record actually has physics chains; bounce an active Physics category back to Model when it does not. */
+    private void updatePhysicsTab()
+    {
+        UIIcon button = this.tabButtons.get(ReplayCategory.PHYSICS);
+
+        if (button == null)
+        {
+            return;
+        }
+
+        boolean hasPhysics = this.formHasPhysics(this.replay.form.get());
+        boolean present = button.getParent() != null;
+
+        if (hasPhysics && !present)
+        {
+            this.iconBar.add(button);
+            this.iconBar.resize();
+        }
+        else if (!hasPhysics && present)
+        {
+            button.removeFromParent();
+            this.iconBar.resize();
+        }
+
+        if (!hasPhysics && this.category == ReplayCategory.PHYSICS)
+        {
+            this.category = ReplayCategory.MODEL;
+        }
+    }
+
+    private boolean formHasPhysics(Form form)
+    {
+        if (form == null)
+        {
+            return false;
+        }
+
+        if (form instanceof ModelForm modelForm && modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null && config.bones() != null && !config.bones().isEmpty())
+            {
+                return true;
+            }
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            if (this.formHasPhysics(part.getForm()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void flushForm(List<UIKeyframeSheet> sheets, List<UIKeyframeSheet> formSheets, Form form, Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs, Map<UIKeyframeSheet, Integer> poseTabDepths)
     {
         String path = FormUtils.getPath(form);
@@ -855,10 +997,6 @@ public class UIReplaysEditor extends UIElement
                 List<UIKeyframeSheet> materialSheets = new ArrayList<>();
                 UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
                 orderedFormSheets.addAll(materialSheets);
-
-                List<UIKeyframeSheet> physicsSheets = new ArrayList<>();
-                UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, physicsSheets);
-                orderedFormSheets.addAll(physicsSheets);
             }
 
             if (this.category == ReplayCategory.POSE)
@@ -1239,7 +1377,7 @@ public class UIReplaysEditor extends UIElement
         List<Integer> selection = DataStorageUtils.intListFromData(data.getList("selection"));
         List<Integer> currentIndices = this.replaysList.replays.getCurrentIndices();
 
-        this.setReplay(CollectionUtils.getSafe(this.film.replays.getList(), data.getInt("replay")), true, false);
+        this.setReplay(CollectionUtils.getSafe(this.film.replays.getList(), data.getInt("replay")), true, OrbitReaction.KEEP);
 
         currentIndices.clear();
         currentIndices.addAll(selection);
@@ -1255,5 +1393,18 @@ public class UIReplaysEditor extends UIElement
 
         data.putInt("replay", index);
         data.put("selection", DataStorageUtils.intListToData(this.replaysList.replays.getCurrentIndices()));
+    }
+
+    /**
+     * How the orbit camera should react when the selected replay is set.
+     */
+    public enum OrbitReaction
+    {
+        /** Reset the orbit camera to its default position. */
+        RESET,
+        /** Treat it as a user switching replays — teleport the pivot onto the replay if the setting allows. */
+        SWITCH,
+        /** Leave the orbit camera untouched (used when restoring selection during undo/redo). */
+        KEEP
     }
 }

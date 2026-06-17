@@ -406,13 +406,25 @@ public class UIPropTransform extends UITransform
 
     public UIPropTransform enableHotkeys()
     {
-        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
-        Supplier<Boolean> active = () -> this.editing;
+        return this.enableHotkeys(() -> true);
+    }
 
-        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().category(category);
+    /**
+     * Same as {@link #enableHotkeys()}, but every registered hotkey is gated by {@code enabled}. When
+     * it returns {@code false} the keybinds report inactive, so input propagation flows past this
+     * transform to whichever element is checked next &mdash; this is how two transforms that coexist in
+     * the tree (e.g. the body part transform in the sidebar alongside the active form panel's transform)
+     * avoid both grabbing on G/S/R: only the one whose gate is on responds.
+     */
+    public UIPropTransform enableHotkeys(Supplier<Boolean> enabled)
+    {
+        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
+        Supplier<Boolean> active = () -> enabled.get() && this.editing;
+
+        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
@@ -420,11 +432,11 @@ public class UIPropTransform extends UITransform
         {
             this.toggleLocal();
             UIUtils.playClick();
-        }).category(category);
+        }).strict().active(enabled).category(category);
 
         if (this.supportsMirror())
         {
-            this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).category(category);
+            this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).active(enabled).category(category);
         }
 
         return this;

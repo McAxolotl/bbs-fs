@@ -100,11 +100,6 @@ public final class ModelPhysicsRuntime
 
     public static void apply(IEntity entity, ModelInstance instance, float transition, Matrix4f baseTransform)
     {
-        apply(entity, instance, transition, baseTransform, null);
-    }
-
-    public static void apply(IEntity entity, ModelInstance instance, float transition, Matrix4f baseTransform, Map<String, Float> poseFixByBone)
-    {
         if (entity == null || instance == null || instance.model == null)
         {
             return;
@@ -128,10 +123,10 @@ public final class ModelPhysicsRuntime
         Map<String, InstanceState> byModel = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
         InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
 
-        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), constraints, state, baseTransform, poseFixByBone);
+        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), constraints, state, baseTransform);
     }
 
-    private static void applyCompiled(World world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform, Map<String, Float> poseFixByBone)
+    private static void applyCompiled(World world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
     {
         Set<String> wanted = new HashSet<>();
         Set<String> chainIds = new HashSet<>();
@@ -165,19 +160,12 @@ public final class ModelPhysicsRuntime
 
         for (ModelPhysicsCache.CompiledChain chain : compiledChains)
         {
-            applyChain(world, age, transition, model, instance, chain, constraints, frames, state, poseFixByBone);
+            applyChain(world, age, transition, model, instance, chain, constraints, frames, state);
         }
     }
 
-    private static void applyChain(World world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState, Map<String, Float> poseFixByBone)
+    private static void applyChain(World world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState)
     {
-        float weight = chain.weight();
-
-        if (weight <= 0F)
-        {
-            return;
-        }
-
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();
         int pointCount = pivotCount + 1;
@@ -187,13 +175,30 @@ public final class ModelPhysicsRuntime
             return;
         }
 
-        float poseFix = getChainPoseFix(ids, chain.targetBone(), poseFixByBone);
-        weight *= (1F - poseFix);
+        /* The film physics track layers a per-chain control over the config, keyed by the chain's
+         * root bone, replacing its dynamic scalars wholesale (mirrors the IK track). */
+        PhysicsControl control = null;
 
-        if (weight <= EPS)
+        if (instance != null && instance.form instanceof ModelForm modelForm && !modelForm.physicsControlOverrides.isEmpty())
+        {
+            control = modelForm.physicsControlOverrides.get(ids.get(0));
+        }
+
+        if (control != null && !control.enabled)
         {
             return;
         }
+
+        float weight = control != null ? control.weight : chain.weight();
+
+        if (weight <= 0F)
+        {
+            return;
+        }
+
+        float gravity = control != null ? control.gravity : chain.gravity();
+        float damping = control != null ? control.damping : chain.damping();
+        float stiffness = control != null ? control.stiffness : chain.stiffness();
 
         ChainState state = instanceState.chains.computeIfAbsent(chain.id(), (k) -> new ChainState());
 
@@ -245,7 +250,24 @@ public final class ModelPhysicsRuntime
 
             if (worldPos != null)
             {
-                target = new Vector3f(worldPos);
+                float targetWeight = modelForm.physicsTargetWeights.getOrDefault(rootBone, 1F);
+
+                if (targetWeight >= 1F)
+                {
+                    target = new Vector3f(worldPos);
+                }
+                else if (targetWeight > 0F)
+                {
+                    /* The binding is fading in or out (it crossed a no-target keyframe). Easing the pin point
+                     * from the chain's current tip toward the full target by the fade amount lets the chain
+                     * travel there smoothly instead of snapping, with no soft-target mode in the solver. */
+                    Vector3f tip = state.pos[state.pos.length - 1];
+
+                    target = state.lastAge == Integer.MIN_VALUE
+                        ? new Vector3f(worldPos)
+                        : new Vector3f(tip).lerp(worldPos, targetWeight);
+                }
+                /* targetWeight <= 0: fully faded out — leave the chain free this frame. */
             }
         }
 
@@ -272,53 +294,9 @@ public final class ModelPhysicsRuntime
         }
 
         computePoseTargets(model, ids, chainFrames, chain.restLengths(), anchor, anchorRotation, target != null, state);
-        step(world, age, transition, model, ids, chain, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
+        step(world, age, transition, model, ids, chain, gravity, damping, stiffness, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
         Vector3f[] positions = renderInterpolate(state, state.renderAlpha, anchor, anchorRotation, target);
         ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);
-    }
-
-    private static float getChainPoseFix(List<String> ids, String targetBone, Map<String, Float> poseFixByBone)
-    {
-        if (poseFixByBone == null || poseFixByBone.isEmpty() || ids == null || ids.isEmpty())
-        {
-            return 0F;
-        }
-
-        float maxFix = 0F;
-
-        for (String id : ids)
-        {
-            maxFix = Math.max(maxFix, getFix(poseFixByBone, id));
-
-            if (maxFix >= 1F)
-            {
-                return 1F;
-            }
-        }
-
-        if (targetBone != null && !targetBone.isEmpty())
-        {
-            maxFix = Math.max(maxFix, getFix(poseFixByBone, targetBone));
-        }
-
-        return maxFix;
-    }
-
-    private static float getFix(Map<String, Float> poseFixByBone, String bone)
-    {
-        Float value = poseFixByBone.get(bone);
-
-        if (value == null)
-        {
-            return 0F;
-        }
-
-        if (value <= 0F)
-        {
-            return 0F;
-        }
-
-        return Math.min(value, 1F);
     }
 
     /**
@@ -458,7 +436,7 @@ public final class ModelPhysicsRuntime
         }
     }
 
-    private static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    private static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -517,8 +495,8 @@ public final class ModelPhysicsRuntime
             return;
         }
 
-        float gravity = BASE_GRAVITY * chain.gravity();
-        float damping = clamp01(chain.damping());
+        float gravity = BASE_GRAVITY * gravityMul;
+        float damping = clamp01(dampingValue);
         int iterations = chain.iterations();
         boolean collisions = chain.collisions() && world != null && chain.radius() > 0F;
         float radius = chain.radius();
@@ -574,7 +552,7 @@ public final class ModelPhysicsRuntime
         /* Per-point spring-back fraction toward the animated pose, applied once per sub-step. The base
          * stiffness falls off toward the tip and is converted to a per-sub-step fraction so the pull
          * over a whole tick stays the same no matter how many sub-steps run. */
-        float[] stiffStep = computeStiffnessSteps(clamp01(chain.stiffness()), state.pos.length, h);
+        float[] stiffStep = computeStiffnessSteps(clamp01(stiffnessValue), state.pos.length, h);
 
         /* Per-bone swing limits, as the cosine of the widest deviation each bone may take from its pose
          * direction. refDir holds that pose direction per segment, rebuilt each sub-step from the sliding
