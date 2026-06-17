@@ -86,6 +86,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private boolean ikAppliedThisRender;
     private boolean physicsAppliedThisRender;
     private boolean constraintsAppliedThisRender;
+    private boolean renderingArm;
 
     private IEntity entity = new StubEntity();
 
@@ -378,12 +379,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return model.getMaterialTexture(material, materialFallback);
         });
 
-        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
+        if (stencilMap == null && !this.renderingArm && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
             ModelIKDebug.render(newStack, model.model, ikMap, "");
         }
 
-        if (stencilMap == null && ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        if (stencilMap == null && !this.renderingArm && ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
         {
             ModelPhysicsDebug.render(newStack, model.model, physicsMap, "");
         }
@@ -626,7 +627,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             RenderSystem.enableBlend();
 
             boolean additive = this.form.additiveColor.get();
-            this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, false, null, 0F, null);
+
+            this.renderingArm = true;
+
+            try
+            {
+                this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, false, null, 0F, null);
+            }
+            finally
+            {
+                this.renderingArm = false;
+            }
 
             for (ModelGroup group : model.getModel().getAllGroups())
             {
