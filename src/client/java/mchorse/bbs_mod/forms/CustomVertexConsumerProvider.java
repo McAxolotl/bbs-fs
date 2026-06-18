@@ -1,11 +1,9 @@
 package mchorse.bbs_mod.forms;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
-import org.lwjgl.opengl.GL11;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -80,10 +78,20 @@ public class CustomVertexConsumerProvider implements VertexConsumerProvider
 
         if (this.ui)
         {
-            /* Force back the depth func because it seems like stuff rendered by a vertex
-             * consumer is resetting the depth func to GL_LESS, and since this vertex consumer
-             * is designed  */
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            /* In 1.21.1 this forced the depth func back to GL_ALWAYS because stuff
+             * rendered by a vertex consumer was resetting the depth func to GL_LESS.
+             *
+             * As of 1.21.5 the GPU-pipeline rewrite removed imperative GL state from
+             * RenderSystem (RenderSystem.depthFunc is gone) — depth testing is now baked
+             * into each RenderLayer's RenderPipeline via DepthTestFunction. The UI layers
+             * therefore have to carry a NO_DEPTH_TEST / GL_ALWAYS-equivalent pipeline
+             * themselves; there is no longer a global func to "force back" here.
+             *
+             * TODO(1.21.11 render): verify at runtime. If UI vertex-consumer draws still
+             * leak a depth func that hides later UI, encode DepthTestFunction.NO_DEPTH_TEST
+             * on the affected BBS UI RenderLayer pipelines (see BBSShaders) rather than
+             * trying to mutate global state from here.
+             */
         }
     }
 }

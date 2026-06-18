@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.graphics.texture;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.platform.TextureUtil;
+import com.mojang.blaze3d.opengl.GlStateManager;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
@@ -58,7 +57,11 @@ public class Texture
 
     public Texture()
     {
-        this.id = TextureUtil.generateTextureId();
+        /* TODO(1.21.11 render): verify at runtime. TextureUtil.generateTextureId() was removed in
+         * the 1.21.5 GPU rewrite; GlStateManager moved to com.mojang.blaze3d.opengl and exposes
+         * _genTexture() as the direct-GL replacement. Functions while the mod still uses raw GL
+         * textures; the eventual GpuTexture migration will replace this whole class. */
+        this.id = GlStateManager._genTexture();
         this.target = GL11.GL_TEXTURE_2D;
 
         this.bind();
@@ -111,7 +114,7 @@ public class Texture
 
     public void bind(int texture)
     {
-        GlStateManager.glActiveTexture(texture);
+        GlStateManager._activeTexture(texture);
         GL11.glBindTexture(this.target, this.id);
     }
 
@@ -122,7 +125,7 @@ public class Texture
 
     public void unbind(int texture)
     {
-        GlStateManager.glActiveTexture(texture);
+        GlStateManager._activeTexture(texture);
         GL11.glBindTexture(this.target, 0);
     }
 
