@@ -31,6 +31,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.resources.Link;
@@ -238,7 +239,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf(model.disabledBones::contains);
+        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
 
         return bones;
     }

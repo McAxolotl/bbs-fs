@@ -37,6 +37,8 @@
 	"bbs.config.transformation.rotate_hide_rings-comment": "When enabled, rotate mode will hide the axis rings and only show the 3D sphere (if enabled)",
 	"bbs.config.transformation.hide_inactive_handles": "Hide inactive handles",
 	"bbs.config.transformation.hide_inactive_handles-comment": "When enabled, grabbing a gizmo handle hides all the other handles for the duration of the drag, leaving only the one being transformed; when disabled, the gizmo never hides anything",
+	"bbs.config.transformation.pose_show_disabled_bones": "Show disabled bones",
+	"bbs.config.transformation.pose_show_disabled_bones-comment": "When enabled, the model's factory-disabled bones (such as eyes or helper bones) stay selectable in the pose editor, bone lists and viewport instead of being hidden. Reopen the pose editor for it to take effect",
 	"bbs.config.transformation.snap_translate": "Move snap step",
 	"bbs.config.transformation.snap_translate-comment": "Step (in transform units) the movement snaps to while Ctrl is held during a drag",
 	"bbs.config.transformation.snap_rotate": "Rotation snap step",
