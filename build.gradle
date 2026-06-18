@@ -59,8 +59,10 @@ dependencies {
 	// These are included in the Fabric API production distribution and allow you to update your mod to the latest modules at a later more convenient time.
 
 	// modImplementation "net.fabricmc.fabric-api:fabric-api-deprecated:${project.fabric_version}"
-	modImplementation "maven.modrinth:sodium:mc1.21.1-0.6.13-fabric"
-	modImplementation "maven.modrinth:iris:1.8.8+1.21.1-fabric"
+	// TODO(1.21.11 port): Iris/Sodium temporarily removed — integration stubbed during port.
+	// Re-add 1.21.11-compatible builds when re-enabling shader-mod compat (Phase: shader compat).
+	// modImplementation "maven.modrinth:sodium:mc1.21.1-0.6.13-fabric"
+	// modImplementation "maven.modrinth:iris:1.8.8+1.21.1-fabric"
 
 	modImplementation "org.anarres:jcpp:1.4.14"
 	modImplementation "io.github.douira:glsl-transformer:2.0.0-pre13"

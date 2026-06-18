@@ -27,13 +27,9 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.iris.IrisUtils;
-import mchorse.bbs_mod.utils.iris.ShaderCurves;
-import mchorse.bbs_mod.utils.sodium.SodiumUtils;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.impl.client.rendering.WorldRenderContextImpl;
 import net.fabricmc.loader.api.FabricLoader;
-import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.WindowFramebuffer;
@@ -195,8 +191,9 @@ public class BBSRendering
 
     public static void setup()
     {
-        iris = FabricLoader.getInstance().isModLoaded("iris");
-        sodium = FabricLoader.getInstance().isModLoaded("sodium");
+        /* Iris/Sodium support has been decoupled; these stay permanently disabled. */
+        iris = false;
+        sodium = false;
         optifine = FabricLoader.getInstance().isModLoaded("optifabric");
 
         ModelBlockEntityUpdateCallback.EVENT.register((entity) ->
@@ -206,13 +203,6 @@ public class BBSRendering
                 capturedModelBlocks.add(entity);
             }
         });
-
-        if (!iris)
-        {
-            return;
-        }
-
-        IrisUtils.setup();
     }
 
     /* Framebuffers */
@@ -500,82 +490,35 @@ public class BBSRendering
 
     public static boolean isIrisShadersEnabled()
     {
-        if (!iris)
-        {
-            return false;
-        }
-
-        return IrisUtils.isShaderPackEnabled();
+        return false;
     }
 
     public static boolean isIrisShadowPass()
     {
-        if (!iris)
-        {
-            return false;
-        }
-
-        return IrisUtils.isShadowPass();
+        return false;
     }
 
     public static void trackTexture(Texture texture)
-    {
-        if (!iris)
-        {
-            return;
-        }
-
-        IrisUtils.trackTexture(texture);
-    }
+    {}
 
     public static float[] calculateTangents(float[] t, float[] v, float[] n, float[] u)
     {
-        if (!iris)
-        {
-            return t;
-        }
-
-        return IrisUtils.calculateTangents(t, v, n, u);
+        return t;
     }
 
     public static float[] calculateTangents(float[] v, float[] n, float[] u)
     {
-        if (!iris)
-        {
-            return v;
-        }
-
-        return IrisUtils.calculateTangents(v, n, u);
-    }
-
-    public static void addUniforms(List<CachedUniform> list, Map<String, ShaderCurves.ShaderVariable> variableMap)
-    {
-        if (!iris)
-        {
-            return;
-        }
-
-        IrisUtils.addUniforms(list, variableMap);
+        return v;
     }
 
     public static List<String> getShadersSliderOptions()
     {
-        if (!iris)
-        {
-            return Collections.emptyList();
-        }
-
-        return IrisUtils.getSliderProperties();
+        return Collections.emptyList();
     }
 
     public static Map<String, String> getShadersLanguageMap(String language)
     {
-        if (!iris)
-        {
-            return Collections.emptyMap();
-        }
-
-        return IrisUtils.getShadersLanguageMap(language);
+        return Collections.emptyMap();
     }
 
     /* Curves */
@@ -590,7 +533,7 @@ public class BBSRendering
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
             Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.SUN_ROTATION) : null;
+            Double v = values != null ? values.get("sun_rotation") : null;
 
             if (v != null)
             {
@@ -611,7 +554,7 @@ public class BBSRendering
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
             Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.BRIGHTNESS) : null;
+            Double v = values != null ? values.get("brightness") : null;
 
             if (v != null)
             {
@@ -632,7 +575,7 @@ public class BBSRendering
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
             Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.WEATHER) : null;
+            Double v = values != null ? values.get("weather") : null;
 
             if (v != null)
             {
@@ -665,11 +608,6 @@ public class BBSRendering
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
-        if (sodium)
-        {
-            return (b) -> SodiumUtils.createVertexBuffer(b, color);
-        }
-
         return (b) -> new RecolorVertexConsumer(b, color);
     }
 }

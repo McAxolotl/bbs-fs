@@ -1,10 +1,14 @@
 accessWidener v2 named
 
-accessible field com/mojang/blaze3d/systems/RenderSystem shaderLightDirections [Lorg/joml/Vector3f;
+# TODO(1.21.11 port): removed by the 1.21.5 render overhaul — RenderSystem no longer holds shaderLightDirections.
+# Lighting now flows through pipeline uniforms. Re-evaluate the FramebufferFormRenderer consumer during render migration.
+# accessible field com/mojang/blaze3d/systems/RenderSystem shaderLightDirections [Lorg/joml/Vector3f;
 
-accessible field com/mojang/blaze3d/platform/GlStateManager TEXTURES [Lcom/mojang/blaze3d/platform/GlStateManager$Texture2DState;
-accessible field com/mojang/blaze3d/platform/GlStateManager activeTexture I
-accessible class com/mojang/blaze3d/platform/GlStateManager$Texture2DState
+# TODO(1.21.11 port): GlStateManager state objects (Texture2DState, TEXTURES, activeTexture) removed by the 1.21.5 GPU abstraction.
+# Texture-unit logic must move onto GpuTexture/sampler APIs during render migration.
+# accessible field com/mojang/blaze3d/platform/GlStateManager TEXTURES [Lcom/mojang/blaze3d/platform/GlStateManager$Texture2DState;
+# accessible field com/mojang/blaze3d/platform/GlStateManager activeTexture I
+# accessible class com/mojang/blaze3d/platform/GlStateManager$Texture2DState
 
 accessible field net/minecraft/client/MinecraftClient framebuffer Lnet/minecraft/client/gl/Framebuffer;
 mutable field net/minecraft/client/MinecraftClient framebuffer Lnet/minecraft/client/gl/Framebuffer;

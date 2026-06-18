@@ -3,7 +3,6 @@ package mchorse.bbs_mod.utils.iris;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.Pair;
-import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +13,13 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * NOTE(1.21.11 port): Iris coupling removed. This class keeps the vanilla GLSL-curve
+ * data model (variableMap / ShaderVariable / constants) that UICurveClip and
+ * CurveClientClip depend on. The Iris uniform-application path ({@code addUniforms}
+ * with {@code CachedUniform}) was dropped during the shader-mod decoupling and must be
+ * reintroduced when re-enabling Iris compatibility.
+ */
 public class ShaderCurves
 {
     public static Map<String, ShaderVariable> variableMap = new HashMap<>();
@@ -306,11 +312,6 @@ public class ShaderCurves
         }
 
         return source.substring(0, nextNewLine + 1) + sb + source.substring(nextNewLine + 1);
-    }
-
-    public static void addUniforms(List<CachedUniform> list)
-    {
-        BBSRendering.addUniforms(list, variableMap);
     }
 
     public static class ShaderVariable
