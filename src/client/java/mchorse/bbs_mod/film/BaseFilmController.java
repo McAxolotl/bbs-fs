@@ -36,7 +36,7 @@ import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -97,9 +97,9 @@ public abstract class BaseFilmController
             Lerps.lerp(entity.getPrevZ(), entity.getZ(), transition)
         );
 
-        double cx = camera.getPos().x;
-        double cy = camera.getPos().y;
-        double cz = camera.getPos().z;
+        double cx = camera.getCameraPos().x;
+        double cy = camera.getCameraPos().y;
+        double cz = camera.getCameraPos().z;
 
         boolean relative = context.replay != null && context.relative;
 
@@ -461,7 +461,7 @@ public abstract class BaseFilmController
 
         matrices.push();
         matrices.translate(0F, hitboxH, 0F);
-        matrices.multiply(MinecraftClient.getInstance().getEntityRenderDispatcher().getRotation());
+        matrices.multiply(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation());
         matrices.scale(0.025F, -0.025F, 0.025F);
 
         Matrix4f matrix4f = matrices.peek().getPositionMatrix();
@@ -649,7 +649,7 @@ public abstract class BaseFilmController
                             double z = replay.keyframes.z.interpolate(ticks);
                             boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
 
-                            Vec3d pos = player.getPos();
+                            Vec3d pos = player.getEntityPos();
 
                             player.move(MovementType.SELF, new Vec3d(x - pos.x, y - pos.y, z - pos.z));
                             player.setPosition(x, y, z);
@@ -664,7 +664,12 @@ public abstract class BaseFilmController
 
                             if (player instanceof ClientPlayerEntity playerEntity)
                             {
-                                playerEntity.input.sneaking = sneaking;
+                                net.minecraft.util.PlayerInput playerInput = playerEntity.input.playerInput;
+
+                                playerEntity.input.playerInput = new net.minecraft.util.PlayerInput(
+                                    playerInput.forward(), playerInput.backward(), playerInput.left(), playerInput.right(),
+                                    playerInput.jump(), sneaking, playerInput.sprint()
+                                );
                             }
 
                             player.fallDistance = replay.keyframes.fall.interpolate(ticks).floatValue();
@@ -747,10 +752,10 @@ public abstract class BaseFilmController
                         player.setHeadYaw(yawHead);
                         player.setPitch(pitch);
                         player.setBodyYaw(yawBody);
-                        player.prevYaw = yawHead;
-                        player.prevHeadYaw = yawHead;
-                        player.prevPitch = pitch;
-                        player.prevBodyYaw = yawBody;
+                        player.lastYaw = yawHead;
+                        player.lastHeadYaw = yawHead;
+                        player.lastPitch = pitch;
+                        player.lastBodyYaw = yawBody;
                     }
                 }
             }
@@ -911,7 +916,7 @@ public abstract class BaseFilmController
         {
             FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
 
-            filmContext.transition = getTransition(entity, context.tickCounter().getTickDelta(false));
+            filmContext.transition = getTransition(entity, MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false));
 
             renderEntity(filmContext);
         }

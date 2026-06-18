@@ -85,6 +85,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -605,11 +606,11 @@ public class BBSModClient implements ClientModInitializer
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) ->
         {
-            BBSRendering.renderHud(drawContext, tickDelta.getTickDelta(false));
+            BBSRendering.renderHud(drawContext, tickDelta.getTickProgress(false));
 
             if (gunZoom != null)
             {
-                gunZoom.update(keyZoom.isPressed(), MinecraftClient.getInstance().getRenderTickCounter().getLastFrameDuration());
+                gunZoom.update(keyZoom.isPressed(), MinecraftClient.getInstance().getRenderTickCounter().getDynamicDeltaTicks());
 
                 if (gunZoom.canBeRemoved())
                 {
@@ -714,7 +715,7 @@ public class BBSModClient implements ClientModInitializer
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.KEYSYM,
             key,
-            "category." + BBSMod.MOD_ID + ".main"
+            KeyBinding.Category.create(Identifier.of(BBSMod.MOD_ID, "main"))
         ));
     }
 
@@ -724,7 +725,7 @@ public class BBSModClient implements ClientModInitializer
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.MOUSE,
             button,
-            "category." + BBSMod.MOD_ID + ".main"
+            KeyBinding.Category.create(Identifier.of(BBSMod.MOD_ID, "main"))
         ));
     }
 

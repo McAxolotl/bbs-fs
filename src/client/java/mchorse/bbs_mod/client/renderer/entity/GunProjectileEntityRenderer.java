@@ -39,8 +39,8 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
         GunProperties properties = projectile.getProperties();
         int out = properties.lifeSpan - 2;
 
-        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, projectile.prevYaw, projectile.getYaw());
-        float pitch = MathHelper.lerpAngleDegrees(tickDelta, projectile.prevPitch, projectile.getPitch());
+        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, projectile.lastYaw, projectile.getYaw());
+        float pitch = MathHelper.lerpAngleDegrees(tickDelta, projectile.lastPitch, projectile.getPitch());
         float scale = Lerps.envelope(projectile.age + tickDelta, 0, properties.fadeIn, out - properties.fadeOut, out);
 
         if (properties.yaw) matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(bodyYaw));

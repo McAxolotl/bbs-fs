@@ -121,7 +121,7 @@ public class ParticleEmitter
     public void setTarget(LivingEntity target)
     {
         this.target = target;
-        this.world = target == null ? null : target.getWorld();
+        this.world = target == null ? null : target.getEntityWorld();
     }
 
     public void setWorld(World world)

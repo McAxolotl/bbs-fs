@@ -47,7 +47,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
     {
         matrices.push();
 
-        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
+        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.lastBodyYaw, livingEntity.bodyYaw);
         int overlay = LivingEntityRenderer.getOverlay(livingEntity, 0F);
 
         this.setupTransforms(livingEntity, matrices, bodyYaw, tickDelta);

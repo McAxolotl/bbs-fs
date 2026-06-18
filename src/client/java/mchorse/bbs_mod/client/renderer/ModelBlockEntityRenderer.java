@@ -51,7 +51,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
     {
         ClientWorld world = MinecraftClient.getInstance().world;
 
-        if (entity == null || entity.getWorld() != world)
+        if (entity == null || entity.getEntityWorld() != world)
         {
             entity = new ActorEntity(BBSMod.ACTOR_ENTITY, world);
         }
@@ -60,9 +60,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         entity.lastRenderX = x;
         entity.lastRenderY = y;
         entity.lastRenderZ = z;
-        entity.prevX = x;
-        entity.prevY = y;
-        entity.prevZ = z;
+        entity.lastX = x;
+        entity.lastY = y;
+        entity.lastZ = z;
 
         double distance = MinecraftClient.getInstance().getEntityRenderDispatcher().getSquaredDistanceToCamera(x, y, z);
 
@@ -71,7 +71,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         matrices.push();
         matrices.translate(tx, ty, tz);
 
-        EntityRendererDispatcherInvoker.bbs$renderShadow(matrices, provider, entity, opacity, tickDelta, entity.getWorld(), radius);
+        EntityRendererDispatcherInvoker.bbs$renderShadow(matrices, provider, entity, opacity, tickDelta, entity.getEntityWorld(), radius);
 
         matrices.pop();
     }
@@ -136,7 +136,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             MatrixStackUtils.applyTransform(matrices, applied);
 
-            int lightAbove = WorldRenderer.getLightmapCoordinates(entity.getWorld(), pos.add((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
+            int lightAbove = WorldRenderer.getLightmapCoordinates(entity.getEntityWorld(), pos.add((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
             Camera camera = mc.gameRenderer.getCamera();
 
             RenderSystem.enableDepthTest();
@@ -190,7 +190,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         Camera camera = mc.gameRenderer.getCamera();
         Vec3d position = !mc.options.getPerspective().isFirstPerson() && mc.player != null
             ? mc.player.getCameraPosVec(tickDelta)
-            : camera.getPos();
+            : camera.getCameraPos();
 
         BlockPos pos = entity.getPos();
         double x = pos.getX() + 0.5D + transform.translate.x;

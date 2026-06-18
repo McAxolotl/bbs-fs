@@ -19,7 +19,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.BufferBuilder;
@@ -75,9 +75,9 @@ public class Recorder extends WorldFilmController
 
         Vector4f vector = Vectors.TEMP_4F;
         Matrix4f matrix = Matrices.TEMP_4F;
-        float x = (float) (position.point.x - camera.getPos().x);
-        float y = (float) (position.point.y - camera.getPos().y);
-        float z = (float) (position.point.z - camera.getPos().z);
+        float x = (float) (position.point.x - camera.getCameraPos().x);
+        float y = (float) (position.point.y - camera.getCameraPos().y);
+        float z = (float) (position.point.z - camera.getCameraPos().z);
         float fov = MathUtils.toRad(position.angle.fov);
         float aspect = BBSRendering.getVideoWidth() / (float) BBSRendering.getVideoHeight();
         float thickness = 0.025F;
@@ -190,7 +190,7 @@ public class Recorder extends WorldFilmController
         Box box = player.getBoundingBox().expand(radius);
         double radiusSq = radius * radius;
 
-        for (LivingEntity entity : player.getWorld().getEntitiesByClass(LivingEntity.class, box, (e) -> e != player && e.isAlive() && e.squaredDistanceTo(player) <= radiusSq))
+        for (LivingEntity entity : player.getEntityWorld().getEntitiesByClass(LivingEntity.class, box, (e) -> e != player && e.isAlive() && e.squaredDistanceTo(player) <= radiusSq))
         {
             MobForm form = Morph.createMobForm(entity);
 
@@ -233,7 +233,7 @@ public class Recorder extends WorldFilmController
     {
         super.render(context);
 
-        renderCameraPreview(this.position, context.camera(), context.matrixStack());
+        renderCameraPreview(this.position, MinecraftClient.getInstance().gameRenderer.getCamera(), context.matrices());
     }
 
     @Override

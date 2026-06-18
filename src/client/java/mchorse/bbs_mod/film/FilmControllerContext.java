@@ -5,7 +5,8 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -56,10 +57,10 @@ public class FilmControllerContext
         this.entities = entities;
         this.entity = entity;
         this.replay = replay;
-        this.camera = context.camera();
-        this.stack = context.matrixStack();
+        this.camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        this.stack = context.matrices();
         this.consumers = context.consumers();
-        this.transition = context.tickCounter().getTickDelta(false);
+        this.transition = MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false);
 
         return this;
     }

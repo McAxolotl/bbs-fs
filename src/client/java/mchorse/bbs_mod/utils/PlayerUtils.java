@@ -22,9 +22,9 @@ public class PlayerUtils
 
         if (!ClientNetwork.isIsBBSModOnServer())
         {
-            String command = "tp " + player.getGameProfile().getName() + " " + x + " " + y + " " + z + " " + yaw + " " + pitch;
+            String command = "tp " + player.getGameProfile().name() + " " + x + " " + y + " " + z + " " + yaw + " " + pitch;
 
-            player.networkHandler.sendCommand(command);
+            player.networkHandler.sendChatCommand(command);
         }
         else
         {
@@ -42,7 +42,7 @@ public class PlayerUtils
 
         if (!ClientNetwork.isIsBBSModOnServer())
         {
-            player.networkHandler.sendCommand("tp " + player.getGameProfile().getName() + " " + x + " " + y + " " + z);
+            player.networkHandler.sendChatCommand("tp " + player.getGameProfile().name() + " " + x + " " + y + " " + z);
         }
         else
         {
@@ -57,9 +57,15 @@ public class PlayerUtils
             return PLAYER_MODEL_PARTS;
         }
 
-        public ProtectedAccess(World world, BlockPos pos, float yaw, GameProfile gameProfile)
+        public ProtectedAccess(World world, GameProfile gameProfile)
         {
-            super(world, pos, yaw, gameProfile);
+            super(world, gameProfile);
+        }
+
+        @Override
+        public net.minecraft.world.GameMode getGameMode()
+        {
+            return net.minecraft.world.GameMode.SURVIVAL;
         }
 
         @Override
