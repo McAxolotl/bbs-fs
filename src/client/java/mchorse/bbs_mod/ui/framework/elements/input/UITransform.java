@@ -177,6 +177,11 @@ public abstract class UITransform extends UIElement
                 this.pasteAll(transforms);
             }
         }).inside().label(UIKeys.TRANSFORMS_CONTEXT_PASTE);
+
+        /* World copy/paste no-ops without a world provider, so these stay harmless on the editors
+         * that don't support it (they just never capture/apply anything there). */
+        this.keys().register(Keys.TRANSFORMATIONS_COPY_WORLD, this::copyWorldTransform).inside().label(UIKeys.TRANSFORMS_CONTEXT_COPY_WORLD);
+        this.keys().register(Keys.TRANSFORMATIONS_PASTE_WORLD, this::pasteWorldTransform).inside().label(UIKeys.TRANSFORMS_CONTEXT_PASTE_WORLD);
     }
 
     protected void toggleUniformScale()
