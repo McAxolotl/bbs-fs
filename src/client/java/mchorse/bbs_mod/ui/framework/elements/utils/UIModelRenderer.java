@@ -155,6 +155,18 @@ public abstract class UIModelRenderer extends UIElement
     {
         this.updateLogic(context);
 
+        /* PROBE(1.21.11 render, diagnostic): GREEN 2px OUTLINE of the panel rect via the proven 2D path
+         * (context.fill). Fires for ANY model/form preview. Reveals the true panel bounds without obscuring
+         * the interior, so the magenta FBO blit (UIPickableFormRenderer, inset) shows inside the frame when
+         * the FBO-texture blit path composites. Remove once preview is real. */
+        {
+            int ax = this.area.x, ay = this.area.y, aw = this.area.w, ah = this.area.h, t = 2, g = 0xff00ff00;
+            context.batcher.box(ax, ay, ax + aw, ay + t, g);
+            context.batcher.box(ax, ay + ah - t, ax + aw, ay + ah, g);
+            context.batcher.box(ax, ay, ax + t, ay + ah, g);
+            context.batcher.box(ax + aw - t, ay, ax + aw, ay + ah, g);
+        }
+
         context.batcher.clip(this.area, context);
         this.renderModel(context);
         context.batcher.unclip(context);
