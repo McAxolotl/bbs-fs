@@ -50,12 +50,11 @@ public abstract class FormRenderer <T extends Form>
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        Vector3f lightA = new Vector3f(0F, 1F, -0.2F).normalize();
-        Vector3f lightB = new Vector3f(-0.85F, 0.85F, 1F).normalize();
-
-        /* TODO(1.21.11 render): RenderSystem.setupLevelDiffuseLighting(Vector3f, Vector3f) was removed by
-         * the 1.21.5 pipeline rewrite (diffuse lighting is now uploaded as a GpuBufferSlice). Re-apply the
-         * lightA/lightB diffuse directions on the new pipeline foundation. */
+        /* The diffuse-light directions the old setupLevelDiffuseLighting bound here (lightA=(0,1,-0.2),
+         * lightB=(-0.85,0.85,1)) are now bound per model-form thumbnail in BbsFormGuiElementRenderer.lights():
+         * the UI form preview renders off-screen during the GUI prepare phase (two-phase GUI), so the lights
+         * must be set there at draw time, not here in the record phase. Other form types render flat 2D and
+         * need no diffuse lighting. */
 
         this.renderInUI(context, x1, y1, x2, y2);
 

@@ -249,67 +249,87 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         context.batcher.flush();
 
         /* List/icon form preview: submit a vanilla special GUI element so the form's model renders off-screen
-         * and the deferred GUI composites it into this cell. The list path runs in the GUI record phase where
-         * a direct immediate 3D draw can't composite (two-phase GUI), so we reuse the mechanism vanilla uses
-         * for entity/item thumbnails. PHASE 1: BbsFormGuiElementRenderer.render only logs (validate routing). */
-        net.minecraft.client.gui.DrawContext bbs$dc = context.batcher.getContext();
-        bbs$dc.state.addSpecialElement(new mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState(
-            this.form, x1, y1, x2, y2, 1.0F, null));
+         * and the deferred GUI composites it into this cell. The list draws each cell in the GUI record phase,
+         * where a direct immediate 3D draw can't composite (two-phase GUI), so we reuse the mechanism vanilla
+         * uses for entity/item thumbnails. BbsFormGuiElementRenderer.render then calls back into renderUIPreview
+         * during the GUI prepare phase (with ModelPreviewRenderer.ACTIVE so the model draws into the FBO). The
+         * cursor-driven yaw is computed here (same as the original getUIMatrix) since render() has no context. */
+        float angle = MathUtils.toRad(context.mouseX - (x1 + x2) / 2) + MathUtils.PI;
 
-        this.ensureAnimator(context.getTransition());
+        if (BBSSettings.freezeModels.get())
+        {
+            angle = -MathUtils.PI + MathUtils.PI / 8;
+        }
+
+        net.minecraft.client.gui.DrawContext bbs$dc = context.batcher.getContext();
+
+        /* Capture the live 2D GUI matrix (carries the list's scroll translate) so the thumbnail composites at
+         * the scrolled cell position — faithful to the original, which rendered onto getMatrices() directly. */
+        org.joml.Matrix3x2f bbs$pose = new org.joml.Matrix3x2f(bbs$dc.getMatrices());
+
+        bbs$dc.state.addSpecialElement(new mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState(
+            this, angle, context.getTransition(), bbs$pose, x1, y1, x2, y2, 1.0F, null));
+    }
+
+    /**
+     * Render this model form into the special-element off-screen FBO bound by {@code BbsFormGuiElementRenderer}
+     * (vanilla's 3D-in-GUI mechanism), for a form-list thumbnail. The base renderer has set an ORTHOGRAPHIC
+     * projection and pre-translated {@code stack} to the cell (origin at the horizontal centre, getYOffset =
+     * 0.85*height down). Here we apply the rest of the original {@link #getUIMatrix} framing (cell scale, 22.5°
+     * forward tilt, cursor-driven yaw), the form transform + uiScale, set the adopted model texture so
+     * {@link ModelInstance#render} takes the entityCutoutNoCull immediate branch, then draw. The caller manages
+     * {@code ModelPreviewRenderer.ACTIVE} + diffuse lighting + restore.
+     */
+    public void renderUIPreview(MatrixStack stack, float angle, float transition, int x1, int y1, int x2, int y2)
+    {
+        this.ensureAnimator(transition);
 
         ModelInstance model = this.getModel();
 
-        if (this.animator != null && model != null)
+        if (this.animator == null || model == null)
         {
-            /* TODO(1.21.11 render): DrawContext.getMatrices() now returns a 2D Matrix3x2fStack.
-             * UI model rendering needs a 3D MatrixStack; we build a fresh one here and feed the
-             * UI matrix into it. Compositing the result back into the 2D GUI context still needs
-             * the new GPU pipeline foundation. */
-            MatrixStack stack = new MatrixStack();
-
-            stack.push();
-
-            Matrix4f uiMatrix = getUIMatrix(context, x1, y1, x2, y2);
-
-            this.applyTransforms(uiMatrix, context.getTransition());
-
-            Link link = this.form.texture.get();
-            Link texture = link == null ? model.texture : link;
-            Color contextColor = Color.white();
-            Color formColor = this.form.color.get();
-            float scale = this.form.uiScale.get() * model.uiScale;
-
-            model.model.resetPose();
-
-            this.animator.applyActions(null, model, context.getTransition());
-            model.model.applyPose(this.getPose());
-
-            MatrixStackUtils.multiply(stack, uiMatrix);
-            stack.scale(scale, scale, scale);
-
-            BBSModClient.getTextures().bindTexture(texture);
-            /* TODO(1.21.11 render): depth func is now encoded in the RenderPipeline; was GL_LEQUAL. */
-
-            Supplier<ShaderProgram> mainShader = this.getMainShader(model);
-
-            boolean additive = this.form.additiveColor.get();
-            this.renderModel(this.entity, mainShader, stack, model, LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, true, null, context.getTransition(), null);
-
-            /* Render body parts */
-            stack.push();
-            stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
-            stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
-
-            this.renderBodyParts(new FormRenderingContext()
-                .set(FormRenderType.ENTITY, this.entity, stack, LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
-                .inUI());
-
-            stack.pop();
-            stack.pop();
-
-            /* TODO(1.21.11 render): depth func is now encoded in the RenderPipeline; was GL_ALWAYS. */
+            return;
         }
+
+        Link link = this.form.texture.get();
+        Link texture = link == null ? model.texture : link;
+        Color contextColor = Color.white();
+        Color formColor = this.form.color.get();
+        float scale = this.form.uiScale.get() * model.uiScale;
+
+        /* Route cubic geometry through the vanilla entity layer keyed on this model's (adopted) texture,
+         * exactly like render3D — this is what makes ModelInstance.render take the entityCutoutNoCull branch. */
+        ModelPreviewRenderer.TEXTURE = AdoptedTexture.identifier(BBSModClient.getTextures().getTexture(texture));
+
+        model.model.resetPose();
+        this.animator.applyActions(null, model, transition);
+        model.model.applyPose(this.getPose());
+
+        /* The base already did translate(width/2, 0.85*height, 0) + scale(wsf, wsf, -wsf); reproduce the rest
+         * of getUIMatrix in logical-pixel space. The original used scale(s, -s, s); the base's extra -Z means
+         * we flip Z here to preserve the original handedness (Y/Z signs are the empirical knob if flipped). */
+        float cellScale = (y2 - y1) / 2.5F;
+
+        Matrix4f uiMatrix = new Matrix4f();
+
+        uiMatrix.scale(cellScale, -cellScale, -cellScale);
+        uiMatrix.rotateX(MathUtils.PI / 8F);
+        uiMatrix.rotateY(angle);
+
+        this.applyTransforms(uiMatrix, transition);
+
+        stack.push();
+
+        MatrixStackUtils.multiply(stack, uiMatrix);
+        stack.scale(scale, scale, scale);
+
+        boolean additive = this.form.additiveColor.get();
+
+        this.renderModel(this.entity, this.getMainShader(model), stack, model,
+            LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV,
+            contextColor, formColor, additive, true, null, transition, null);
+
+        stack.pop();
     }
 
     /**
