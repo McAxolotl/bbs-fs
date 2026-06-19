@@ -244,7 +244,7 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
             float tick = frame.getTick();
             int x1 = this.keyframes.toGraphX(tick);
             int y = this.toGraphY(this.getValue(frame.getValue(), axis));
-            
+
             boolean isPointHover = this.isNear(this.keyframes.toGraphX(frame.getTick()), y, context.mouseX, context.mouseY);
             boolean toRemove = Window.isCtrlPressed() && isPointHover;
 

@@ -4,6 +4,7 @@ import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.render.Camera;
@@ -27,10 +28,14 @@ public class FilmControllerContext
     public float shadowRadius;
 
     public String bone;
-    public boolean local;
+    public TransformSpace space = TransformSpace.PARENT;
 
     public String bone2;
-    public boolean local2;
+    public TransformSpace space2 = TransformSpace.PARENT;
+
+    /** Draw the editing gizmo at the entity's resolved {@code form.anchor} matrix. */
+    public boolean anchorGizmo;
+    public TransformSpace anchorSpace = TransformSpace.PARENT;
 
     public String nameTag = "";
     public boolean relative;
@@ -44,7 +49,9 @@ public class FilmControllerContext
         this.shadowRadius = 0F;
         this.color = Colors.WHITE;
         this.bone = null;
-        this.local = false;
+        this.space = TransformSpace.PARENT;
+        this.anchorGizmo = false;
+        this.anchorSpace = TransformSpace.PARENT;
         this.nameTag = "";
         this.relative = false;
     }
@@ -114,18 +121,26 @@ public class FilmControllerContext
         return this;
     }
 
-    public FilmControllerContext bone(String bone, boolean local)
+    public FilmControllerContext bone(String bone, TransformSpace space)
     {
         this.bone = bone;
-        this.local = local;
+        this.space = space;
 
         return this;
     }
 
-    public FilmControllerContext bone2(String bone, boolean local)
+    public FilmControllerContext bone2(String bone, TransformSpace space)
     {
         this.bone2 = bone;
-        this.local2 = local;
+        this.space2 = space;
+
+        return this;
+    }
+
+    public FilmControllerContext anchorGizmo(boolean anchorGizmo, TransformSpace space)
+    {
+        this.anchorGizmo = anchorGizmo;
+        this.anchorSpace = space;
 
         return this;
     }

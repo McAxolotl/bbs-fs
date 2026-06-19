@@ -15,10 +15,12 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
@@ -29,7 +31,9 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -61,11 +65,9 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Supplier;
 
 public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITickable
@@ -85,7 +87,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private boolean ikAppliedThisRender;
     private boolean physicsAppliedThisRender;
     private boolean constraintsAppliedThisRender;
-    private final Map<String, Float> poseFixByBone = new HashMap<>();
+    private boolean renderingArm;
 
     private IEntity entity = new StubEntity();
 
@@ -178,19 +180,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             PoseTransform poseTransform = targetPose.get(entry.getKey());
             PoseTransform value = entry.getValue();
 
-            if (value.fix != 0)
+            if (!Operation.equals(value.fix, 0))
             {
                 poseTransform.translate.lerp(value.translate, value.fix);
                 poseTransform.scale.lerp(value.scale, value.fix);
                 poseTransform.rotate.lerp(value.rotate, value.fix);
-                poseTransform.rotate2.lerp(value.rotate2, value.fix);
             }
             else
             {
                 poseTransform.translate.add(value.translate);
                 poseTransform.scale.add(value.scale).sub(1, 1, 1);
                 poseTransform.rotate.add(value.rotate);
-                poseTransform.rotate2.add(value.rotate2);
             }
         }
     }
@@ -239,7 +239,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf(model.disabledBones::contains);
+        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
 
         return bones;
     }
@@ -338,15 +338,56 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         Matrix4f baseTransform = ui ? null : new Matrix4f((world != null ? world : stack).peek().getPositionMatrix());
 
-        this.collectPoseFixByBone();
         this.applyIKOnce(model, baseTransform);
         this.applyPhysicsOnce(target, model, transition, baseTransform);
         this.applyConstraintsOnce(model);
-        model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get());
 
-        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof mchorse.bbs_mod.data.types.MapType ikMap)
+        /* Default texture for materials without their own: the form's texture override, else the
+         * model's default. Per-material textures (folder defaults now, animation tracks later)
+         * layer on top via the resolver. */
+        Link defaultTexture = this.form.texture.get();
+
+        if (defaultTexture == null)
+        {
+            defaultTexture = model.texture;
+        }
+
+        final Link resolvedDefault = defaultTexture;
+
+        /* The form's single "Default" texture (form.texture) only applies when the model exposes no
+         * materials (e.g. cubic). Once there's a material list, materials fall back only to the model's
+         * base texture - the Default is hidden in the editor and must not affect them here either. */
+        final Link materialFallback = model.materials.isEmpty() ? resolvedDefault : model.texture;
+
+        model.render(newStack, program, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
+        {
+            /* Resolution order: animated per-material track > editor-picked static per-material
+             * texture > the material's loaded default (folder/Kd) > the model base texture. */
+            Link override = this.form.materialTextureOverrides.get(material);
+
+            if (override != null)
+            {
+                return override;
+            }
+
+            Link picked = this.form.materialTextures.getLink(material);
+
+            if (picked != null)
+            {
+                return picked;
+            }
+
+            return model.getMaterialTexture(material, materialFallback);
+        });
+
+        if (stencilMap == null && !this.renderingArm && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
             ModelIKDebug.render(newStack, model.model, ikMap, "");
+        }
+
+        if (stencilMap == null && !this.renderingArm && ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        {
+            ModelPhysicsDebug.render(newStack, model.model, physicsMap, "");
         }
 
         gameRenderer.getLightmapTextureManager().disable();
@@ -382,37 +423,50 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         this.ikAppliedThisRender = true;
         model.form = this.form;
-        if (baseTransform == null || this.form == null || this.form.ikTargetOverrides.isEmpty())
+
+        boolean hasOverrides = baseTransform != null && this.form != null
+            && (!this.form.ikTargetOverrides.isEmpty() || !this.form.poleTargetOverrides.isEmpty());
+
+        if (!hasOverrides)
         {
-            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
+            ModelIKRuntime.apply(model, null, null);
             return;
         }
 
         Matrix4f inv = new Matrix4f(baseTransform).invert();
-        Map<String, Vector3f> local = new HashMap<>(this.form.ikTargetOverrides.size() * 2);
+        Map<String, Vector3f> local = toModelSpace(this.form.ikTargetOverrides, inv);
+        Map<String, Vector3f> poleLocal = toModelSpace(this.form.poleTargetOverrides, inv);
 
-        for (Map.Entry<String, Vector3f> entry : this.form.ikTargetOverrides.entrySet())
+        if (local.isEmpty() && poleLocal.isEmpty())
         {
-            String controller = entry.getKey();
+            ModelIKRuntime.apply(model, null, null);
+            return;
+        }
+
+        ModelIKRuntime.apply(model, local.isEmpty() ? null : local, poleLocal.isEmpty() ? null : poleLocal);
+    }
+
+    /** World-space target overrides into the model's local space (the space the solver and pivot frames use). */
+    private static Map<String, Vector3f> toModelSpace(Map<String, Vector3f> world, Matrix4f inv)
+    {
+        Map<String, Vector3f> local = new HashMap<>(world.size() * 2);
+
+        for (Map.Entry<String, Vector3f> entry : world.entrySet())
+        {
+            String key = entry.getKey();
             Vector3f worldPos = entry.getValue();
 
-            if (controller == null || controller.isEmpty() || worldPos == null)
+            if (key == null || key.isEmpty() || worldPos == null)
             {
                 continue;
             }
 
             Vector3f pos = new Vector3f(worldPos);
             inv.transformPosition(pos);
-            local.put(controller, pos);
+            local.put(key, pos);
         }
 
-        if (local.isEmpty())
-        {
-            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
-            return;
-        }
-
-        ModelIKRuntime.apply(model, local, this.poseFixByBone);
+        return local;
     }
 
     private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
@@ -425,42 +479,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.physicsAppliedThisRender = true;
         model.lastBaseTransform = baseTransform;
         model.form = this.form;
-        ModelPhysicsRuntime.apply(target, model, transition, baseTransform, this.poseFixByBone);
-    }
-
-    private void collectPoseFixByBone()
-    {
-        this.poseFixByBone.clear();
-
-        if (this.form == null)
-        {
-            return;
-        }
-
-        Pose pose = this.getPose();
-
-        if (pose == null || pose.transforms.isEmpty())
-        {
-            return;
-        }
-
-        for (Map.Entry<String, PoseTransform> entry : pose.transforms.entrySet())
-        {
-            String bone = entry.getKey();
-            PoseTransform transform = entry.getValue();
-
-            if (bone == null || bone.isEmpty() || transform == null)
-            {
-                continue;
-            }
-
-            float fix = MathUtils.clamp(transform.fix, 0F, 1F);
-
-            if (fix > 0F)
-            {
-                this.poseFixByBone.put(bone, fix);
-            }
-        }
+        ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
     }
 
     private void applyConstraintsOnce(ModelInstance model)
@@ -609,7 +628,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             RenderSystem.enableBlend();
 
             boolean additive = this.form.additiveColor.get();
-            this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, false, null, 0F, null);
+
+            this.renderingArm = true;
+
+            try
+            {
+                this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, false, null, 0F, null);
+            }
+            finally
+            {
+                this.renderingArm = false;
+            }
 
             for (ModelGroup group : model.getModel().getAllGroups())
             {
@@ -679,9 +708,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         model.fillStencilMap(context.stencilMap, this.form);
 
-        if (ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof mchorse.bbs_mod.data.types.MapType ikMap)
+        if (ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
             ModelIKDebug.renderStencil(context.stack, model.model, ikMap, context.stencilMap, this.form);
+        }
+
+        if (ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        {
+            ModelPhysicsDebug.renderStencil(context.stack, model.model, physicsMap, context.stencilMap, this.form);
         }
     }
 
@@ -827,6 +861,101 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         stack.pop();
 
         this.bones.clear();
+    }
+
+    /**
+     * Form-local displacement that drags the shadow under the model's perceived position: how far the
+     * model has moved from its bind pose, counting BOTH the form's own transform (its keyframes) and
+     * the anchor bone's root motion. Falls back to the base form-transform displacement when there's
+     * no model or no anchor bone, so every form still shifts its shadow by its transform.
+     */
+    @Override
+    public Vector3f getShadowDisplacement(IEntity entity, float transition)
+    {
+        ModelInstance model = this.getModel();
+
+        if (model == null)
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        String anchor = model.getAnchor();
+
+        if (anchor == null || anchor.isEmpty())
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        Vector3f current = this.sampleBoneOrigin(entity, transition, anchor, false);
+        Vector3f rest = this.sampleBoneOrigin(entity, transition, anchor, true);
+
+        if (current == null || rest == null)
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        return current.sub(rest);
+    }
+
+    /**
+     * Capture a bone's origin translation in form-local space, either in the current animated pose
+     * ({@code rest = false}) or the model's rest/bind pose ({@code rest = true}). Mirrors the root-form
+     * portion of {@link #collectMatrices} so both samples share the same frame and the form's own
+     * transform cancels out when they are subtracted.
+     */
+    private Vector3f sampleBoneOrigin(IEntity entity, float transition, String bone, boolean rest)
+    {
+        ModelInstance model = this.getModel();
+
+        if (model == null)
+        {
+            return null;
+        }
+
+        MatrixStack stack = new MatrixStack();
+
+        stack.push();
+
+        /* The current sample includes the form's own transform (so its keyframes move the shadow); the
+         * rest sample omits it and stays in the bind pose, so subtracting the two yields the full
+         * displacement of the model from rest — form transform plus anchor-bone root motion. The
+         * model's default scale is static, though, so it must be applied to BOTH samples or it won't
+         * cancel and the bind pose ends up at a different height (a constant ~1/16 shadow sink). */
+        if (rest)
+        {
+            stack.scale(model.scale.x, model.scale.y, model.scale.z);
+        }
+        else
+        {
+            this.applyTransforms(stack, false, transition);
+        }
+
+        model.model.resetPose();
+
+        if (!rest && this.animator != null)
+        {
+            this.animator.applyActions(entity, model, transition);
+            model.model.applyPose(this.getPose());
+        }
+
+        stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+        this.captureMatrices(model);
+
+        Vector3f result = null;
+        MatrixCacheEntry entry = this.bones.get(bone);
+
+        if (entry != null)
+        {
+            stack.push();
+            MatrixStackUtils.multiply(stack, entry.origin());
+            result = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+            stack.pop();
+        }
+
+        this.bones.clear();
+        stack.pop();
+
+        return result;
     }
 
     @Override

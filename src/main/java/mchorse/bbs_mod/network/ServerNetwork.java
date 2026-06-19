@@ -78,6 +78,7 @@ public class ServerNetwork
     public static final Identifier CLIENT_SELECTED_SLOT = Identifier.of(BBSMod.MOD_ID, "c15");
     public static final Identifier CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = Identifier.of(BBSMod.MOD_ID, "c16");
     public static final Identifier CLIENT_REFRESH_MODEL_BLOCKS = Identifier.of(BBSMod.MOD_ID, "c17");
+    public static final Identifier CLIENT_REQUEST_FILM_RESYNC = Identifier.of(BBSMod.MOD_ID, "c18");
 
     public static final Identifier SERVER_MODEL_BLOCK_FORM_PACKET = Identifier.of(BBSMod.MOD_ID, "s1");
     public static final Identifier SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = Identifier.of(BBSMod.MOD_ID, "s2");
@@ -150,6 +151,7 @@ public class ServerNetwork
         registerS2C(CLIENT_SELECTED_SLOT);
         registerS2C(CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER);
         registerS2C(CLIENT_REFRESH_MODEL_BLOCKS);
+        registerS2C(CLIENT_REQUEST_FILM_RESYNC);
 
         ServerPlayNetworking.registerGlobalReceiver(idFor(SERVER_MODEL_BLOCK_FORM_PACKET), (payload, context) -> handleModelBlockFormPacket(context.server(), context.player(), payload.asPacketByteBuf()));
         ServerPlayNetworking.registerGlobalReceiver(idFor(SERVER_MODEL_BLOCK_TRANSFORMS_PACKET), (payload, context) -> handleModelBlockTransformsPacket(context.server(), context.player(), payload.asPacketByteBuf()));
@@ -765,6 +767,19 @@ public class ServerNetwork
         buf.writeString(filmId);
 
         ServerPlayNetworking.send(player, BufPayload.from(buf, idFor(CLIENT_STOP_FILM_PACKET)));
+    }
+
+    /**
+     * Ask the editing client to re-send the whole film, used when a per-property
+     * sync targets a path the server doesn't have (client/server desync).
+     */
+    public static void requestFilmResync(ServerPlayerEntity player, String filmId)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeString(filmId);
+
+        ServerPlayNetworking.send(player, BufPayload.from(buf, idFor(CLIENT_REQUEST_FILM_RESYNC)));
     }
 
     public static void sendManagerData(ServerPlayerEntity player, int callbackId, RepositoryOperation op, BaseType data)

@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.utils.keyframes.factories;
 
+import org.joml.Vector3f;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,6 +13,8 @@ public class KeyframeFactories
     public static final TransformKeyframeFactory TRANSFORM = new TransformKeyframeFactory();
     public static final PoseTransformKeyframeFactory POSE_TRANSFORM = new PoseTransformKeyframeFactory();
     public static final PoseKeyframeFactory POSE = new PoseKeyframeFactory();
+    public static final IKKeyframeFactory IK = new IKKeyframeFactory();
+    public static final PhysicsKeyframeFactory PHYSICS = new PhysicsKeyframeFactory();
     public static final BooleanKeyframeFactory BOOLEAN = new BooleanKeyframeFactory();
     public static final StringKeyframeFactory STRING = new StringKeyframeFactory();
     public static final FloatKeyframeFactory FLOAT = new FloatKeyframeFactory();
@@ -18,8 +22,8 @@ public class KeyframeFactories
     public static final IntegerKeyframeFactory INTEGER = new IntegerKeyframeFactory();
     public static final LongKeyframeFactory LONG = new LongKeyframeFactory();
     public static final LinkKeyframeFactory LINK = new LinkKeyframeFactory();
-    public static final Vector3fKeyframeFactory VECTOR3F = new Vector3fKeyframeFactory(new org.joml.Vector3f());
-    public static final Vector3fKeyframeFactory VECTOR3F_SCALE = new Vector3fKeyframeFactory(new org.joml.Vector3f(1F, 1F, 1F));
+    public static final Vector3fKeyframeFactory VECTOR3F = new Vector3fKeyframeFactory(new Vector3f());
+    public static final Vector3fKeyframeFactory VECTOR3F_SCALE = new Vector3fKeyframeFactory(new Vector3f(1F, 1F, 1F));
     public static final Vector4fKeyframeFactory VECTOR4F = new Vector4fKeyframeFactory();
     public static final AnchorKeyframeFactory ANCHOR = new AnchorKeyframeFactory();
     public static final BlockStateKeyframeFactory BLOCK_STATE = new BlockStateKeyframeFactory();
@@ -43,6 +47,8 @@ public class KeyframeFactories
         FACTORIES.put("transform", TRANSFORM);
         FACTORIES.put("pose_transform", POSE_TRANSFORM);
         FACTORIES.put("pose", POSE);
+        FACTORIES.put("ik", IK);
+        FACTORIES.put("physics", PHYSICS);
         FACTORIES.put("boolean", BOOLEAN);
         FACTORIES.put("string", STRING);
         FACTORIES.put("float", FLOAT);

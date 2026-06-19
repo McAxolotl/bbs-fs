@@ -7,6 +7,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,12 @@ public class ModelGroup implements IMapSerializable
     public Transform initial = new Transform();
     public Transform current = new Transform();
 
+    /* Transient full local orientation an IK solve gives this bone, applied raw in
+     * the render matrix IN PLACE OF the euler rotate triple — so the pole owns the
+     * whole orientation (swing and roll) without round-tripping through euler. Null
+     * when the bone is not IK-driven this frame. */
+    public Quaternionf ikOrient;
+
     public ModelGroup(String id)
     {
         this.id = id;
@@ -37,6 +44,7 @@ public class ModelGroup implements IMapSerializable
         this.lighting = 0F;
         this.color.set(1F, 1F, 1F);
         this.current.copy(this.initial);
+        this.ikOrient = null;
     }
 
     @Override

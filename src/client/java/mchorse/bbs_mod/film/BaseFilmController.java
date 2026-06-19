@@ -3,20 +3,30 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.BodyPart;
+import mchorse.bbs_mod.cubic.ik.IKControl;
+import mchorse.bbs_mod.cubic.ik.IKControls;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
@@ -26,6 +36,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
@@ -183,20 +194,57 @@ public abstract class BaseFilmController
         MatrixStackUtils.multiply(stack, target);
         FormUtilsClient.render(form, formContext);
 
-        if (UIBaseMenu.renderAxes)
+        if (UIBaseMenu.shouldRenderAxes())
         {
-            if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, entity, transition, stack);
-            if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.local2, context.map, form, entity, transition, stack);
+            if (context.bone != null) renderAxes(context.bone, context.space, context.map, form, entity, transition, stack);
+            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.space2, form, entity, transition, stack);
         }
 
         stack.pop();
 
+        if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)
+        {
+            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorSpace, context.map, stack);
+        }
+
         if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F)
         {
-            stack.push();
-            stack.translate(position.x - cx, position.y - cy, position.z - cz);
+            /* Place the shadow under the replay's perceived position: shift the actual shadow position
+             * by how far the model (form transform + anchor-bone root motion) has moved from rest,
+             * mapped from form-local into world axes via the render target. Moving the position itself
+             * (not just translating the quad) makes the shadow's ground projection and shading match. */
+            double shadowX = position.x;
+            double shadowY = position.y;
+            double shadowZ = position.z;
 
-            ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, position.x, position.y, position.z, 0F, 0F, 0F, context.shadowRadius, opacity);
+            FormRenderer renderer = FormUtilsClient.getRenderer(FormUtils.getRoot(form));
+
+            if (renderer != null && !BBSRendering.isIrisShadowPass() && context.replay != null && context.replay.shadowFollow.get())
+            {
+                Vector3f displacement = renderer.getShadowDisplacement(entity, transition);
+
+                if (displacement != null)
+                {
+                    target.transformDirection(displacement);
+
+                    shadowX += displacement.x;
+                    shadowY += displacement.y;
+                    shadowZ += displacement.z;
+                }
+
+                /* Extra world-space nudge to seat the shadow on the model's real floor (added after the
+                 * form-local displacement is mapped to world, so it stays vertical regardless of facing). */
+                Point offset = context.replay.shadowOffset.get();
+
+                shadowX += offset.x;
+                shadowY += offset.y;
+                shadowZ += offset.z;
+            }
+
+            stack.push();
+            stack.translate(shadowX - cx, shadowY - cy, shadowZ - cz);
+
+            ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, shadowX, shadowY, shadowZ, 0F, 0F, 0F, context.shadowRadius, opacity);
 
             stack.pop();
         }
@@ -214,15 +262,20 @@ public abstract class BaseFilmController
         RenderSystem.enableDepthTest();
     }
 
-    private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, IEntity entity, float transition, MatrixStack stack)
+    private static void renderAxes(String bone, TransformSpace space, StencilMap stencilMap, Form form, IEntity entity, float transition, MatrixStack stack)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
-        Matrix4f matrix = local ? map.get(mapKey).matrix() : map.get(mapKey).origin();
+        Matrix4f matrix = space == TransformSpace.LOCAL ? map.get(mapKey).matrix() : map.get(mapKey).origin();
 
         if (matrix != null)
         {
+            /* LOCAL strips the bone's scale (the gizmo must not inherit it, the
+             * form editor does the same); WORLD keeps only the position. */
+            if (space == TransformSpace.LOCAL) matrix = MatrixStackUtils.stripScale(matrix);
+            else if (space == TransformSpace.WORLD) matrix = new Matrix4f().translation(matrix.getTranslation(new Vector3f()));
+
             stack.push();
             MatrixStackUtils.multiply(stack, matrix);
 
@@ -238,6 +291,102 @@ public abstract class BaseFilmController
             RenderSystem.enableDepthTest();
             stack.pop();
         }
+    }
+
+    /**
+     * The replay's "axes preview" (a secondary bone): plain, non-interactive
+     * cool axes via {@link Draw#coolerAxes} — not the editing gizmo. Resolves the
+     * bone matrix exactly like {@link #renderAxes} and applies the same
+     * distance scaling the gizmo uses, so the preview keeps a constant on-screen
+     * size and matches the gizmo's axes.
+     */
+    private static void renderPreviewAxes(String bone, TransformSpace space, Form form, IEntity entity, float transition, MatrixStack stack)
+    {
+        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        MatrixCacheEntry entry = map.get(mapKey);
+
+        if (entry == null)
+        {
+            return;
+        }
+
+        Matrix4f matrix = space == TransformSpace.LOCAL ? entry.matrix() : entry.origin();
+
+        if (matrix == null)
+        {
+            return;
+        }
+
+        if (space == TransformSpace.LOCAL) matrix = MatrixStackUtils.stripScale(matrix);
+        else if (space == TransformSpace.WORLD) matrix = new Matrix4f().translation(matrix.getTranslation(new Vector3f()));
+
+        stack.push();
+        MatrixStackUtils.multiply(stack, matrix);
+
+        Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+        Matrix4f proj = RenderSystem.getProjectionMatrix();
+        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
+        float distanceScale = BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+
+        stack.scale(distanceScale, distanceScale, distanceScale);
+        Draw.coolerAxes(stack, 0.25F, 0.008F);
+
+        RenderSystem.enableDepthTest();
+        stack.pop();
+    }
+
+    /**
+     * Draw the editing gizmo for the form's anchor offset. The anchor is applied
+     * as {@code parent.mul(transform)} in {@link #getTotalMatrix}, so the gizmo
+     * sits at that resolved matrix {@code full} (already computed as the entity's
+     * render target) and edits {@code form.anchor.transform}. The space toggle
+     * mirrors {@link #renderAxes}: LOCAL keeps the anchor's own orientation,
+     * WORLD axis-aligns it, PARENT uses the attachment's orientation at the
+     * anchor's position.
+     */
+    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, TransformSpace space, StencilMap stencilMap, MatrixStack stack)
+    {
+        Form form = entity.getForm();
+
+        if (form == null || full == null)
+        {
+            return;
+        }
+
+        Matrix4f matrix;
+
+        if (space == TransformSpace.WORLD)
+        {
+            matrix = new Matrix4f().translation(full.getTranslation(new Vector3f()));
+        }
+        else if (space == TransformSpace.PARENT)
+        {
+            Matrix4f parent = getEntityMatrix(entities, cx, cy, cz, form.anchor.get(), defaultMatrix, transition, 0, true);
+
+            matrix = MatrixStackUtils.stripScale(parent);
+            matrix.setTranslation(full.getTranslation(new Vector3f()));
+        }
+        else
+        {
+            matrix = MatrixStackUtils.stripScale(full);
+        }
+
+        stack.push();
+        MatrixStackUtils.multiply(stack, matrix);
+
+        if (stencilMap == null)
+        {
+            Gizmo.INSTANCE.render(stack);
+        }
+        else
+        {
+            Gizmo.INSTANCE.renderStencil(stack, stencilMap);
+        }
+
+        RenderSystem.enableDepthTest();
+        stack.pop();
     }
 
     public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i)
@@ -404,6 +553,27 @@ public abstract class BaseFilmController
         boolean useBoneMatrix
     )
     {
+        Matrix4f matrix = getBoneCompositeMatrix(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath, useBoneMatrix);
+
+        return matrix == null ? null : MatrixStackUtils.stripScale(matrix);
+    }
+
+    /**
+     * The same composite as {@link #getGizmoBoneCompositeMatrix} but with the bone's scale kept.
+     * The gizmo drops scale on purpose (a gizmo must not inherit it); world-space transform capture
+     * needs the full matrix, so it goes through this variant instead.
+     */
+    public static Matrix4f getBoneCompositeMatrix(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath,
+        boolean useBoneMatrix
+    ) {
         if (entity == null || entity.getForm() == null || bonePath == null)
         {
             return null;
@@ -451,7 +621,56 @@ public abstract class BaseFilmController
             return null;
         }
 
-        return MatrixStackUtils.stripScale(new Matrix4f(target).mul(bone));
+        return new Matrix4f(target).mul(bone);
+    }
+
+    /**
+     * The anchor's resolved world matrix as composed for the film viewport — the
+     * same {@code target} {@link #renderEntity} renders the form with, i.e.
+     * {@code getTotalMatrix(form.anchor)}. Used by the gizmo drag to numerically
+     * sample how {@code form.anchor.transform} maps to world position/rotation
+     * (the counterpart of {@link #getGizmoBoneCompositeMatrix} for the anchor,
+     * with no bone multiply since the anchor moves the whole form).
+     */
+    public static Matrix4f getGizmoAnchorCompositeMatrix(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition
+    ) {
+        if (entity == null || entity.getForm() == null)
+        {
+            return null;
+        }
+
+        Form form = entity.getForm();
+        boolean relative = replay != null && replay.relative.get();
+
+        double cx = cameraX;
+        double cy = cameraY;
+        double cz = cameraZ;
+
+        if (relative && replay != null)
+        {
+            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
+            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
+            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+        }
+
+        Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
+        Matrix4f full = defaultMatrix;
+
+        if (!relative)
+        {
+            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition, 0);
+
+            full = pair.a != null ? pair.a : defaultMatrix;
+        }
+
+        return MatrixStackUtils.stripScale(full);
     }
 
     private static void renderNameTag(IEntity entity, Text text, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
@@ -522,9 +741,10 @@ public abstract class BaseFilmController
             {
                 World world = MinecraftClient.getInstance().world;
                 IEntity entity = new StubEntity(world);
+                int ticks = replay.getTick(this.getTick());
 
                 entity.setForm(FormUtils.copy(replay.form.get()));
-                replay.keyframes.apply(0, entity);
+                replay.keyframes.apply(ticks, entity);
                 entity.setPrevX(entity.getX());
                 entity.setPrevY(entity.getY());
                 entity.setPrevZ(entity.getZ());
@@ -790,11 +1010,31 @@ public abstract class BaseFilmController
                 continue;
             }
 
+            if (PerLimbService.isIKControlChannel(id))
+            {
+                this.applyIKControls(root, PerLimbService.parseIKControlFormPath(id), channel, tick);
+                continue;
+            }
+
+            if (PerLimbService.isPhysicsControlChannel(id))
+            {
+                this.applyPhysicsControls(root, PerLimbService.parsePhysicsControlFormPath(id), channel, tick);
+                continue;
+            }
+
             PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
 
             if (ikPath != null)
             {
-                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, true);
+                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, TargetKind.IK);
+                continue;
+            }
+
+            PerLimbService.PoleTargetPath polePath = PerLimbService.parsePoleTargetPath(id);
+
+            if (polePath != null)
+            {
+                this.applyOverride(root, polePath.formPath(), polePath.controller(), channel, tick, transition, TargetKind.POLE);
                 continue;
             }
 
@@ -802,54 +1042,193 @@ public abstract class BaseFilmController
 
             if (physicsPath != null)
             {
-                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, false);
+                this.applyPhysicsTarget(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition);
             }
         }
     }
 
-    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, boolean isIK)
+    private void applyIKControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
     {
-        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
-        if (form instanceof ModelForm modelForm)
+        if (!(form instanceof ModelForm modelForm))
         {
-            Vector3f position = resolveTargetPosition(channel, tick, transition);
-
-            if (position != null)
-            {
-                Map<String, Vector3f> overrides = isIK ? modelForm.ikTargetOverrides : modelForm.physicsTargetOverrides;
-                overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
-            }
+            return;
         }
-    }
 
-    private Vector3f resolveTargetPosition(KeyframeChannel<?> channel, float tick, float transition)
-    {
         KeyframeSegment<?> segment = channel.find(tick);
 
         if (segment == null)
         {
-            return null;
+            return;
         }
 
-        Object v = segment.createInterpolated();
+        Object value = segment.createInterpolated();
 
-        if (!(v instanceof Anchor anchor))
+        if (!(value instanceof IKControls controls))
         {
-            return null;
+            return;
         }
 
-        IEntity targetEntity = this.entities.get(anchor.replay);
-
-        if (targetEntity == null)
+        for (Map.Entry<String, IKControl> entry : controls.controls.entrySet())
         {
-            return null;
+            modelForm.ikControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new IKControl()).copy(entry.getValue());
+        }
+    }
+
+    private void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    {
+        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
         }
 
-        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return;
+        }
+
+        Object value = segment.createInterpolated();
+
+        if (!(value instanceof PhysicsControls controls))
+        {
+            return;
+        }
+
+        for (Map.Entry<String, PhysicsControl> entry : controls.controls.entrySet())
+        {
+            modelForm.physicsControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new PhysicsControl()).copy(entry.getValue());
+        }
+    }
+
+    private enum TargetKind
+    {
+        IK, POLE
+    }
+
+    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind)
+    {
+        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
+        {
+            return;
+        }
+
+        Map<String, Vector3f> overrides = switch (kind)
+        {
+            case IK -> modelForm.ikTargetOverrides;
+            case POLE -> modelForm.poleTargetOverrides;
+        };
+        Map<String, Float> weights = switch (kind)
+        {
+            case IK -> modelForm.ikTargetWeights;
+            case POLE -> modelForm.poleTargetWeights;
+        };
+
+        /* Resolve the BOUND side at its full position with a 0..1 fade weight, mirroring
+         * applyPhysicsTarget: feeding the fading anchor straight to getTotalMatrix would
+         * lerp the position from world origin across a "None" key, yanking the pole/target
+         * to (0,0,0). The applier eases the override in/out from the config position by the
+         * weight instead, so a fade glides from where the bone already is. */
+        Anchor resolve;
+        float weight;
+
+        if (anchor.previous != null && anchor.isFadeIn())
+        {
+            resolve = anchor.copy();
+            weight = anchor.x;
+        }
+        else if (anchor.previous != null && anchor.isFadeOut())
+        {
+            resolve = anchor.previous;
+            weight = 1F - anchor.x;
+        }
+        else
+        {
+            resolve = anchor;
+            weight = 1F;
+        }
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        {
+            return;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
-        return resolved.getTranslation(TEMP_VECTOR);
+        overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
+        weights.put(targetId, weight);
+    }
+
+    /**
+     * Physics target override with fade support. Unlike the IK/pole targets this also resolves a fade
+     * <em>weight</em>: when the binding crosses a no-target keyframe the shared anchor interpolation lerps the
+     * resolved matrix from world origin, which yanks the chain to (0,0,0). Instead we resolve the bound side at
+     * its full position and hand the physics solver a 0..1 weight so it can ease the chain in/out from its own
+     * tip (see {@link ModelPhysicsRuntime}).
+     */
+    private void applyPhysicsTarget(Form root, String formPath, String rootBone, KeyframeChannel<?> channel, float tick, float transition)
+    {
+        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
+        {
+            return;
+        }
+
+        /* Pick the bound side and how present it is. Fade in/out blends to/from "no target"; a straight switch
+         * between two real targets keeps the anchor's own lerp at full weight. */
+        Anchor resolve;
+        float weight;
+
+        if (anchor.previous != null && anchor.isFadeIn())
+        {
+            resolve = anchor.copy();
+            weight = anchor.x;
+        }
+        else if (anchor.previous != null && anchor.isFadeOut())
+        {
+            resolve = anchor.previous;
+            weight = 1F - anchor.x;
+        }
+        else
+        {
+            resolve = anchor;
+            weight = 1F;
+        }
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        {
+            return;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
+
+        modelForm.physicsTargetOverrides.computeIfAbsent(rootBone, (k) -> new Vector3f()).set(position);
+        modelForm.physicsTargetWeights.put(rootBone, weight);
     }
 
     private void clearTargetOverrides(Form form)
@@ -857,7 +1236,13 @@ public abstract class BaseFilmController
         if (form instanceof ModelForm modelForm)
         {
             modelForm.ikTargetOverrides.clear();
+            modelForm.poleTargetOverrides.clear();
+            modelForm.ikTargetWeights.clear();
+            modelForm.poleTargetWeights.clear();
+            modelForm.ikControlOverrides.clear();
             modelForm.physicsTargetOverrides.clear();
+            modelForm.physicsTargetWeights.clear();
+            modelForm.physicsControlOverrides.clear();
         }
 
         for (BodyPart part : form.parts.getAllTyped())

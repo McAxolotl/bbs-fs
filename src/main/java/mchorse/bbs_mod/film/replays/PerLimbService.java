@@ -5,13 +5,23 @@ import mchorse.bbs_mod.forms.FormUtils;
 public class PerLimbService
 {
     public static final String POSE_BONES = "pose.bones.";
+    public static final String MATERIAL_TEXTURES = "texture.materials.";
     public static final String IK_TARGETS = "ik_targets";
+    public static final String IK_CONTROLS = "ik_controls";
+    public static final String POLE_TARGETS = "pole_targets";
     public static final String PHYSICS_TARGETS = "physics_targets";
+    public static final String PHYSICS_CONTROLS = "physics_controls";
 
     public static record PoseBonePath(String formPath, String bone)
     {}
 
+    public static record MaterialTexturePath(String formPath, String material)
+    {}
+
     public static record IKTargetPath(String formPath, String controller)
+    {}
+
+    public static record PoleTargetPath(String formPath, String controller)
     {}
 
     public static record PhysicsTargetPath(String formPath, String rootBone)
@@ -22,9 +32,54 @@ public class PerLimbService
         return id != null && id.contains(POSE_BONES);
     }
 
+    public static boolean isMaterialTextureChannel(String id)
+    {
+        return id != null && id.contains(MATERIAL_TEXTURES);
+    }
+
+    public static MaterialTexturePath parseMaterialTexturePath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(MATERIAL_TEXTURES);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String material = id.substring(index + MATERIAL_TEXTURES.length());
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return new MaterialTexturePath(formPath, material);
+    }
+
+    public static String toMaterialTextureKey(String formPath, String material)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return MATERIAL_TEXTURES + material;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + MATERIAL_TEXTURES + material;
+    }
+
     public static boolean isIKTargetChannel(String id)
     {
         return id != null && id.contains(IK_TARGETS);
+    }
+
+    public static boolean isPoleTargetChannel(String id)
+    {
+        return id != null && id.contains(POLE_TARGETS);
     }
 
     public static boolean isPhysicsTargetChannel(String id)
@@ -107,6 +162,86 @@ public class PerLimbService
         return formPath + FormUtils.PATH_SEPARATOR + IK_TARGETS + FormUtils.PATH_SEPARATOR + controller;
     }
 
+    public static boolean isIKControlChannel(String id)
+    {
+        return id != null && id.contains(IK_CONTROLS);
+    }
+
+    /** The IK-controls channel is one per form (not per controller); this returns its owning form path. */
+    public static String parseIKControlFormPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(IK_CONTROLS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return formPath;
+    }
+
+    public static String toIKControlKey(String formPath)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return IK_CONTROLS;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + IK_CONTROLS;
+    }
+
+    public static PoleTargetPath parsePoleTargetPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(POLE_TARGETS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String controller = id.substring(index + POLE_TARGETS.length());
+        if (controller.startsWith(FormUtils.PATH_SEPARATOR))
+        {
+            controller = controller.substring(FormUtils.PATH_SEPARATOR.length());
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return new PoleTargetPath(formPath, controller);
+    }
+
+    public static String toPoleTargetKey(String formPath, String controller)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+    }
+
     public static PhysicsTargetPath parsePhysicsTargetPath(String id)
     {
         if (id == null)
@@ -145,5 +280,45 @@ public class PerLimbService
         }
 
         return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
+    }
+
+    public static boolean isPhysicsControlChannel(String id)
+    {
+        return id != null && id.contains(PHYSICS_CONTROLS);
+    }
+
+    /** The physics-controls channel is one per form (not per chain); this returns its owning form path. */
+    public static String parsePhysicsControlFormPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(PHYSICS_CONTROLS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return formPath;
+    }
+
+    public static String toPhysicsControlKey(String formPath)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return PHYSICS_CONTROLS;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_CONTROLS;
     }
 }
