@@ -36,4 +36,25 @@ old picker-layer no-op) -> draws nothing even in the right phase.
 - MODEL + PARTICLES pipelines both `withCull(false)` -> -Z flip won't cull; matches original disableCull for particle UI.
 - ModelPreviewRenderer.ACTIVE (set by base renderer) only affects cubic ModelInstance.render; irrelevant to other forms.
 
-## STATUS: implementing
+## STATUS: DONE (build green, committed 2ab8ecd9 on fix/morph-picker-forms). Runtime not run (per task). User to verify visually.
+
+## DEVIATION FROM PLAN (concurrency)
+getUIPreviewMatrix was first put in ModelFormRenderer (natural home next to getUIMatrix), but a CONCURRENT
+session reset ModelFormRenderer.java to HEAD mid-work and wiped it. Moved it to FormRenderer base (same package,
+I own that file) and call it unqualified from the 4 subclasses. ModelFormRenderer ended up UNTOUCHED.
+
+## CONCURRENCY HAZARD (flag to user)
+The working tree has parallel uncommitted work from OTHER sessions: BBSPickerRenderer.java (M, +65/-13 = bone/picking
+work), memory/tmp/bone-picking.md, memory/tmp/gizmo-render.md. ModelFormRenderer.java was reset under me once.
+I committed ONLY my 10 files by explicit path; did not touch the others. If builds/commits look odd, suspect the
+concurrent sessions.
+
+## FILES CHANGED (commit 2ab8ecd9)
+BbsFormGuiElementRenderState.java, BbsFormGuiElementRenderer.java, FormRenderer.java, Billboard/Extruded/Block/
+ParticleFormRenderer.java, ParticleEmitter.java, ParticleComponentAppearanceBillboard.java. compileClientJava green.
+
+## RISK NOTES (for runtime verify)
+- Fog tint: Billboard/Extruded(getModelLayer) + Particle(getParticlesLayer) draw via RenderLayer.draw in GUI prepare
+  with ambient global fog. ModelForm preview (vanilla entityCutoutNoCull) proves ambient fog is benign there, but the
+  BBS layers were not previously exercised in the GUI FBO — watch for a fog-colour wash.
+- Particle re-framing math verified on paper (origin 0.85h->0.5h via translate -0.35*(y2-y1); scale (y2-y1)/2).
