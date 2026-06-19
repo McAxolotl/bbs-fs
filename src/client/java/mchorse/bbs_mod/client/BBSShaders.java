@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSMod;
 import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gl.UniformType;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.VertexFormats;
@@ -47,13 +48,13 @@ public class BBSShaders
     /* ---- model ----
      * VertexFormat: POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL
      * Samplers: Sampler0 (albedo), Sampler1 (overlay), Sampler2 (lightmap)
-     * Custom uniforms: ColorModulator(vec4), Light0_Direction(vec3), Light1_Direction(vec3),
-     *                  IViewRotMat(mat3), NormalMat(mat3) + builtin ModelViewMat/ProjMat/Fog*
+     * Builtin std140 UBOs (1.21.5+): DynamicTransforms (ModelViewMat/ColorModulator),
+     *                  Projection (ProjMat), Fog, Lighting (Light0/1_Direction).
+     * The 1.21.1 per-instance NormalMat/IViewRotMat are gone: the pose normal matrix is now applied
+     * CPU-side at buffer-build time (CubicCubeRenderer transforms each Normal before emitting it), so
+     * the migrated bbs:core/model GLSL feeds the raw Normal straight into minecraft_mix_light.
      */
-    private static final RenderPipeline MODEL = register(
-        "model", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL,
-        "Sampler0", "Sampler1", "Sampler2"
-    );
+    private static final RenderPipeline MODEL = registerModel();
 
     /* ---- multilink ----
      * VertexFormat: POSITION_TEXTURE_COLOR
@@ -283,6 +284,36 @@ public class BBSShaders
     /* ----------------------------------------------------------------------------------------
      * Builders
      * ---------------------------------------------------------------------------------------- */
+
+    /**
+     * Build and register the model pipeline. Identical to {@link #register} but additionally declares
+     * the four builtin std140 UBO blocks the migrated {@code bbs:core/model} GLSL imports
+     * (light.glsl / fog.glsl / dynamictransforms.glsl / projection.glsl). Declared in the same order
+     * the vanilla entity pipeline uses (DynamicTransforms, Projection, Fog, Lighting) so the engine
+     * binds them; without these the model shader fails to link and every world draw is a no-op.
+     */
+    private static RenderPipeline registerModel()
+    {
+        Identifier shader = Identifier.of(BBSMod.MOD_ID, "core/model");
+
+        RenderPipeline.Builder builder = RenderPipeline.builder()
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/model"))
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+            .withCull(false)
+            .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+            .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+            .withUniform("Fog", UniformType.UNIFORM_BUFFER)
+            .withUniform("Lighting", UniformType.UNIFORM_BUFFER)
+            .withSampler("Sampler0")
+            .withSampler("Sampler1")
+            .withSampler("Sampler2");
+
+        return RenderPipelines.register(builder.build());
+    }
 
     /**
      * Build and register a RenderPipeline for a BBS core shader. The vertex and fragment shader
