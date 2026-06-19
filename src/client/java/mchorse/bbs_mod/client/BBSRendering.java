@@ -38,7 +38,7 @@ import net.minecraft.client.texture.GlTexture;
 import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL43;
+import org.lwjgl.opengl.GL30;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -79,6 +79,9 @@ public class BBSRendering
     private static Framebuffer framebuffer;
     private static Framebuffer clientFramebuffer;
     private static Texture texture;
+
+    /** Private read FBO used to snapshot our framebuffer's colour attachment into {@link #texture}. */
+    private static int captureReadFramebuffer = -1;
 
     private static Runnable pendingExportResolutionAction;
 
@@ -178,9 +181,10 @@ public class BBSRendering
         if (texture == null)
         {
             texture = new Texture();
-            /* RGBA8 (not RGB8) so glCopyImageSubData from the framebuffer's RGBA8 colour attachment is
-             * format-class compatible; the export read-back uses GL_BGR so the dropped alpha is harmless. */
-            texture.setFormat(TextureFormat.RGBA_U8);
+            /* RGB8 (no alpha) on purpose: the world framebuffer's sky/cleared regions carry a non-opaque alpha
+             * that, if preserved, would make the sky show through as the panel background in the preview blit
+             * (GUI_TEXTURED multiplies texel alpha). Capturing into RGB8 drops it so the preview stays opaque. */
+            texture.setFormat(TextureFormat.RGB_U8);
             texture.setFilter(GL11.GL_NEAREST);
         }
 
@@ -391,11 +395,11 @@ public class BBSRendering
             /* Snapshot the world that just rendered into our reassigned WindowFramebuffer into the BBS texture
              * that the film preview blits and the VideoRecorder reads back.
              *
-             * 1.21.11: Framebuffer.beginWrite() was removed, so glCopyTexSubImage2D (which reads from the
-             * currently GL-bound read framebuffer) no longer has our framebuffer bound and would copy garbage.
-             * Instead copy the colour attachment (a GlTexture, RGBA8) straight into the snapshot texture with
-             * glCopyImageSubData — a direct texture-to-texture copy that touches no FBO or texture-unit binding
-             * state (avoiding the GlStateManager corruption that raw unit binds cause in this port). */
+             * 1.21.11: Framebuffer.beginWrite() was removed, so glCopyTexSubImage2D no longer has our framebuffer
+             * bound as the GL read target (it would copy garbage). Bind the colour attachment to our own read FBO
+             * first, then glCopyTexSubImage2D into the (RGB8) snapshot — this also drops the framebuffer's
+             * non-opaque sky alpha so the preview stays opaque (see getTexture). The read-FBO binding is
+             * saved/restored; the modern pipeline rebinds render-pass targets afterwards so it stays isolated. */
             if (texture.width != w || texture.height != h)
             {
                 texture.bind();
@@ -403,13 +407,23 @@ public class BBSRendering
                 texture.unbind();
             }
 
+            if (captureReadFramebuffer == -1)
+            {
+                captureReadFramebuffer = GL30.glGenFramebuffers();
+            }
+
+            int previousRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
             int sourceId = ((GlTexture) framebuffer.getColorAttachment()).getGlId();
 
-            GL43.glCopyImageSubData(
-                sourceId, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
-                texture.id, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
-                w, h, 1
-            );
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, captureReadFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, sourceId, 0);
+            GL30.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+
+            texture.bind();
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+            texture.unbind();
+
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousRead);
         }
 
         toggleFramebuffer(false);
