@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.graphics.Framebuffer;
@@ -12,19 +11,13 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -87,15 +80,15 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         int h = MathUtils.clamp(this.form.height.get(), 2, 4096);
         int prevDraw = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-        Vector3f light0 = RenderSystem.shaderLightDirections[0];
-        Vector3f light1 = RenderSystem.shaderLightDirections[1];
-        Matrix4f projectionMatrix = new Matrix4f(RenderSystem.getProjectionMatrix());
 
+        /* TODO(1.21.11 render): RenderSystem.shaderLightDirections / setShaderLights(Vector3f,Vector3f) /
+         * getProjectionMatrix / setProjectionMatrix / getModelViewStack were removed by the 1.21.5 GPU
+         * pipeline rewrite (lighting is now a GpuBufferSlice, projection lives in RenderSystem's dynamic
+         * uniforms). The original code saved the two shader light directions + projection matrix, switched
+         * to a flat front-facing light and an ortho projection while rendering the inner forms into the
+         * framebuffer, then restored them below. Re-implement once the framebuffer render path is rebuilt
+         * on the new pipeline foundation. */
         GL30.glCullFace(GL30.GL_FRONT);
-        RenderSystem.setShaderLights(new Vector3f(0F, 0F, 1F), new Vector3f(0F, 0F, 1F));
-        RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(-1F, 1F, 1F, -1F, -500F, 500F), VertexSorter.BY_Z);
-        RenderSystem.getModelViewStack().pushMatrix();
-        RenderSystem.getModelViewStack().identity();
 
         framebuffer.apply();
 
@@ -118,14 +111,16 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
         GL30.glViewport(0, 0, width, height);
 
-        RenderSystem.setShaderLights(light0, light1);
-        RenderSystem.getModelViewStack().popMatrix();
-        RenderSystem.setProjectionMatrix(projectionMatrix, VertexSorter.BY_Z);
+        /* TODO(1.21.11 render): restore shader lights + projection + model-view stack here (see above). */
         GL30.glCullFace(GL30.GL_BACK);
 
         boolean shading = !context.isPicking();
         VertexFormat format = shading ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_LIGHT_COLOR;
-        Supplier<ShaderProgram> shader = shading ? GameRenderer::getRenderTypeEntityTranslucentProgram : GameRenderer::getPositionTexColorProgram;
+        /* TODO(1.21.11 render): GameRenderer.getRenderTypeEntityTranslucentProgram / getPositionTexColorProgram
+         * were removed (shaders now live in RenderPipeline/RenderLayer). Stubbed shader supplier; the
+         * framebuffer composite is a no-op until the new pipeline path is wired up. Was:
+         * shading ? entity-translucent program : position-tex-color program. */
+        Supplier<ShaderProgram> shader = () -> null;
 
         this.renderModel(framebuffer.getMainTexture(), format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
     }
@@ -171,13 +166,10 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         color.mul(overlayColor);
 
-        GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
-
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
+        /* TODO(1.21.11 render): lightmap/overlay enable + RenderSystem.setShader were removed; lightmap,
+         * overlay and the shader program are now bound through the RenderPipeline/RenderLayer samplers. */
 
         BBSModClient.getTextures().bindTexture(texture);
-        RenderSystem.setShader(shader);
 
         texture.bind();
         texture.setFilterMipmap(false, false);
@@ -201,12 +193,18 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, entry, -1F);
         this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, entry, -1F);
 
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableBlend();
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        /* TODO(1.21.11 render): blend state now pipeline-encoded; BufferRenderer.drawWithGlobalProgram was
+         * removed. The built quad must be submitted via a RenderLayer/RenderPipeline draw (e.g.
+         * someRenderLayer.draw(builtBuffer)). For now we build then discard the buffer so it compiles and
+         * does not leak; the framebuffer composite is a no-op until the pipeline path is wired up. */
+        net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable();
 
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
+        if (__bbsBuilt != null)
+        {
+            __bbsBuilt.close();
+        }
+
+        /* TODO(1.21.11 render): lightmap/overlay teardown was here; now pipeline-encoded. */
     }
 
     private VertexConsumer fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, MatrixStack.Entry entry, float nz)

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -15,19 +16,15 @@ import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -49,7 +46,10 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        MatrixStack stack = context.batcher.getContext().getMatrices();
+        /* TODO(1.21.11 render): context.batcher.getContext().getMatrices() now returns a 2D
+         * Matrix3x2fStack; the billboard quad needs a 3D MatrixStack. Build a fresh 3D stack from the
+         * UI matrix so the quad-building math stays intact. */
+        MatrixStack stack = new MatrixStack();
 
         stack.push();
 
@@ -63,7 +63,9 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         VertexFormat format = VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL;
 
-        this.renderModel(format, GameRenderer::getRenderTypeEntityTranslucentProgram,
+        /* The shading (POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL) path uses the BBS model layer
+         * (formerly GameRenderer::getRenderTypeEntityTranslucentProgram). */
+        this.renderModel(format, BBSShaders::getModelLayer,
             stack,
             OverlayTexture.DEFAULT_UV, LightmapTextureManager.MAX_LIGHT_COORDINATE, Colors.WHITE,
             context.getTransition()
@@ -83,15 +85,21 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         }
 
         VertexFormat format = shading ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_LIGHT_COLOR;
-        Supplier<ShaderProgram> shader = this.getShader(context,
-            shading ? GameRenderer::getRenderTypeEntityTranslucentProgram : GameRenderer::getPositionTexColorProgram,
-            shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
-        );
+
+        /* TODO(1.21.11 render): the old getShader(...) picking path (ShaderProgram + Target GlUniform
+         * via setupTarget) is gone. When picking, the picker billboard layers
+         * (BBSShaders.getPickerBillboard[NoShading]Layer) must be selected and their Target UBO
+         * uniform supplied per pass. For now route both paths through the BBS model/no-shading layer.
+         * The no-shading format (POSITION_TEXTURE_LIGHT_COLOR) has no dedicated non-picker BBS layer,
+         * so it borrows the picker-no-shading layer (same vertex format) as a stand-in. */
+        Supplier<RenderLayer> shader = shading
+            ? BBSShaders::getModelLayer
+            : BBSShaders::getPickerBillboardNoShadingLayer;
 
         this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
     }
 
-    private void renderModel(VertexFormat format, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderModel(VertexFormat format, Supplier<RenderLayer> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
     {
         Link t = this.form.texture.get();
 
@@ -167,7 +175,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition);
     }
 
-    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderQuad(VertexFormat format, Texture texture, Supplier<RenderLayer> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
     {
         Color color = new Color().set(overlayColor, true);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
@@ -191,15 +199,12 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             matrices.peek().getNormalMatrix().identity();
         }
 
-        GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
-
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
-
-        ShaderProgram finalShader = shader.get();
+        /* Was: lightmap.enable() + overlay.setupOverlayColor() + RenderSystem.setShader(finalShader).
+         * Lightmap/overlay are now bound by the RenderLayer (the BBS model layer uses
+         * useLightmap()/useOverlay()); the shader is the layer's RenderPipeline. */
+        RenderLayer layer = shader.get();
 
         BBSModClient.getTextures().bindTexture(texture);
-        RenderSystem.setShader(() -> finalShader);
 
         texture.bind();
         texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
@@ -223,14 +228,19 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, entry, -1F);
         this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, entry, -1F);
 
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableBlend();
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        /* Was: defaultBlendFunc + enableBlend + BufferRenderer.drawWithGlobalProgram. Blend is now
+         * encoded in the layer's pipeline; submit the built buffer through the layer.
+         * TODO(1.21.11 render): the bound texture (Sampler0) is currently fed via the old global
+         * texture binding; the BBS layer's sampler wiring (replacing RenderSystem.getShaderTexture)
+         * is part of the pipeline-foundation work, so the billboard texture may not sample until then. */
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            layer.draw(built);
+        }
 
         texture.setFilterMipmap(false, false);
-
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
     }
 
     private VertexConsumer fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, MatrixStack.Entry entry, float nz)

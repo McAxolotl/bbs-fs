@@ -1,97 +1,133 @@
 package mchorse.bbs_mod.cubic.render.vanilla;
 
 import com.google.common.collect.Maps;
-import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
-import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import net.minecraft.client.model.ModelPart;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.TexturedRenderLayers;
-import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.model.BakedModelManager;
-import net.minecraft.client.texture.Sprite;
-import net.minecraft.client.texture.SpriteAtlasTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.DyedColorComponent;
+import net.minecraft.component.type.EquippableComponent;
 import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.item.ArmorItem;
-import net.minecraft.item.ArmorMaterial;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.trim.ArmorTrim;
+import net.minecraft.item.equipment.EquipmentAsset;
+import net.minecraft.item.equipment.trim.ArmorTrim;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 
 import java.util.Map;
 
+/**
+ * Vanilla armor rendering onto BBS cubic-model bones.
+ *
+ * <p>Ported to 1.21.11. The 1.21.4+ equipment rewrite removed the entire API this class was built
+ * on:
+ * <ul>
+ *   <li>{@code net.minecraft.item.ArmorItem} no longer exists — armor identity is now carried by the
+ *       {@link net.minecraft.component.DataComponentTypes#EQUIPPABLE} data component (an
+ *       {@link EquippableComponent} whose {@link EquippableComponent#assetId()} points at an
+ *       {@link EquipmentAsset}).</li>
+ *   <li>{@code ArmorMaterial} moved to {@code net.minecraft.item.equipment} and no longer exposes a
+ *       per-item material/key the way it used to; {@code ArmorTrim} moved to
+ *       {@code net.minecraft.item.equipment.trim} and replaced
+ *       {@code getGenericModelId}/{@code getLeggingsModelId} with
+ *       {@link ArmorTrim#getTextureId(String, RegistryKey)}.</li>
+ *   <li>{@code RenderLayer.getArmorCutoutNoCull(Identifier)}, {@code RenderLayer.getArmorEntityGlint()}
+ *       and every other {@code RenderLayer.getXxx(...)} entity-layer factory were removed —
+ *       {@code RenderLayer} now only exposes {@code of(String, RenderSetup)}. Entity/equipment drawing
+ *       moved to {@code EquipmentRenderer} + the {@code OrderedRenderCommandQueue} command system, a
+ *       different architecture from this per-{@link ArmorType}, per-{@link ModelPart} renderer.</li>
+ *   <li>{@code BakedModelManager.getAtlas(Identifier)} was removed (atlases live in
+ *       {@code AtlasManager}), so the armor-trims sprite atlas can no longer be fetched here.</li>
+ * </ul>
+ *
+ * <p>Faithfully reproducing per-bone armor + trim + glint on top of cubic bones now requires the new
+ * {@code EquipmentRenderer}/{@code OrderedRenderCommandQueue} pipeline, which is a real redesign (it
+ * renders a whole {@code Model<S>} through a command queue rather than individual {@code ModelPart}s).
+ * That is out of scope for a build-only port, so the draw bodies below are neutralized with
+ * {@code TODO(1.21.11 render)} while the public API ({@link #ArmorRenderer} constructor and
+ * {@link #renderArmorSlot}) is kept stable so callers compile unchanged. Mechanical migrations that
+ * still have clean equivalents (equippable-based detection, {@code ModelPart.pivotX -> originX},
+ * texture-id derivation, bone selection) are done so the structure is ready to wire up at runtime.
+ */
 public class ArmorRenderer
 {
     private static final Map<String, Identifier> ARMOR_TEXTURE_CACHE = Maps.newHashMap();
     private final BipedEntityModel innerModel;
     private final BipedEntityModel outerModel;
-    private final SpriteAtlasTexture armorTrimsAtlas;
+    private final BakedModelManager bakery;
 
     public ArmorRenderer(BipedEntityModel innerModel, BipedEntityModel outerModel, BakedModelManager bakery)
     {
         this.innerModel = innerModel;
         this.outerModel = outerModel;
-        this.armorTrimsAtlas = bakery.getAtlas(TexturedRenderLayers.ARMOR_TRIMS_ATLAS_TEXTURE);
+        /* TODO(1.21.11 render): BakedModelManager.getAtlas(ARMOR_TRIMS_ATLAS_TEXTURE) was removed (the
+         * trims atlas now lives in AtlasManager). The bakery is retained for when the trim sprite
+         * lookup is rewired through the new equipment-asset pipeline. */
+        this.bakery = bakery;
     }
 
     public void renderArmorSlot(MatrixStack matrices, VertexConsumerProvider vertexConsumers, IEntity entity, EquipmentSlot armorSlot, ArmorType type, int light)
     {
         ItemStack itemStack = entity.getEquipmentStack(armorSlot);
-        Item item = itemStack.getItem();
 
-        if (item instanceof ArmorItem armorItem)
+        if (itemStack.isEmpty())
         {
-            if (armorItem.getSlotType() == armorSlot)
-            {
-                boolean innerModel = this.usesInnerModel(armorSlot);
-                BipedEntityModel bipedModel = this.getModel(armorSlot);
-                ModelPart part = this.getPart(bipedModel, type);
+            return;
+        }
 
-                bipedModel.setVisible(true);
+        /* 1.21.4+: armor is identified by the EQUIPPABLE component + its asset id, not by an
+         * ArmorItem subclass. We still gate on the slot matching so this only fires for the armour
+         * the model actually wears in that slot. */
+        EquippableComponent equippable = itemStack.get(DataComponentTypes.EQUIPPABLE);
 
-                part.pivotX = part.pivotY = part.pivotZ = 0F;
-                part.pitch = part.yaw = part.roll = 0F;
-                part.xScale = part.yScale = part.zScale = 1F;
+        if (equippable == null || equippable.slot() != armorSlot || equippable.assetId().isEmpty())
+        {
+            return;
+        }
 
-                DyedColorComponent dyed = itemStack.get(DataComponentTypes.DYED_COLOR);
+        RegistryKey<EquipmentAsset> assetId = equippable.assetId().get();
 
-                if (dyed != null)
-                {
-                    int color = dyed.rgb();
-                    float r = (float)(color >> 16 & 255) / 255.0F;
-                    float g = (float)(color >> 8 & 255) / 255.0F;
-                    float b = (float)(color & 255) / 255.0F;
+        boolean innerModel = this.usesInnerModel(armorSlot);
+        BipedEntityModel bipedModel = this.getModel(armorSlot);
+        ModelPart part = this.getPart(bipedModel, type);
 
-                    this.renderArmorParts(part, matrices, vertexConsumers, light, armorItem, innerModel, r, g, b, null);
-                    this.renderArmorParts(part, matrices, vertexConsumers, light, armorItem, innerModel, 1F, 1F, 1F, "overlay");
-                }
-                else
-                {
-                    this.renderArmorParts(part, matrices, vertexConsumers, light, armorItem, innerModel, 1F, 1F, 1F, null);
-                }
+        bipedModel.setVisible(true);
 
-                ArmorTrim trim = itemStack.get(DataComponentTypes.TRIM);
+        part.originX = part.originY = part.originZ = 0F;
+        part.pitch = part.yaw = part.roll = 0F;
+        part.xScale = part.yScale = part.zScale = 1F;
 
-                if (trim != null)
-                {
-                    this.renderTrim(part, armorItem.getMaterial(), matrices, vertexConsumers, light, trim, innerModel);
-                }
+        DyedColorComponent dyed = itemStack.get(DataComponentTypes.DYED_COLOR);
 
-                if (itemStack.hasGlint())
-                {
-                    this.renderGlint(part, matrices, vertexConsumers, light);
-                }
-            }
+        if (dyed != null)
+        {
+            int color = dyed.rgb();
+            float r = (float) (color >> 16 & 255) / 255.0F;
+            float g = (float) (color >> 8 & 255) / 255.0F;
+            float b = (float) (color & 255) / 255.0F;
+
+            this.renderArmorParts(part, matrices, vertexConsumers, light, assetId, innerModel, r, g, b, null);
+            this.renderArmorParts(part, matrices, vertexConsumers, light, assetId, innerModel, 1F, 1F, 1F, "overlay");
+        }
+        else
+        {
+            this.renderArmorParts(part, matrices, vertexConsumers, light, assetId, innerModel, 1F, 1F, 1F, null);
+        }
+
+        ArmorTrim trim = itemStack.get(DataComponentTypes.TRIM);
+
+        if (trim != null)
+        {
+            this.renderTrim(part, assetId, matrices, vertexConsumers, light, trim, innerModel);
+        }
+
+        if (itemStack.hasGlint())
+        {
+            this.renderGlint(part, matrices, vertexConsumers, light);
         }
     }
 
@@ -122,25 +158,32 @@ public class ArmorRenderer
         return bipedModel.head;
     }
 
-    private void renderArmorParts(ModelPart part, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorItem item, boolean secondTextureLayer, float red, float green, float blue, String overlay)
+    private void renderArmorParts(ModelPart part, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, RegistryKey<EquipmentAsset> assetId, boolean secondTextureLayer, float red, float green, float blue, String overlay)
     {
-        VertexConsumer base = vertexConsumers.getBuffer(RenderLayer.getArmorCutoutNoCull(this.getArmorTexture(item, secondTextureLayer, overlay)));
-        VertexConsumer vertexConsumer = new RecolorVertexConsumer(base, new Color(red, green, blue, 1F));
-
-        part.render(matrices, vertexConsumer, light, OverlayTexture.DEFAULT_UV);
+        /* TODO(1.21.11 render): the old draw path was
+         *   VertexConsumer base = vertexConsumers.getBuffer(RenderLayer.getArmorCutoutNoCull(texture));
+         *   part.render(matrices, new RecolorVertexConsumer(base, new Color(r, g, b, 1F)), light, OverlayTexture.DEFAULT_UV);
+         * RenderLayer.getArmorCutoutNoCull was removed in the 1.21.4 equipment rewrite (RenderLayer now
+         * only exposes of(String, RenderSetup); equipment drawing goes through EquipmentRenderer +
+         * OrderedRenderCommandQueue). The texture id is derived below so the recolor draw can be rewired
+         * once a POSITION_TEX_COLOR_NORMAL equipment RenderLayer/pipeline is built for BBS. */
+        Identifier texture = this.getArmorTexture(assetId, secondTextureLayer, overlay);
     }
 
-    private void renderTrim(ModelPart part, RegistryEntry<ArmorMaterial> material, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, boolean leggings)
+    private void renderTrim(ModelPart part, RegistryKey<EquipmentAsset> assetId, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, boolean leggings)
     {
-        Sprite sprite = this.armorTrimsAtlas.getSprite(leggings ? trim.getLeggingsModelId(material) : trim.getGenericModelId(material));
-        VertexConsumer vertexConsumer = sprite.getTextureSpecificVertexConsumer(vertexConsumers.getBuffer(TexturedRenderLayers.getArmorTrims(trim.getPattern().value().decal())));
-
-        part.render(matrices, vertexConsumer, light, OverlayTexture.DEFAULT_UV);
+        /* TODO(1.21.11 render): trims now resolve via trim.getTextureId(prefix, assetId) against the
+         * armor-trims atlas, but BakedModelManager.getAtlas(...) (used to fetch that atlas) was removed,
+         * and TexturedRenderLayers.getArmorTrims(boolean) needs the new equipment draw path. Sprite
+         * lookup + draw must be rewired through AtlasManager + EquipmentRenderer. */
+        Identifier trimTexture = trim.getTextureId(leggings ? "leggings" : "armor", assetId);
     }
 
     private void renderGlint(ModelPart part, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
     {
-        part.render(matrices, vertexConsumers.getBuffer(RenderLayer.getArmorEntityGlint()), light, OverlayTexture.DEFAULT_UV);
+        /* TODO(1.21.11 render): RenderLayer.getArmorEntityGlint() was removed in the 1.21.4 equipment
+         * rewrite. The enchantment-glint overlay is now applied by the equipment render command system;
+         * neutralized until the BBS equipment draw path is ported. */
     }
 
     private BipedEntityModel getModel(EquipmentSlot slot)
@@ -153,11 +196,15 @@ public class ArmorRenderer
         return slot == EquipmentSlot.LEGS;
     }
 
-    private Identifier getArmorTexture(ArmorItem item, boolean secondLayer, String overlay)
+    private Identifier getArmorTexture(RegistryKey<EquipmentAsset> assetId, boolean secondLayer, String overlay)
     {
-        RegistryKey<ArmorMaterial> key = item.getMaterial().getKey().orElse(null);
-        String materialName = key == null ? "iron" : key.getValue().getPath();
-        String id = "textures/models/armor/" + materialName + "_layer_" + (secondLayer ? 2 : 1) + (overlay == null ? "" : "_" + overlay) + ".png";
+        /* 1.21.4+: armor textures live under textures/entity/equipment/<layer>/<asset>(.png), keyed by
+         * the equipment asset id rather than the old textures/models/armor/<material>_layer_N path. We
+         * build a best-effort id from the asset path so the draw can be wired up later; the exact layer
+         * folder is resolved by the equipment-model system at runtime. */
+        String assetName = assetId.getValue().getPath();
+        String layer = secondLayer ? "humanoid_leggings" : "humanoid";
+        String id = "textures/entity/equipment/" + layer + "/" + assetName + (overlay == null ? "" : "_" + overlay) + ".png";
 
         Identifier found = ARMOR_TEXTURE_CACHE.get(id);
 

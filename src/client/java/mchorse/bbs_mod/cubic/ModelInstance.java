@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.cubic;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.bobj.BOBJBone;
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
@@ -31,11 +31,11 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
 import net.minecraft.client.MinecraftClient;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
@@ -382,12 +382,20 @@ public class ModelInstance implements IModelInstance
             }
             else
             {
-                RenderSystem.setShader(() -> shader);
-
-
+                /* TODO(1.21.11 render): RenderSystem.setShader(...) + BufferRenderer.drawWithGlobalProgram(...)
+                 * were removed in 1.21.5+. The immediate (non-VAO) cube geometry is now built into a
+                 * BufferBuilder and drawn through the BBS model RenderLayer (which wraps the model
+                 * RenderPipeline). Verify at runtime that the layer's pipeline/UBO state matches what the
+                 * old model ShaderProgram supplied. */
                 BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-                { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+
+                BuiltBuffer built = builder.endNullable();
+
+                if (built != null)
+                {
+                    BBSShaders.getModelLayer().draw(built);
+                }
             }
         }
         else if (this.model instanceof BOBJModel model)

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -54,7 +53,9 @@ public abstract class FormRenderer <T extends Form>
         Vector3f lightA = new Vector3f(0F, 1F, -0.2F).normalize();
         Vector3f lightB = new Vector3f(-0.85F, 0.85F, 1F).normalize();
 
-        RenderSystem.setupLevelDiffuseLighting(lightA, lightB);
+        /* TODO(1.21.11 render): RenderSystem.setupLevelDiffuseLighting(Vector3f, Vector3f) was removed by
+         * the 1.21.5 pipeline rewrite (diffuse lighting is now uploaded as a GpuBufferSlice). Re-apply the
+         * lightA/lightB diffuse directions on the new pipeline foundation. */
 
         this.renderInUI(context, x1, y1, x2, y2);
 
@@ -203,13 +204,20 @@ public abstract class FormRenderer <T extends Form>
 
     protected void setupTarget(FormRenderingContext context, ShaderProgram program)
     {
+        /* TODO(1.21.11 render): GlUniform is now an interface without set(int) — per-draw uniforms are
+         * supplied through the RenderPipeline's UniformDescription / dynamic uniform buffers rather than
+         * mutated on a ShaderProgram. The picking "Target" uniform must be wired through the picker
+         * RenderPipeline once the picking path is ported. Was: program.getUniform("Target").set(getPickingIndex()). */
+        if (program == null)
+        {
+            return;
+        }
+
         GlUniform target = program.getUniform("Target");
 
         if (target != null)
         {
-            int pickingIndex = context.getPickingIndex();
-
-            target.set(pickingIndex);
+            /* no-op: uniform value upload deferred to pipeline rewrite (see TODO above) */
         }
     }
 

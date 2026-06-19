@@ -224,8 +224,9 @@ public class BOBJModelVAO
 
         ModelVAORenderer.setupUniforms(stack, shader);
 
-        shader.bind();
-
+        /* TODO(1.21.11 render): bind the model RenderPipeline (BBSShaders.getModel()) via a RenderPass
+         * here. ShaderProgram.bind()/unbind() were removed in 1.21.5+. The skinned-mesh geometry is still
+         * computed on the CPU (updateMesh) and uploaded/drawn through the raw-GL VAO below. */
         GL30.glBindVertexArray(this.vao);
 
         GL30.glEnableVertexAttribArray(Attributes.POSITION);
@@ -246,8 +247,7 @@ public class BOBJModelVAO
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
-        shader.unbind();
-
+        /* TODO(1.21.11 render): unbind/end the RenderPass that replaced ShaderProgram.unbind(). */
         GL30.glBindVertexArray(currentVAO);
         GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
     }

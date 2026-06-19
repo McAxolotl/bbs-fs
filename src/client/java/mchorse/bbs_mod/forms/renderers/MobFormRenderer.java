@@ -1,43 +1,30 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.client.BBSShaders;
-import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.MatrixStackUtils;
-import mchorse.bbs_mod.utils.PlayerUtils;
-import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.OtherClientPlayerEntity;
-import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.model.EntityModel;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.SpawnReason;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.RotationAxis;
-import org.joml.Matrix4f;
-import org.lwjgl.opengl.GL11;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -184,23 +171,30 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         try
         {
-            compound = (new StringNbtReader(new StringReader(nbt))).parseCompound();
+            /* 1.21.5: new StringNbtReader(StringReader).parseCompound() -> StringNbtReader.readCompound(String). */
+            compound = StringNbtReader.readCompound(nbt);
         }
         catch (Exception e)
         {}
 
-        this.entity = Registries.ENTITY_TYPE.get(Identifier.of(id)).create(MinecraftClient.getInstance().world);
+        /* 1.21.2: EntityType.create(World) -> create(World, SpawnReason). */
+        this.entity = Registries.ENTITY_TYPE.get(Identifier.of(id)).create(MinecraftClient.getInstance().world, SpawnReason.COMMAND);
 
         if (this.entity == null && this.form.isPlayer())
         {
             this.entity = new OtherClientPlayerEntity(MinecraftClient.getInstance().world, slim ? SLIM : WIDE);
-            this.entity.getDataTracker().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
+            /* TODO(1.21.11 render): PlayerEntity.PLAYER_MODEL_PARTS tracked-data was removed, so the
+             * model-parts (cape/jacket/sleeves) byte can no longer be set via the data tracker. The
+             * cosmetic model layers must be enabled through the new player-model/skin config when that
+             * path is ported. */
         }
 
         if (this.entity != null)
         {
             compound.putString("id", id);
-            this.entity.readNbt(compound);
+            /* TODO(1.21.11 render): Entity.readNbt(NbtCompound) was removed by the 1.21.6 persistence
+             * rewrite (NBT read now goes through ReadView). The mob's custom NBT (the user-provided
+             * mobNBT) is no longer applied. Wire this through the ReadView API once it is ported. */
             this.entity.noClip = true;
         }
     }
@@ -210,55 +204,16 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     {
         this.ensureEntity();
 
-        if (this.entity != null)
-        {
-            MatrixStack stack = context.batcher.getContext().getMatrices();
-
-            stack.push();
-
-            Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
-            CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-            float scale = this.form.uiScale.get();
-            float width = this.entity.getWidth();
-            float height = this.entity.getHeight();
-
-            scale = scale * Math.min(1.8F / Math.max(width, height), 1F);
-
-            this.applyTransforms(uiMatrix, context.getTransition());
-            MatrixStackUtils.multiply(stack, uiMatrix);
-            stack.scale(scale, scale, scale);
-
-            if (!this.form.mobID.get().equals("minecraft:ender_dragon"))
-            {
-                stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
-            }
-
-            stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
-            stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
-
-            BooleanHolder first = new BooleanHolder();
-
-            CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
-            {
-                if (!first.bool)
-                {
-                    this.bindTexture();
-
-                    first.bool = true;
-                }
-            });
-
-            consumers.setUI(true);
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
-            consumers.draw();
-            consumers.setUI(false);
-
-            CustomVertexConsumerProvider.clearRunnables();
-
-            stack.pop();
-
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        }
+        /* TODO(1.21.11 render): vanilla-entity rendering is stubbed.
+         * The 1.21.2 EntityRenderState rewrite changed
+         * EntityRenderManager.render(Entity, x, y, z, yaw, tickDelta, MatrixStack,
+         * VertexConsumerProvider, light) to
+         * render(EntityRenderState, CameraRenderState, x, y, z, MatrixStack,
+         * OrderedRenderCommandQueue) and the per-entity texture/shader hijack used here goes through
+         * CustomVertexConsumerProvider, which the old immediate VertexConsumerProvider no longer
+         * matches. Also context.batcher.getContext().getMatrices() now returns a 2D Matrix3x2fStack.
+         * Re-implement against the render-state + command-queue API once the entity-render foundation
+         * is ported. The entity is still constructed/ticked so non-render uses (bones, etc.) work. */
     }
 
     @Override
@@ -266,92 +221,18 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     {
         this.ensureEntity();
 
-        if (this.entity != null)
-        {
-            CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-            int light = context.light;
-            BooleanHolder first = new BooleanHolder();
-            Matrix4f cached = new Matrix4f(RenderSystem.getModelViewMatrix());
-
-            if (context.isPicking())
-            {
-                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
-                {
-                    if (!first.bool)
-                    {
-                        this.bindTexture();
-
-                        first.bool = true;
-                    }
-
-                    /* The picker shader must be (re)applied for every layer, not just the
-                     * first one. Entities like the piglin render held items (e.g. the golden
-                     * sword) through Minecraft's own item rendering, which adds extra render
-                     * layers. If those layers aren't forced onto the picker shader, they get
-                     * drawn with vanilla item shaders, leaking GL/shader state that breaks the
-                     * picking of any subsequent entity rendered into the stencil framebuffer. */
-                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
-                });
-
-                light = 0;
-            }
-            else
-            {
-                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
-                {
-                    if (!first.bool)
-                    {
-                        this.bindTexture();
-
-                        first.bool = true;
-                    }
-                });
-            }
-
-            context.stack.push();
-            if (context.world != null)
-            {
-                context.world.push();
-            }
-
-            if (this.form.mobID.get().equals("minecraft:ender_dragon"))
-            {
-                context.stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
-                if (context.world != null)
-                {
-                    context.world.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
-                }
-            }
-
-            if (this.entity instanceof LivingEntity entity)
-            {
-                int u = context.overlay & '\uffff';
-                int v = context.overlay >> 16 & '\uffff';
-
-                entity.hurtTime = v != 10 ? 100 : 0;
-            }
-
-            currentPose = this.form.pose.get();
-            currentPoseOverlay = this.form.poseOverlay.get();
-
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
-
-            currentPose = currentPoseOverlay = null;
-
-            consumers.draw();
-            CustomVertexConsumerProvider.clearRunnables();
-
-            context.stack.pop();
-
-            if (context.world != null)
-            {
-                context.world.pop();
-            }
-
-            RenderSystem.enableDepthTest();
-            RenderSystem.getModelViewMatrix().set(cached);
-        }
+        /* TODO(1.21.11 render): vanilla-entity rendering is stubbed (see renderInUI).
+         * This 3D path additionally relied on:
+         *  - RenderSystem.setShader(getPickerModelsProgram) + setupTarget(ShaderProgram) for picking
+         *    (ShaderProgram/GlUniform removed; the BBS picker pipeline + Target UBO uniform must
+         *    replace it);
+         *  - the per-layer CustomVertexConsumerProvider hijack to bind the entity texture and force
+         *    the picker shader on held-item sub-layers;
+         *  - EntityRenderManager.render(Entity, ..., MatrixStack, VertexConsumerProvider, light),
+         *    replaced by the render-state + OrderedRenderCommandQueue API;
+         *  - RenderSystem.getModelViewMatrix() save/restore + enableDepthTest (state is per-pipeline).
+         * Re-implement against the new entity render-state pipeline once the foundation is ported.
+         * The entity is still constructed/ticked so bone collection and tick logic keep working. */
     }
 
     @Override
@@ -363,13 +244,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             this.entity.tick();
 
-            this.entity.prevPitch = this.prevPitch;
-            this.entity.prevYaw = 0F;
+            /* 1.21.9: Entity prevPitch/prevYaw -> lastPitch/lastYaw; LivingEntity prevHeadYaw/
+             * prevBodyYaw -> lastHeadYaw/lastBodyYaw. */
+            this.entity.lastPitch = this.prevPitch;
+            this.entity.lastYaw = 0F;
 
             if (this.entity instanceof LivingEntity livingEntity)
             {
-                livingEntity.prevHeadYaw = this.prevYawHead;
-                livingEntity.prevBodyYaw = 0F;
+                livingEntity.lastHeadYaw = this.prevYawHead;
+                livingEntity.lastBodyYaw = 0F;
 
                 /* Limb swing is so ugly */
                 if (livingEntity.limbAnimator instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)

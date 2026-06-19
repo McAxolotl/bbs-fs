@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -18,7 +17,6 @@ import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -48,16 +46,14 @@ import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.ItemDisplayContext;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Vector3f;
 import org.joml.Matrix4f;
-import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -256,7 +252,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
-            MatrixStack stack = context.batcher.getContext().getMatrices();
+            /* TODO(1.21.11 render): DrawContext.getMatrices() now returns a 2D Matrix3x2fStack.
+             * UI model rendering needs a 3D MatrixStack; we build a fresh one here and feed the
+             * UI matrix into it. Compositing the result back into the 2D GUI context still needs
+             * the new GPU pipeline foundation. */
+            MatrixStack stack = new MatrixStack();
 
             stack.push();
 
@@ -279,11 +279,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             stack.scale(scale, scale, scale);
 
             BBSModClient.getTextures().bindTexture(texture);
-            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+            /* TODO(1.21.11 render): depth func is now encoded in the RenderPipeline; was GL_LEQUAL. */
 
-            Supplier<ShaderProgram> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRenderTypeEntityTranslucentCullProgram
-                : BBSShaders::getModel;
+            Supplier<ShaderProgram> mainShader = this.getMainShader(model);
 
             boolean additive = this.form.additiveColor.get();
             this.renderModel(this.entity, mainShader, stack, model, LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, true, null, context.getTransition(), null);
@@ -300,8 +298,22 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             stack.pop();
             stack.pop();
 
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            /* TODO(1.21.11 render): depth func is now encoded in the RenderPipeline; was GL_ALWAYS. */
         }
+    }
+
+    /**
+     * TODO(1.21.11 render): the model shader path moved to RenderPipeline/RenderLayer.
+     * {@link GameRenderer}'s getXxxProgram() accessors were removed and {@link BBSShaders#getModel()}
+     * now returns a {@link com.mojang.blaze3d.pipeline.RenderPipeline}. {@link ModelInstance#render}
+     * still consumes a {@code Supplier<ShaderProgram>}, so until the model render path is rebuilt on the
+     * new pipeline this returns a null shader (rendering is a no-op). The old selection was:
+     * {@code ((isIrisShadersEnabled() && isRenderingWorld()) || !model.isVAORendered())} ->
+     * entity-translucent-cull program, else BBSShaders::getModel.
+     */
+    private Supplier<ShaderProgram> getMainShader(ModelInstance model)
+    {
+        return () -> null;
     }
 
     private void renderModel(IEntity target, Supplier<ShaderProgram> program, MatrixStack stack, ModelInstance model, int light, int overlay, Color contextColor, Color formColor, boolean additive, boolean ui, StencilMap stencilMap, float transition, MatrixStack world)
@@ -314,17 +326,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         FormColorBlend.BlendMode blendMode = additive ? FormColorBlend.BlendMode.BRIGHTEN : FormColorBlend.BlendMode.MULTIPLY;
         FormColorBlend.blend(finalColor, formColor, blendMode);
 
-        if (!model.culling)
-        {
-            RenderSystem.disableCull();
-        }
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
-
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
+        /* TODO(1.21.11 render): cull/blend state and lightmap/overlay binding are now encoded in the
+         * RenderPipeline (model.culling toggled cull; blend was default-func enabled; lightmap+overlay
+         * were enabled here). Re-apply on the new pipeline foundation. */
 
         MatrixStack newStack = new MatrixStack();
 
@@ -350,22 +354,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             ModelIKDebug.render(newStack, model.model, ikMap, "");
         }
 
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
-        RenderSystem.disableBlend();
-
-        if (!model.culling)
-        {
-            RenderSystem.enableCull();
-        }
+        /* TODO(1.21.11 render): teardown of lightmap/overlay/blend/cull was here; now pipeline-encoded. */
 
         /* Render items */
         this.captureMatrices(model);
 
         if (stencilMap == null)
         {
-            this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ModelTransformationMode.THIRD_PERSON_RIGHT_HAND, model.itemsMain, finalColor, overlay, light);
-            this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ModelTransformationMode.THIRD_PERSON_LEFT_HAND, model.itemsOff, finalColor, overlay, light);
+            this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, model.itemsMain, finalColor, overlay, light);
+            this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, model.itemsOff, finalColor, overlay, light);
 
             for (Map.Entry<ArmorType, ArmorSlot> entry : model.armorSlots.entrySet())
             {
@@ -488,7 +485,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             MatrixStackUtils.applyTransform(stack, armorSlot.transform);
             stack.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180F));
 
-            CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+            /* TODO(1.21.11 render): blend/depth state is now pipeline-encoded; hijack hook left as a no-op. */
+            CustomVertexConsumerProvider.hijackVertexFormat((l) -> {});
 
             ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, consumers, target, type.slot, type, light);
             consumers.draw();
@@ -496,13 +494,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             CustomVertexConsumerProvider.clearRunnables();
 
             stack.pop();
-
-            RenderSystem.enableBlend();
-            RenderSystem.enableDepthTest();
         }
     }
 
-    private void renderItems(IEntity target, ModelInstance model, MatrixStack stack, EquipmentSlot slot, ModelTransformationMode mode, List<ArmorSlot> items, Color color, int overlay, int light)
+    private void renderItems(IEntity target, ModelInstance model, MatrixStack stack, EquipmentSlot slot, ItemDisplayContext mode, List<ArmorSlot> items, Color color, int overlay, int light)
     {
         ItemStack itemStack = target.getEquipmentStack(slot);
 
@@ -526,31 +521,23 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 stack.translate(0F, 0.125F, 0F);
                 MatrixStackUtils.applyTransform(stack, armorSlot.transform);
 
-                CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+                /* TODO(1.21.11 render): blend state now pipeline-encoded; hijack hook left as a no-op. */
+                CustomVertexConsumerProvider.hijackVertexFormat((l) -> {});
 
                 consumers.setSubstitute(BBSRendering.getColorConsumer(color));
 
-                /* For some reason, due to Sodium and my color consumer, in some cases items like Trident,
-                 * shield, etc. not get rendered, but if in another arm there is another item, it does render...
-                 * So, I render a 0 size oak button to circumvent that bug! */
-                if (model.model instanceof BOBJModel)
-                {
-                    stack.push();
-                    stack.scale(0F, 0F, 0F);
-                    MinecraftClient.getInstance().getItemRenderer().renderItem(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND, stack, consumers, target.getWorld(), light, overlay, 0);
-                    consumers.draw();
-                    stack.pop();
-                }
-
-                MinecraftClient.getInstance().getItemRenderer().renderItem(null, itemStack, mode, mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND, stack, consumers, target.getWorld(), light, overlay, 0);
+                /* TODO(1.21.11 render): ItemRenderer.renderItem(entity, stack, mode, leftHanded, matrices,
+                 * vcp, world, light, overlay, seed) was removed by the 1.21.4 item-model rewrite. Item
+                 * rendering (incl. the 0-size OAK_BUTTON Sodium workaround for the BOBJModel case) needs to
+                 * be reimplemented against the new ItemRenderState / SpecialModelRenderer system.
+                 * Neutralized for build-only; held items currently do not render. mode/leftHanded was:
+                 * mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND. */
                 consumers.draw();
                 consumers.setSubstitute(null);
 
                 CustomVertexConsumerProvider.clearRunnables();
 
                 stack.pop();
-
-                RenderSystem.enableDepthTest();
             }
         }
     }
@@ -602,12 +589,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             BBSModClient.getTextures().bindTexture(texture);
 
-            Supplier<ShaderProgram> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRenderTypeEntityTranslucentCullProgram
-                : BBSShaders::getModel;
+            Supplier<ShaderProgram> mainShader = this.getMainShader(model);
 
-            RenderSystem.enableDepthTest();
-            RenderSystem.enableBlend();
+            /* TODO(1.21.11 render): depth-test/blend now pipeline-encoded. */
 
             boolean additive = this.form.additiveColor.get();
             this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.DEFAULT_UV, contextColor, formColor, additive, false, null, 0F, null);
@@ -659,10 +643,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             BBSModClient.getTextures().bindTexture(texture);
 
-            Supplier<ShaderProgram> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRenderTypeEntityTranslucentCullProgram
-                : BBSShaders::getModel;
-            Supplier<ShaderProgram> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
+            Supplier<ShaderProgram> mainShader = this.getMainShader(model);
+            /* TODO(1.21.11 render): picker shader is now BBSShaders.getPickerModelsProgram() -> RenderPipeline.
+             * ModelInstance.render still wants Supplier<ShaderProgram>; picking path stubbed (null) until ported. */
+            Supplier<ShaderProgram> shader = this.getShader(context, mainShader, () -> null);
 
             this.renderModel(context.entity, shader, context.stack, model, context.light, context.overlay, contextColor, formColor, additive, false, context.stencilMap, context.getTransition(), context.world);
         }

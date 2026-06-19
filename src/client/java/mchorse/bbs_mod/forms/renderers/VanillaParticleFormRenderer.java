@@ -75,7 +75,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
 
         Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
 
-        translation.add(camera.getPos().x, camera.getPos().y, camera.getPos().z);
+        translation.add(camera.getCameraPos().x, camera.getCameraPos().y, camera.getCameraPos().z);
         context.stack.push();
         context.stack.loadIdentity();
         context.stack.multiplyPositionMatrix(new Matrix4f(InverseView.get()).invert());
@@ -141,7 +141,10 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                     double y = this.pos.y + temp3f.y;
                     double z = this.pos.z + temp3f.z;
 
-                    world.addParticle(effect, true, x, y, z, v.x, v.y, v.z);
+                    /* 1.21.x: World.addParticle(effect, alwaysSpawn, x..., v...) -> addParticleClient
+                     * which split the old alwaysSpawn flag into (alwaysSpawn, important/force). Keep
+                     * alwaysSpawn=true and force=false to match the prior 8-arg behaviour. */
+                    world.addParticleClient(effect, true, false, x, y, z, v.x, v.y, v.z);
                 }
 
                 this.tick = frequency;

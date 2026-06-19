@@ -1,12 +1,8 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
-import mchorse.bbs_mod.graphics.InverseView;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
-import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
 
 public class ModelVAORenderer
@@ -18,9 +14,11 @@ public class ModelVAORenderer
 
         setupUniforms(stack, shader);
 
-        shader.bind();
-        modelVAO.render(shader.getFormat(), r, g, b, a, light, overlay);
-        shader.unbind();
+        /* TODO(1.21.11 render): the model RenderPipeline (BBSShaders.getModel()) must be bound via
+         * RenderSystem.getDevice()/RenderPass before issuing the raw-GL VAO draw. ShaderProgram.bind()/
+         * unbind() no longer exist in 1.21.5+. The VAO geometry is still uploaded/drawn via raw GL below;
+         * wire the pipeline bind + UBO uploads here once the GPU-pipeline foundation is in place. */
+        modelVAO.render(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, r, g, b, a, light, overlay);
 
         GL30.glBindVertexArray(currentVAO);
         GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
@@ -28,74 +26,22 @@ public class ModelVAORenderer
 
     public static void setupUniforms(MatrixStack stack, ShaderProgram shader)
     {
-        for (int i = 0; i < 12; i++)
-        {
-            shader.addSampler("Sampler" + i, RenderSystem.getShaderTexture(i));
-        }
-
-        if (shader.projectionMat != null)
-        {
-            shader.projectionMat.set(RenderSystem.getProjectionMatrix());
-        }
-
-        if (shader.modelViewMat != null)
-        {
-            shader.modelViewMat.set(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix()));
-        }
-
-        /* NormalMat is present by default in Iris' shaders, but when there is no Iris,
-         * the BBS mod's model.json shader is being used instead that provides NormalMat
-         * uniform.
-         */
-        GlUniform normalUniform = shader.getUniform("NormalMat");
-
-        if (normalUniform != null)
-        {
-            normalUniform.set(stack.peek().getNormalMatrix());
-        }
-
-        GlUniform viewRotationUniform = shader.getUniform("ViewRotationMat");
-
-        if (viewRotationUniform != null)
-        {
-            viewRotationUniform.set(InverseView.get());
-        }
-
-        if (shader.fogStart != null)
-        {
-            shader.fogStart.set(RenderSystem.getShaderFogStart());
-        }
-
-        if (shader.fogEnd != null)
-        {
-            shader.fogEnd.set(RenderSystem.getShaderFogEnd());
-        }
-
-        if (shader.fogColor != null)
-        {
-            shader.fogColor.set(RenderSystem.getShaderFogColor());
-        }
-
-        if (shader.fogShape != null)
-        {
-            shader.fogShape.set(RenderSystem.getShaderFogShape().getId());
-        }
-
-        if (shader.colorModulator != null)
-        {
-            shader.colorModulator.set(1F, 1F, 1F, 1F);
-        }
-
-        if (shader.gameTime != null)
-        {
-            shader.gameTime.set(RenderSystem.getShaderGameTime());
-        }
-
-        if (shader.textureMat != null)
-        {
-            shader.textureMat.set(RenderSystem.getTextureMatrix());
-        }
-
-        RenderSystem.setupShaderLights(shader);
+        /* TODO(1.21.11 render): the entire imperative uniform/sampler/fog/light setup below was removed
+         * in 1.21.5+. ShaderProgram no longer exposes the public uniform fields (projectionMat,
+         * modelViewMat, fogStart/End/Color/Shape, colorModulator, gameTime, textureMat) nor addSampler();
+         * GlUniform is now a near-empty interface (no set(...)); and RenderSystem.getShaderTexture/
+         * getProjectionMatrix, getShaderFog, getShaderGameTime, getTextureMatrix, setupShaderLights were all
+         * deleted. These built-in uniforms now live in std140 UBOs (Projection / Fog / Lighting /
+         * DynamicTransforms) and the custom ones (NormalMat, ViewRotationMat, ColorModulator, light
+         * directions) must be supplied as RenderPipeline UBO entries / DynamicUniforms and uploaded per
+         * RenderPass. Restore this when the GPU-pipeline foundation is wired up.
+         *
+         * The matrices that were fed in (preserved for the migration):
+         *   ProjectionMat  = RenderSystem.getProjectionMatrix()
+         *   ModelViewMat   = RenderSystem.getModelViewMatrix() * stack.peek().getPositionMatrix()
+         *   NormalMat      = stack.peek().getNormalMatrix()
+         *   ViewRotationMat= InverseView.get()
+         *   ColorModulator = (1, 1, 1, 1)
+         * plus fog (start/end/color/shape), gameTime, textureMatrix and the 12 Sampler bindings. */
     }
 }

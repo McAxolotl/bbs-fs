@@ -1,7 +1,10 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.client.BBSShaders;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.LabelForm;
@@ -14,13 +17,15 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -28,6 +33,34 @@ import java.util.List;
 
 public class LabelFormRenderer extends FormRenderer<LabelForm>
 {
+    /* ----------------------------------------------------------------------------------------
+     * 1.21.11 render: the label background box used GameRenderer::getPositionColorProgram via
+     * RenderSystem.setShader + BufferRenderer.drawWithGlobalProgram (both removed). It is now drawn
+     * through a BBS-owned POSITION_COLOR pipeline wrapped in a RenderLayer.
+     * ---------------------------------------------------------------------------------------- */
+    private static final RenderPipeline SHADOW_PIPELINE = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/label_shadow"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BlendFunction.TRANSLUCENT)
+            .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer shadowLayer;
+
+    private static RenderLayer getShadowLayer()
+    {
+        if (shadowLayer == null)
+        {
+            shadowLayer = RenderLayer.of(BBSMod.MOD_ID + "_label_shadow",
+                RenderSetup.builder(SHADOW_PIPELINE).translucent().build());
+        }
+
+        return shadowLayer;
+    }
+
     public static void fillQuad(BufferBuilder builder, MatrixStack stack, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3, float x4, float y4, float z4, float r, float g, float b, float a)
     {
         Matrix4f matrix4f = stack.peek().getPositionMatrix();
@@ -94,16 +127,16 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         MatrixStackUtils.scaleStack(context.stack, scale, -scale, scale);
 
-        RenderSystem.disableCull();
+        /* TODO(1.21.11 render): RenderSystem.disableCull/enableCull removed; cull is now per-pipeline
+         * state. Text renders through the vanilla text RenderLayer which sets its own cull. */
 
         if (context.isPicking())
         {
-            CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
-            {
-                this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
-            });
-
+            /* TODO(1.21.11 render): picking via RenderSystem.setShader(getPickerModelsProgram) and
+             * setupTarget(ShaderProgram) is gone (ShaderProgram/GlUniform removed). The picker
+             * pipeline (BBSShaders.getPickerModelsLayer) must be applied through the new
+             * CustomVertexConsumerProvider layer override + a per-pass Target UBO uniform once the
+             * picking foundation lands. Neutralized so the label still renders normally. */
             light = 0;
         }
 
@@ -118,8 +151,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         CustomVertexConsumerProvider.clearRunnables();
 
-        RenderSystem.enableDepthTest();
-        RenderSystem.enableCull();
+        /* TODO(1.21.11 render): RenderSystem.enableDepthTest/enableCull removed (per-pipeline now). */
 
         context.stack.pop();
     }
@@ -169,7 +201,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             light
         );
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.enableDepthTest removed (per-pipeline now). */
 
         consumers.draw();
 
@@ -268,7 +300,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         consumers.draw();
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.enableDepthTest removed (per-pipeline now). */
 
         this.renderShadow(context, x, y, w, h);
     }
@@ -300,10 +332,15 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             color.r, color.g, color.b, color.a
         );
 
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        /* Was: enableBlend + enableDepthTest + setShader(getPositionColorProgram) +
+         * drawWithGlobalProgram. The POSITION_COLOR pipeline now encodes blend + depth test. */
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            getShadowLayer().draw(built);
+        }
+
         context.stack.pop();
     }
 }

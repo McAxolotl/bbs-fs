@@ -13,18 +13,15 @@ import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
-
-import java.util.function.Supplier;
 
 public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements ITickable
 {
@@ -89,7 +86,11 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
         if (emitter != null)
         {
-            MatrixStack stack = context.batcher.getContext().getMatrices();
+            /* DrawContext.getMatrices() is now a 2D Matrix3x2fStack (1.21.5 UI rewrite), but the
+             * emitter renders 3D quads through a 3D MatrixStack. Build a dedicated 3D stack here.
+             * TODO(1.21.11 render): verify at runtime — the previous 2D UI matrix offset/scale is
+             * not folded in, so the preview may need its transform re-derived from the UI matrix. */
+            MatrixStack stack = new MatrixStack();
             int scale = (y2 - y1) / 2;
 
             stack.push();
@@ -138,10 +139,10 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
             translation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
 
-            GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
-
-            gameRenderer.getLightmapTextureManager().enable();
-            gameRenderer.getOverlayTexture().setupOverlayColor();
+            /* 1.21.5: LightmapTextureManager.enable()/OverlayTexture.setupOverlayColor() were removed
+             * along with the imperative GL texture-unit binding. The lightmap and overlay textures are
+             * now bound automatically as samplers by the RenderLayer's pipeline (the BBS billboard
+             * layer declares useLightmap()/useOverlay()), so there is nothing to enable/teardown here. */
 
             context.stack.push();
             context.stack.loadIdentity();
@@ -161,18 +162,23 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
                 boolean shadersEnabled = BBSRendering.isIrisShadersEnabled();
 
                 VertexFormat format = shadersEnabled ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_COLOR_LIGHT;
-                Supplier<ShaderProgram> shader = shadersEnabled
-                    ? this.getShader(context, GameRenderer::getRenderTypeEntityTranslucentProgram, BBSShaders::getPickerBillboardProgram)
-                    : this.getShader(context, GameRenderer::getParticleProgram, BBSShaders::getPickerParticlesProgram);
+
+                /* 1.21.5: ParticleEmitter.render now takes the target RenderLayer directly instead of a
+                 * Supplier<ShaderProgram> (ShaderProgram + GameRenderer.getXxxProgram() were removed).
+                 * The shaders path uses the billboard layer, the no-shaders path the particles layer.
+                 * TODO(1.21.11 render): the old picking branch routed through getShader()/setupTarget()
+                 * to upload the per-object Target uniform. That uniform must now be supplied via the
+                 * pipeline's UBO/DynamicUniforms; for picking we still select the picker layer so the
+                 * correct pipeline is bound, but the Target index upload needs wiring at runtime. */
+                RenderLayer layer = shadersEnabled
+                    ? BBSShaders.getPickerBillboardLayer()
+                    : BBSShaders.getPickerParticlesLayer();
 
                 emitter.setupCameraProperties(context.camera);
-                emitter.render(format, shader, context.stack, context.overlay, context.getTransition());
+                emitter.render(format, layer, context.stack, context.overlay, context.getTransition());
             }
 
             context.stack.pop();
-
-            gameRenderer.getLightmapTextureManager().disable();
-            gameRenderer.getOverlayTexture().teardownOverlayColor();
         }
     }
 

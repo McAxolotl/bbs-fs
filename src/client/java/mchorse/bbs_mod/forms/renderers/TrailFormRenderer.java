@@ -9,16 +9,23 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.TrailForm;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -33,6 +40,79 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 {
     private int tick;
     private final Map<FormRenderType, ArrayDeque<Trail>> record = new HashMap<>();
+
+    /* ----------------------------------------------------------------------------------------
+     * 1.21.11 render: RenderSystem.setShader + BufferRenderer.drawWithGlobalProgram were removed.
+     * Immediate-mode geometry is now built into a BufferBuilder, finished into a BuiltBuffer and
+     * submitted through a RenderLayer carrying a RenderPipeline. These BBS-owned pipelines replace
+     * the old GameRenderer::getPositionColorProgram / getPositionTexProgram usage.
+     * ---------------------------------------------------------------------------------------- */
+    private static final BlendFunction BLEND = BlendFunction.TRANSLUCENT;
+
+    /* POSITION_COLOR / TRIANGLES, no depth test (the axes path did RenderSystem.disableDepthTest()). */
+    private static final RenderPipeline AXES_PIPELINE = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/trail_axes"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    /* POSITION_TEXTURE / QUADS, depth-tested (the trail strip path enabled depth test + blend).
+     * TODO(1.21.11 render): this is seeded from POSITION_TEX_COLOR_SNIPPET because there is no
+     * position-tex-only snippet exposed; the buffer below writes POSITION_TEXTURE (no color attr) and
+     * binds the trail texture globally (no sampler declared here). Verify at runtime: a dedicated
+     * textured position-tex pipeline (sampler + matching vertex format) is likely needed before the
+     * trail samples its texture correctly. */
+    private static final RenderPipeline TRAIL_PIPELINE = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_TEX_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/trail_strip"))
+            .withVertexFormat(VertexFormats.POSITION_TEXTURE, VertexFormat.DrawMode.QUADS)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer axesLayer;
+    private static RenderLayer trailLayer;
+
+    private static RenderLayer getAxesLayer()
+    {
+        if (axesLayer == null)
+        {
+            axesLayer = RenderLayer.of(BBSMod.MOD_ID + "_trail_axes",
+                RenderSetup.builder(AXES_PIPELINE).translucent().build());
+        }
+
+        return axesLayer;
+    }
+
+    private static RenderLayer getTrailLayer()
+    {
+        if (trailLayer == null)
+        {
+            trailLayer = RenderLayer.of(BBSMod.MOD_ID + "_trail_strip",
+                RenderSetup.builder(TRAIL_PIPELINE).translucent().build());
+        }
+
+        return trailLayer;
+    }
+
+    /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
+    private static void flush(BufferBuilder builder, RenderLayer layer)
+    {
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            /* TODO(1.21.11 render): verify at runtime. RenderLayer.draw uploads + draws with the
+             * layer pipeline; previously this was BufferRenderer.drawWithGlobalProgram. */
+            layer.draw(built);
+        }
+    }
 
     public TrailFormRenderer(TrailForm form)
     {
@@ -85,10 +165,10 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             Draw.fillBox(builder, stack, -outlineOffset, -outlineSize, -outlineOffset, outlineOffset, outlineSize, outlineOffset, 0, 0, 0);
             Draw.fillBox(builder, stack, -axisOffset, -axisSize, -axisOffset, axisOffset, axisSize, axisOffset, 0, 1, 0);
 
-            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-            RenderSystem.disableDepthTest();
-
-            { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+            /* Was: RenderSystem.setShader(getPositionColorProgram) + disableDepthTest +
+             * BufferRenderer.drawWithGlobalProgram. The no-depth POSITION_COLOR pipeline now
+             * encodes both the shader and the disabled depth test. */
+            flush(builder, getAxesLayer());
 
             return;
         }
@@ -184,6 +264,11 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
 
+        /* TODO(1.21.11 render): the texture was previously bound globally via
+         * BBSModClient.getTextures().bindTexture(...) and consumed by the position-tex shader. The
+         * BBS trail pipeline does not declare a sampler, so the trail texture is not yet sampled.
+         * Wire a textured pipeline (sampler + per-draw texture binding) when the picking/texture
+         * foundation lands. */
         for (it = trails.iterator(); it.hasNext(); last = trail)
         {
             trail = it.next();
@@ -242,11 +327,10 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             }
         }
 
-        RenderSystem.setShader(GameRenderer::getPositionTexProgram);
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableBlend();
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-        RenderSystem.enableDepthTest();
+        /* Was: setShader(getPositionTexProgram) + defaultBlendFunc + enableBlend +
+         * drawWithGlobalProgram + enableDepthTest. The trail pipeline now encodes the shader,
+         * translucent blend and depth test. */
+        flush(builder, getTrailLayer());
 
         stack.pop();
     }

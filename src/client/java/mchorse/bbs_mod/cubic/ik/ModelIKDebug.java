@@ -1,6 +1,10 @@
 package mchorse.bbs_mod.cubic.ik;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
@@ -10,13 +14,15 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -48,8 +54,98 @@ public final class ModelIKDebug
 
     public static boolean enabled;
 
+    /* Ported to 1.21.11: 1.21.5 removed RenderSystem.setShader/state toggles and
+     * BufferRenderer.drawWithGlobalProgram. Immediate-mode geometry is now built into a
+     * BufferBuilder, finished into a BuiltBuffer, and submitted through a RenderLayer carrying a
+     * RenderPipeline (the pipeline encodes the old depth-test/blend/cull state). This overlay always
+     * drew with depth-test disabled (so the gizmos sit on top), no cull and translucent blend, so we
+     * register two POSITION_COLOR no-depth pipelines: one for the joint/goal triangles and one for the
+     * chain lines. Mirrors mchorse.bbs_mod.graphics.Draw. */
+    private static final RenderPipeline POSITION_COLOR_TRIS_NO_DEPTH = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/ik_debug_position_color_tris"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BlendFunction.TRANSLUCENT)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static final RenderPipeline POSITION_COLOR_LINES_NO_DEPTH = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/ik_debug_position_color_lines"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.DEBUG_LINES)
+            .withBlend(BlendFunction.TRANSLUCENT)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    /* The picking pass encodes the object index as the exact vertex colour, so blend MUST be off
+     * (a blended pixel would corrupt the id read back from the framebuffer). Depth-test stays
+     * disabled to match the visual overlay. */
+    private static final RenderPipeline POSITION_COLOR_STENCIL = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/ik_debug_position_color_stencil"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withoutBlend()
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer trisLayer;
+    private static RenderLayer linesLayer;
+    private static RenderLayer stencilLayer;
+
     private ModelIKDebug()
     {
+    }
+
+    private static RenderLayer getTrisLayer()
+    {
+        if (trisLayer == null)
+        {
+            trisLayer = RenderLayer.of(BBSMod.MOD_ID + "_ik_debug_tris",
+                RenderSetup.builder(POSITION_COLOR_TRIS_NO_DEPTH).translucent().build());
+        }
+
+        return trisLayer;
+    }
+
+    private static RenderLayer getLinesLayer()
+    {
+        if (linesLayer == null)
+        {
+            linesLayer = RenderLayer.of(BBSMod.MOD_ID + "_ik_debug_lines",
+                RenderSetup.builder(POSITION_COLOR_LINES_NO_DEPTH).translucent().build());
+        }
+
+        return linesLayer;
+    }
+
+    private static RenderLayer getStencilLayer()
+    {
+        if (stencilLayer == null)
+        {
+            stencilLayer = RenderLayer.of(BBSMod.MOD_ID + "_ik_debug_stencil",
+                RenderSetup.builder(POSITION_COLOR_STENCIL).build());
+        }
+
+        return stencilLayer;
+    }
+
+    /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
+    private static void flush(BufferBuilder builder, RenderLayer layer)
+    {
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            /* TODO(1.21.11 render): verify at runtime. RenderLayer.draw uploads + draws with the
+             * layer pipeline; previously this was BufferRenderer.drawWithGlobalProgram. */
+            layer.draw(built);
+        }
     }
 
     public static void render(MatrixStack stack, IModel model, MapType ikData, String selectedTip)
@@ -68,11 +164,8 @@ public final class ModelIKDebug
 
         Map<String, PivotFrame> frames = collectFrames(model, compiled);
 
-        RenderSystem.disableDepthTest();
-        RenderSystem.disableCull();
-        RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
+        /* Depth-test/cull/blend state now lives in the layer pipelines (no-depth, no-cull,
+         * translucent), so the old RenderSystem toggles are gone. */
         stack.push();
 
         if (model instanceof BOBJModel)
@@ -86,9 +179,6 @@ public final class ModelIKDebug
         }
 
         stack.pop();
-
-        RenderSystem.enableCull();
-        RenderSystem.enableDepthTest();
     }
 
     private static Map<String, PivotFrame> collectFrames(IModel model, ModelIKCache.Compiled compiled)
@@ -130,9 +220,7 @@ public final class ModelIKDebug
 
         Map<String, PivotFrame> frames = collectFrames(model, compiled);
 
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
+        /* Depth-test disabled (and blend off) is encoded in the stencil layer's pipeline. */
         stack.push();
 
         if (model instanceof BOBJModel)
@@ -159,11 +247,9 @@ public final class ModelIKDebug
             stencilMap.addPicking(form, chain.target());
         }
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        flush(builder, getStencilLayer());
 
         stack.pop();
-
-        RenderSystem.enableDepthTest();
     }
 
     /** Clickable goal half-size, scaled to the bone span so it fits any rig. */
@@ -232,7 +318,7 @@ public final class ModelIKDebug
 
         addLine(lines, matrix, tip, target, GOAL, 0.4F * a);
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = lines.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        flush(lines, getLinesLayer());
 
         /* Solid spheres: joints, the accented effector, and the goal. */
         BufferBuilder dots = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
@@ -245,7 +331,7 @@ public final class ModelIKDebug
         orb(dots, stack, tip, unit * 0.1F, EFFECTOR, a);
         orb(dots, stack, target, unit * 0.12F, GOAL, a);
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = dots.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        flush(dots, getTrisLayer());
     }
 
     private static void orb(BufferBuilder builder, MatrixStack stack, Vector3f p, float radius, float[] col, float a)

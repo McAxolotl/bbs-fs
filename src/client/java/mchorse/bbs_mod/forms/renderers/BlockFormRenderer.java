@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BlockForm;
@@ -29,10 +27,13 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        context.batcher.getContext().draw();
-
+        /* DrawContext.draw() was removed in the 1.21.5 UI rewrite (immediate draws are flushed by the
+         * engine); the previous flush before block rendering is no longer available here. */
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-        MatrixStack matrices = context.batcher.getContext().getMatrices();
+        /* DrawContext.getMatrices() now returns a 2D Matrix3x2fStack; the block renders through a 3D
+         * MatrixStack, so build a dedicated one and apply the UI matrix to it.
+         * TODO(1.21.11 render): verify at runtime — the 2D UI stack transform is not folded in. */
+        MatrixStack matrices = new MatrixStack();
 
         Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
 
@@ -78,15 +79,19 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         {
             CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
             {
-                this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
+                /* TODO(1.21.11 render): RenderSystem.setShader and ShaderProgram-based setupTarget were
+                 * removed in 1.21.5. The picker_models pipeline must be bound via its RenderLayer and the
+                 * per-object Target uniform supplied through the pipeline's UBO/DynamicUniforms. Neutralized
+                 * here so the block still renders (vanilla pipeline); picking selection needs runtime wiring. */
             });
 
             light = 0;
         }
         else
         {
-            CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+            /* TODO(1.21.11 render): RenderSystem.enableBlend() is gone; blend state now lives in each
+             * RenderLayer's RenderPipeline. No imperative blend toggle needed here. */
+            CustomVertexConsumerProvider.hijackVertexFormat((l) -> {});
         }
 
         color.set(context.color);
@@ -105,6 +110,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             context.world.pop();
         }
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.enableDepthTest() was removed in 1.21.5; depth testing is
+         * now encoded per RenderLayer via DepthTestFunction on its pipeline. No restore needed here. */
     }
 }
