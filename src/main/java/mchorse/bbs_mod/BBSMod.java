@@ -200,7 +200,7 @@ public class BBSMod implements ModInitializer
 
     public static final GameRule<Boolean> BBS_EDITING_RULE = GameRuleBuilder.forBoolean(true)
         .category(GameRuleCategory.MISC)
-        .buildAndRegister(Identifier.of(MOD_ID, "bbsEditing"));
+        .buildAndRegister(Identifier.of(MOD_ID, "bbs_editing"));
 
     public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = Registry.register(
         Registries.BLOCK_ENTITY_TYPE,

@@ -109,6 +109,10 @@ public class BBSModClient implements ClientModInitializer
     private static KeyBinding keyTeleport;
     private static KeyBinding keyZoom;
 
+    /* NOTE(1.21.11 port): KeyBinding categories are now registered objects (KeyBinding.Category.create);
+     * create once and reuse, otherwise re-registering the same id throws "already registered". */
+    private static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(Identifier.of(BBSMod.MOD_ID, "main"));
+
     private static UIDashboard dashboard;
 
     private static CameraController cameraController = new CameraController();
@@ -682,7 +686,7 @@ public class BBSModClient implements ClientModInitializer
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.KEYSYM,
             key,
-            KeyBinding.Category.create(Identifier.of(BBSMod.MOD_ID, "main"))
+            KEY_CATEGORY
         ));
     }
 
@@ -692,7 +696,7 @@ public class BBSModClient implements ClientModInitializer
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.MOUSE,
             button,
-            KeyBinding.Category.create(Identifier.of(BBSMod.MOD_ID, "main"))
+            KEY_CATEGORY
         ));
     }
 

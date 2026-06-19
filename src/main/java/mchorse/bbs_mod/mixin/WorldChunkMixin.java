@@ -27,10 +27,10 @@ public class WorldChunkMixin
      * serializing any later would capture empty data. The replaced block state, on the other hand, is read
      * from the return value rather than from getBlockState - by the time the change is recorded the chunk
      * already holds the new state, and on Connector the injection even lands after the section write. */
-    private static final String SET_BLOCK_STATE = "setBlockState(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;Z)Lnet/minecraft/block/BlockState;";
+    private static final String SET_BLOCK_STATE = "setBlockState(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)Lnet/minecraft/block/BlockState;";
 
     @Inject(method = SET_BLOCK_STATE, at = @At("HEAD"))
-    private void captureReplacedBlockEntity(BlockPos pos, BlockState state, boolean moved, CallbackInfoReturnable<BlockState> info, @Share("replaced") LocalRef<NbtCompound> replaced)
+    private void captureReplacedBlockEntity(BlockPos pos, BlockState state, int moved, CallbackInfoReturnable<BlockState> info, @Share("replaced") LocalRef<NbtCompound> replaced)
     {
         WorldChunk chunk = (WorldChunk) (Object) this;
 
@@ -46,7 +46,7 @@ public class WorldChunkMixin
     }
 
     @Inject(method = SET_BLOCK_STATE, at = @At("RETURN"))
-    private void recordChangedBlock(BlockPos pos, BlockState state, boolean moved, CallbackInfoReturnable<BlockState> info, @Share("replaced") LocalRef<NbtCompound> replaced)
+    private void recordChangedBlock(BlockPos pos, BlockState state, int moved, CallbackInfoReturnable<BlockState> info, @Share("replaced") LocalRef<NbtCompound> replaced)
     {
         BlockState previous = info.getReturnValue();
         WorldChunk chunk = (WorldChunk) (Object) this;
