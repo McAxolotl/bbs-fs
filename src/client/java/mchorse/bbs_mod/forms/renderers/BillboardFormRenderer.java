@@ -84,19 +84,22 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             shading = true;
         }
 
-        VertexFormat format = shading ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_LIGHT_COLOR;
+        /* 1.21.11 render: the no-shading billboard path (POSITION_TEXTURE_LIGHT_COLOR) has no dedicated
+         * non-picker BBS RenderLayer. The 1.21.1 original drew it via the vanilla
+         * getPositionTexLightmapColorProgram and used picker_billboard_no_shading ONLY for picking; the
+         * build-only port stood in the picker layer for the normal draw too. That pipeline now declares
+         * the BBSPicker UBO and cannot be drawn through the immediate RenderLayer path, so the no-shading
+         * normal path is skipped until a proper non-picker layer is added (it already drew nothing while
+         * the picker pipeline was a #version 150 no-op, so this is not a regression). Picker billboard
+         * draws go through BBSPickerRenderer. The shaded path (the common case) is unchanged. */
+        if (!shading)
+        {
+            return;
+        }
 
-        /* TODO(1.21.11 render): the old getShader(...) picking path (ShaderProgram + Target GlUniform
-         * via setupTarget) is gone. When picking, the picker billboard layers
-         * (BBSShaders.getPickerBillboard[NoShading]Layer) must be selected and their Target UBO
-         * uniform supplied per pass. For now route both paths through the BBS model/no-shading layer.
-         * The no-shading format (POSITION_TEXTURE_LIGHT_COLOR) has no dedicated non-picker BBS layer,
-         * so it borrows the picker-no-shading layer (same vertex format) as a stand-in. */
-        Supplier<RenderLayer> shader = shading
-            ? BBSShaders::getModelLayer
-            : BBSShaders::getPickerBillboardNoShadingLayer;
+        VertexFormat format = VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL;
 
-        this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
+        this.renderModel(format, BBSShaders::getModelLayer, context.stack, context.overlay, context.light, context.color, context.getTransition());
     }
 
     private void renderModel(VertexFormat format, Supplier<RenderLayer> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)

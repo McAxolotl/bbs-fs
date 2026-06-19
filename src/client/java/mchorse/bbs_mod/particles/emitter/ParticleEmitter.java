@@ -459,16 +459,18 @@ public class ParticleEmitter
                 render.renderUI(this.uiParticle, builder, matrix, transition);
             }
 
-            /* TODO(1.21.11 render): verify at runtime. The old path bound this emitter's texture
-             * via bindTexture() + GameRenderer::getPositionTexColorProgram and drew through the
-             * global buffer. Pipelines now sample from a RenderLayer's own texture/sampler set; the
-             * picker-particles BBS layer is the closest POSITION_TEXTURE_COLOR-ish equivalent, but
-             * the per-emitter texture-to-Sampler0 binding still needs wiring in the new layer. */
+            /* TODO(1.21.11 render): the on-screen UI particle render (POSITION_TEXTURE_COLOR) had stood
+             * in the picker_particles layer as a normal draw during the build-only port. That pipeline now
+             * declares the BBSPicker UBO and can no longer be drawn through the immediate RenderLayer path
+             * (it would assert on the unbound custom uniform), and picker shaders only ever emit a
+             * Target-index colour anyway — never the texture. Route this through a proper non-picker
+             * POSITION_TEXTURE_COLOR layer once one exists; drop the buffer for now (this path already drew
+             * nothing while the picker pipeline was a #version 150 no-op, so behaviour is unchanged). */
             BuiltBuffer built = builder.endNullable();
 
             if (built != null)
             {
-                BBSShaders.getPickerParticlesLayer().draw(built);
+                built.close();
             }
         }
     }

@@ -109,7 +109,11 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
          * the picker-particles layer's sampler must be re-wired in the new pipeline. */
         getWhiteLightmapTexture();
 
-        this.emitter.render(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, BBSShaders.getPickerParticlesLayer(), stack, OverlayTexture.DEFAULT_UV, context.getTransition());
+        /* 1.21.11 render: this is a NORMAL (non-picking) preview, so it must not use the picker
+         * layer — picker_particles now declares the BBSPicker UBO and cannot be drawn through the
+         * immediate RenderLayer path. Route through the proper non-picker particle layer (same
+         * POSITION_TEXTURE_COLOR_LIGHT format). */
+        this.emitter.render(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, BBSShaders.getParticlesLayer(), stack, OverlayTexture.DEFAULT_UV, context.getTransition());
 
         stack.pop();
 
