@@ -15,10 +15,15 @@ import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.command.argument.ParticleEffectArgumentType;
+import net.minecraft.item.ItemStack;
+import net.minecraft.particle.BlockStateParticleEffect;
+import net.minecraft.particle.ItemStackParticleEffect;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -105,13 +110,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                 Matrix3f m = Matrices.TEMP_3F;
                 Vector3f v = Vectors.TEMP_3F;
                 ParticleSettings settings = this.form.settings.get();
-                ParticleType<?> type = Registries.PARTICLE_TYPE.get(settings.particle);
-                ParticleEffect effect = ParticleTypes.FLAME;
-
-                if (type instanceof net.minecraft.particle.SimpleParticleType simple)
-                {
-                    effect = simple;
-                }
+                ParticleEffect effect = createEffect(settings, world);
 
                 for (int i = 0; i < count; i++)
                 {
@@ -148,6 +147,43 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
             }
 
             this.tick -= 1;
+        }
+    }
+
+    /**
+     * Builds the particle effect from the form's settings. For the two common parametric
+     * particles the arguments string is just a bare id for convenience — {@code dirt} for
+     * {@code minecraft:block}, {@code apple} for {@code minecraft:item} — and the rest of the
+     * structure is filled in here. Otherwise (or when a {@code {...}} compound is given) it is
+     * parsed exactly like the vanilla {@code /particle} command, so every particle type still
+     * works. Falls back to flame when nothing parses.
+     */
+    private static ParticleEffect createEffect(ParticleSettings settings, World world)
+    {
+        String args = settings.arguments == null ? "" : settings.arguments.trim();
+
+        try
+        {
+            ParticleType<?> type = Registries.PARTICLE_TYPE.get(settings.particle);
+            boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
+
+            if (bareId && type == ParticleTypes.BLOCK)
+            {
+                return new BlockStateParticleEffect(ParticleTypes.BLOCK, Registries.BLOCK.get(Identifier.of(args)).getDefaultState());
+            }
+
+            if (bareId && type == ParticleTypes.ITEM)
+            {
+                return new ItemStackParticleEffect(ParticleTypes.ITEM, new ItemStack(Registries.ITEM.get(Identifier.of(args))));
+            }
+
+            StringReader reader = new StringReader(settings.particle.toString() + args);
+
+            return ParticleEffectArgumentType.readParameters(reader, world.getRegistryManager());
+        }
+        catch (Exception e)
+        {
+            return ParticleTypes.FLAME;
         }
     }
 }
