@@ -232,6 +232,8 @@ public abstract class UIModelRenderer extends UIElement
          * The colour texture is then blitted back into the deferred GUI (V-flipped, FBO origin is bottom-up). */
         if (vw > 0 && vh > 0)
         {
+            ModelPreviewRenderer.DRAW_CALLS = 0;
+            ModelPreviewRenderer.DEBUG = "(model-render not reached)";
             ModelPreviewRenderer.ACTIVE = true;
             this.preview.begin(vw, vh, this.camera.projection);
 
@@ -244,6 +246,19 @@ public abstract class UIModelRenderer extends UIElement
                 this.preview.end();
                 ModelPreviewRenderer.ACTIVE = false;
                 ModelPreviewRenderer.TEXTURE = null;
+            }
+
+            if (context.getTick() % 30L == 0L)
+            {
+                Matrix4f mv = this.createCameraStack().peek().getPositionMatrix();
+                System.out.println("[BBS preview] vw=" + vw + " vh=" + vh
+                    + " camPos=(" + (float) this.camera.position.x + "," + (float) this.camera.position.y + "," + (float) this.camera.position.z + ")"
+                    + " dist=" + this.distance.getValue()
+                    + " drawCalls=" + ModelPreviewRenderer.DRAW_CALLS
+                    + " [" + ModelPreviewRenderer.DEBUG + "]"
+                    + " glId=" + this.preview.getColorGlId()
+                    + "\n  proj=" + this.camera.projection
+                    + "\n  modelView=" + mv);
             }
 
             context.batcher.texturedBox(this.preview.getColorGlId(), Colors.WHITE,

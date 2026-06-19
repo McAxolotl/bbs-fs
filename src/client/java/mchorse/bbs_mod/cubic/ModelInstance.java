@@ -277,6 +277,15 @@ public class ModelInstance implements IModelInstance
 
     public boolean isVAORendered()
     {
+        /* In-panel preview (Variant 1) wires only the IMMEDIATE cubic path (entityCutoutNoCull); the VAO
+         * path still uses the not-yet-ported BBS shader (null) and renders flat. Force the immediate path
+         * for cubic Models while a preview is active so the camera/projection actually apply. (BOBJModel has
+         * no immediate path, so it stays VAO — handled separately, still TODO for preview.) */
+        if (ModelPreviewRenderer.ACTIVE && this.model instanceof Model)
+        {
+            return false;
+        }
+
         return !this.vaos.isEmpty() || this.model instanceof BOBJModel;
     }
 
@@ -372,6 +381,12 @@ public class ModelInstance implements IModelInstance
         if (this.model instanceof Model model)
         {
             boolean isVao = this.isVAORendered();
+
+            if (ModelPreviewRenderer.ACTIVE)
+            {
+                ModelPreviewRenderer.DEBUG = "isModel=true isVao=" + isVao + " texNull=" + (ModelPreviewRenderer.TEXTURE == null) + " vaos=" + this.vaos.size();
+            }
+
             CubicCubeRenderer renderProcessor = isVao
                 ? new CubicVAORenderer(shader, this, light, overlay, stencilMap, keys)
                 : new CubicCubeRenderer(light, overlay, stencilMap, keys);
@@ -399,6 +414,7 @@ public class ModelInstance implements IModelInstance
                 {
                     if (ModelPreviewRenderer.ACTIVE && ModelPreviewRenderer.TEXTURE != null)
                     {
+                        ModelPreviewRenderer.DRAW_CALLS++;
                         RenderLayers.entityCutoutNoCull(ModelPreviewRenderer.TEXTURE).draw(built);
                     }
                     else
