@@ -343,8 +343,17 @@ public class UIFilmPreview extends UIElement
         Camera camera = this.panel.getCamera();
 
         camera.copy(this.panel.getWorldCamera());
-        camera.view.set(this.panel.lastView);
-        camera.projection.set(this.panel.lastProjection);
+
+        /* 1.21.11 port: in 1.21.1 UIFilmPanel.renderInWorld() captured the actual render matrices into
+         * lastProjection (RenderSystem.getProjectionMatrix) and lastView (WorldRenderContext.positionMatrix),
+         * and getCamera() carried them for the RMB world-pick ray (CameraUtils.getMouseDirection in
+         * UIReplaysEditor.clickViewport). Those RenderSystem/WorldRenderContext APIs were removed in 1.21.11,
+         * so that capture is stubbed and lastView/lastProjection stay identity — which made the click ray map
+         * to the wrong world position. Reconstruct the same matrices from the live world-camera state instead:
+         * the perspective projection matches the off-screen render aspect (video width/height, identical to
+         * getViewport()) and updateView() rebuilds the rotation-only view from the world camera's rotation. */
+        camera.updatePerspectiveProjection(BBSRendering.getVideoWidth(), BBSRendering.getVideoHeight());
+        camera.updateView();
         context.batcher.flush();
 
         if (texture != null)
