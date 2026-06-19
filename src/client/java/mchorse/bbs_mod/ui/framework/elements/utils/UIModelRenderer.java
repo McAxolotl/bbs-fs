@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import mchorse.bbs_mod.BBSModClient;
@@ -14,7 +15,11 @@ import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Intersectiond;
 import org.joml.Matrix3d;
@@ -234,6 +239,13 @@ public abstract class UIModelRenderer extends UIElement
 
             try
             {
+                /* Ground grid first (depth-tested, so the model occludes the lines behind it), then the model
+                 * — matches the original 1.21.1 renderModel ordering (grid drawn before renderUserModel). */
+                if (this.grid)
+                {
+                    this.renderGrid(context);
+                }
+
                 this.renderUserModel(context);
             }
             catch (Exception e)
@@ -411,13 +423,50 @@ public abstract class UIModelRenderer extends UIElement
     /**
      * Render block of grass under the model (which signify where
      * located the ground below the model)
+     *
+     * <p>1.21.11 port: faithful to the original 11x11 ground grid (coloured Z/X centre axes blue/red, the rest
+     * grey). Two forced deviations from the 1.21.1 code: (1) the 3D position matrix is taken from
+     * {@link #createCameraStack()} — the same {@code camera.view * translate(-pos) * transform} stack baked
+     * into the model vertices — instead of {@code DrawContext.getMatrices()} (now 2D); (2) the flush goes
+     * through the BBS POSITION_COLOR DEBUG_LINES pipeline ({@link Draw#flushLines}) since
+     * {@code RenderSystem.setShader} + {@code BufferRenderer.drawWithGlobalProgram} were removed in 1.21.5.
+     * Called inside {@link #renderModelToTexture}'s {@link ModelPreviewRenderer} pass, so it draws into the
+     * off-screen preview FBO with the perspective projection already set and global model-view identity.</p>
      */
     protected void renderGrid(UIContext context)
     {
-        /* TODO(1.21.11 render): ground-grid line render disabled. It built a POSITION_COLOR/DEBUG_LINES
-         * BufferBuilder (11x11 grid with coloured X/Z centre axes) drawn via RenderSystem.setShader +
-         * GameRenderer.getPositionColorProgram + BufferRenderer.drawWithGlobalProgram, all removed in the
-         * 1.21.5 GPU rewrite, and it read a 3D position matrix from DrawContext.getMatrices() (now 2D).
-         * Re-emit through the new POSITION_COLOR line pipeline once the foundation lands. */
+        Matrix4f matrix4f = this.createCameraStack().peek().getPositionMatrix();
+
+        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
+
+        for (int x = 0; x <= 10; x ++)
+        {
+            if (x == 0)
+            {
+                builder.vertex(matrix4f, x - 5, 0, -5).color(0F, 0F, 1F, 1F);
+                builder.vertex(matrix4f, x - 5, 0, 5).color(0F, 0F, 1F, 1F);
+            }
+            else
+            {
+                builder.vertex(matrix4f, x - 5, 0, -5).color(0.25F, 0.25F, 0.25F, 1F);
+                builder.vertex(matrix4f, x - 5, 0, 5).color(0.25F, 0.25F, 0.25F, 1F);
+            }
+        }
+
+        for (int x = 0; x <= 10; x ++)
+        {
+            if (x == 0)
+            {
+                builder.vertex(matrix4f, -5, 0, x - 5).color(1F, 0F, 0F, 1F);
+                builder.vertex(matrix4f, 5, 0, x - 5).color(1F, 0F, 0F, 1F);
+            }
+            else
+            {
+                builder.vertex(matrix4f, -5, 0, x - 5).color(0.25F, 0.25F, 0.25F, 1F);
+                builder.vertex(matrix4f, 5, 0, x - 5).color(0.25F, 0.25F, 0.25F, 1F);
+            }
+        }
+
+        Draw.flushLines(builder);
     }
 }

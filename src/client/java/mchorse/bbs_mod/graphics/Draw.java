@@ -69,8 +69,22 @@ public class Draw
             .build()
     );
 
+    /* POSITION_COLOR / DEBUG_LINES, depth-tested. Replaces the old DEBUG_LINES + GameRenderer::getPositionColorProgram
+     * path (e.g. the 3D model-preview ground grid); GL_LINES width 1, no cull, drawn under LEQUAL depth as the
+     * original did via RenderSystem.depthFunc(GL_LEQUAL). */
+    private static final RenderPipeline POSITION_COLOR_LINES = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/draw_position_color_lines"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.DEBUG_LINES)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
     private static RenderLayer positionColorLayer;
     private static RenderLayer positionColorNoDepthLayer;
+    private static RenderLayer positionColorLinesLayer;
 
     private static RenderLayer getPositionColorLayer()
     {
@@ -92,6 +106,27 @@ public class Draw
         }
 
         return positionColorNoDepthLayer;
+    }
+
+    private static RenderLayer getPositionColorLinesLayer()
+    {
+        if (positionColorLinesLayer == null)
+        {
+            positionColorLinesLayer = RenderLayer.of(BBSMod.MOD_ID + "_draw_position_color_lines",
+                RenderSetup.builder(POSITION_COLOR_LINES).translucent().build());
+        }
+
+        return positionColorLinesLayer;
+    }
+
+    /**
+     * Submit a DEBUG_LINES POSITION_COLOR buffer through the BBS line pipeline. Replacement for the old
+     * {@code BufferRenderer.drawWithGlobalProgram} flush used by immediate-mode line geometry (e.g. the
+     * model-preview ground grid). No-op on an empty buffer.
+     */
+    public static void flushLines(BufferBuilder builder)
+    {
+        flush(builder, getPositionColorLinesLayer());
     }
 
     /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
