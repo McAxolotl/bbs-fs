@@ -289,11 +289,34 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
          * the scrolled cell position — faithful to the original, which rendered onto getMatrices() directly. */
         org.joml.Matrix3x2f bbs$pose = new org.joml.Matrix3x2f(bbs$dc.getMatrices());
 
-        /* Read the live GUI scissor (set by the caller's batcher.clip, e.g. UIReplayList clips the form preview
-         * to the row's square) and carry it as the composite quad's scissorArea — without it the model renders
-         * full-size and overflows the cell instead of being cropped. Faithful to the original, where renderUI
-         * was bracketed by batcher.clip/unclip and the immediate 3D draw respected the GL scissor. */
+        /* Read the live GUI scissor (set by the caller's batcher.clip, e.g. UIFormCategory clips the cell to its
+         * square / UIScrollView clips to the viewport) and carry it as the composite quad's scissorArea — without
+         * it the model renders full-size and overflows the cell instead of being cropped. Faithful to the
+         * original, where renderUI was bracketed by batcher.clip/unclip and the immediate 3D draw respected the
+         * GL scissor.
+         *
+         * Coordinate-space reconciliation (the scroll-crop bug): the geometry passed below (x1..y2) is in
+         * cell/content space and is placed on-screen by bbs$pose (which carries the list scroll translate, e.g.
+         * translate(0, -S)). The live scissor, however, is DOUBLE-shifted by the scroll: Batcher2D.clip first
+         * globalises the rect (subtracting the viewport shift S) and THEN DrawContext.enableScissor transforms it
+         * by the same pose (subtracting S again) — so the stored scissor sits at y - 2S while the geometry lands
+         * at y - S. The gap is exactly one scroll offset, growing as you scroll down, which cropped the preview.
+         * Undo the extra pose shift on the scissor so it tracks the geometry again (this preserves the viewport
+         * clamping baked into the live rect, unlike rebuilding the rect from x1..y2). */
         net.minecraft.client.gui.ScreenRect bbs$scissor = bbs$dc.scissorStack.peekLast();
+
+        if (bbs$scissor != null)
+        {
+            int bbs$dx = (int) bbs$pose.m20();
+            int bbs$dy = (int) bbs$pose.m21();
+
+            if (bbs$dx != 0 || bbs$dy != 0)
+            {
+                bbs$scissor = new net.minecraft.client.gui.ScreenRect(
+                    bbs$scissor.getLeft() - bbs$dx, bbs$scissor.getTop() - bbs$dy,
+                    bbs$scissor.width(), bbs$scissor.height());
+            }
+        }
 
         bbs$dc.state.addSpecialElement(new mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState(
             this, angle, context.getTransition(), bbs$pose, x1, y1, x2, y2, 1.0F, bbs$scissor));
