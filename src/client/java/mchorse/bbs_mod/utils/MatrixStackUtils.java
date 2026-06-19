@@ -10,10 +10,12 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
+import org.joml.Vector3f;
 
 public class MatrixStackUtils
 {
     private static Matrix3f normal = new Matrix3f();
+    private static Matrix3f billboardView = new Matrix3f();
 
     private static Matrix4f oldProjection = new Matrix4f();
     private static Matrix4f oldMV = new Matrix4f();
@@ -23,6 +25,37 @@ public class MatrixStackUtils
     {
         stack.peek().getPositionMatrix().scale(x, y, z);
         stack.peek().getNormalMatrix().scale(x < 0F ? -1F : 1F, y < 0F ? -1F : 1F, z < 0F ? -1F : 1F);
+    }
+
+    /**
+     * Orient the matrix stack's top so that geometry drawn on the local XY plane always faces the
+     * camera (billboarding). The form's own scale and translation are preserved; its rotation is
+     * intentionally discarded — that's the point of a billboard.
+     *
+     * <p>Since 1.21.1 the camera view rotation is no longer baked into the form matrix stack (its
+     * base is identity); it lives in {@link RenderSystem#getModelViewMatrix()} and is re-applied by
+     * the shader at draw time. So we replace the model's orientation with the inverse of that view
+     * rotation: once the shader multiplies the view back in, the two cancel and the quad ends up
+     * screen-facing. The pre-1.21.1 trick of setting the orientation to identity only worked because
+     * the view used to live in this very matrix.
+     */
+    public static void billboard(MatrixStack stack)
+    {
+        Matrix4f position = stack.peek().getPositionMatrix();
+        Vector3f scale = Vectors.TEMP_3F;
+
+        position.getScale(scale);
+
+        RenderSystem.getModelViewMatrix().get3x3(billboardView);
+        billboardView.invert();
+
+        position.m00(billboardView.m00()).m01(billboardView.m01()).m02(billboardView.m02());
+        position.m10(billboardView.m10()).m11(billboardView.m11()).m12(billboardView.m12());
+        position.m20(billboardView.m20()).m21(billboardView.m21()).m22(billboardView.m22());
+
+        position.scale(scale);
+
+        stack.peek().getNormalMatrix().identity();
     }
 
     public static void cacheMatrices()
