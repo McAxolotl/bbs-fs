@@ -683,15 +683,6 @@ public class Gizmo
         }
     }
 
-    private void drawCachedSphere(MatrixStack stack, VertexBuffer vbo, float r, float g, float b, float a)
-    {
-        RenderSystem.setShaderColor(r, g, b, a);
-        vbo.bind();
-        vbo.draw(stack.peek().getPositionMatrix(), RenderSystem.getProjectionMatrix(), GameRenderer.getPositionColorProgram());
-        VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-    }
-
     private void drawCachedRing(MatrixStack stack, VertexBuffer vbo, Axis axis, int color)
     {
         float alpha = Colors.getA(color);
@@ -962,20 +953,9 @@ public class Gizmo
         boolean rotating = editing && activeOp == Op.ROTATE.modeOrdinal;
         Axis activeAxis = rotating ? this.currentTransform.getAxis() : null;
 
-        /* The sphere is translucent and drawn before the bars/cubes, so in
-         * combined it sits as a faint tint behind the move/scale handles. */
-        if (this.hasSphere() && BBSSettings.rotate3dSphere.get() && (active == null || active == Handle.TRACKBALL))
-        {
-            /* Always the base colour — hover is now a screen-space overlay
-             * composited in {@link #renderSphereHighlight}, so the sphere keeps
-             * its own colour and the highlight reads as a glow on top. */
-            int color = BBSSettings.rotate3dSphereColor.get();
-
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            this.drawCachedSphere(stack, this.rotateSphereVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-            RenderSystem.disableBlend();
-        }
+        /* The 3D sphere itself is invisible — it only acts as the trackball grab
+         * area. Hover feedback is a screen-space glow composited in
+         * {@link #renderSphereHighlight}. */
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
