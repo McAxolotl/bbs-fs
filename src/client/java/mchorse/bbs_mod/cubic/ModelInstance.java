@@ -277,16 +277,14 @@ public class ModelInstance implements IModelInstance
 
     public boolean isVAORendered()
     {
-        /* In-panel preview (Variant 1) wires only the IMMEDIATE cubic path (entityCutoutNoCull); the VAO
-         * path still uses the not-yet-ported BBS shader (null) and renders flat. Force the immediate path
-         * for cubic Models while a preview is active so the camera/projection actually apply. (BOBJModel has
-         * no immediate path, so it stays VAO — handled separately, still TODO for preview.) */
-        if (ModelPreviewRenderer.ACTIVE && this.model instanceof Model)
-        {
-            return false;
-        }
-
-        return !this.vaos.isEmpty() || this.model instanceof BOBJModel;
+        /* Cubic Models render through the IMMEDIATE CubicCubeRenderer path (original code, no shader): in
+         * previews via entityCutoutNoCull(adopted texture), in-world via the now-working bbs:core/model layer
+         * (the same layer BillboardFormRenderer draws through, with the model texture bound globally). The VAO
+         * path still binds getMainShader()==null + a stubbed ModelVAORenderer.setupUniforms (TODO pipeline
+         * foundation), so it draws nothing. Keep only BOBJModel — which has NO immediate path — on VAO until
+         * the new-pipeline VAO draw is ported. Was: !this.vaos.isEmpty() || BOBJModel, with a preview-only
+         * ACTIVE override forcing cubic immediate; that override is now the unconditional rule. */
+        return this.model instanceof BOBJModel;
     }
 
     public void delete()
