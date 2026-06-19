@@ -267,8 +267,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
          * the scrolled cell position — faithful to the original, which rendered onto getMatrices() directly. */
         org.joml.Matrix3x2f bbs$pose = new org.joml.Matrix3x2f(bbs$dc.getMatrices());
 
+        /* Read the live GUI scissor (set by the caller's batcher.clip, e.g. UIReplayList clips the form preview
+         * to the row's square) and carry it as the composite quad's scissorArea — without it the model renders
+         * full-size and overflows the cell instead of being cropped. Faithful to the original, where renderUI
+         * was bracketed by batcher.clip/unclip and the immediate 3D draw respected the GL scissor. */
+        net.minecraft.client.gui.ScreenRect bbs$scissor = bbs$dc.scissorStack.peekLast();
+
         bbs$dc.state.addSpecialElement(new mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState(
-            this, angle, context.getTransition(), bbs$pose, x1, y1, x2, y2, 1.0F, null));
+            this, angle, context.getTransition(), bbs$pose, x1, y1, x2, y2, 1.0F, bbs$scissor));
     }
 
     /**
