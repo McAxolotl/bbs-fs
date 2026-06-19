@@ -28,7 +28,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
@@ -1255,19 +1255,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
         int index = this.stencil.getIndex();
         Texture texture = this.stencil.getFramebuffer().getMainTexture();
         Pair<Form, String> pair = this.stencil.getPicked();
-        int w = texture.width;
-        int h = texture.height;
 
-        com.mojang.blaze3d.pipeline.RenderPipeline previewProgram = BBSShaders.getPickerPreviewProgram();
-        Supplier<com.mojang.blaze3d.pipeline.RenderPipeline> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
+        /* Highlight the hovered form/bone/replay: composite the picking texture back over the viewport with the
+         * picker_preview pipeline, recolouring the pixels whose encoded index equals the picked index with
+         * BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor + texturedBox path).
+         * The custom BBSPicker UBO cannot ride the immediate RenderLayer/texturedBox path, so the overlay is
+         * drawn through BBSPickerRenderer's dedicated render pass that binds it. */
+        int highlightColor = BBSSettings.stencilHighlightColor.get();
 
-        /* TODO(1.21.11 render): per-draw uniforms ("Target", "HighlightColor") were set via GlUniform on the
-         * old ShaderProgram; RenderPipeline has no GlUniform accessor. The picker-preview shader needs these
-         * fed through the new uniform/UBO mechanism once the render foundation exposes it.
-         * Selected stencil index = index; highlight color = BBSSettings.stencilHighlightColor. */
-
-        /* TODO(1.21.11 render): blend state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableBlend() */
-        context.batcher.texturedBox(getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, h, w, 0, w, h);
+        BBSPickerRenderer.drawHighlight(texture, index, highlightColor, area.x, area.y, area.w, area.h);
 
         if (altPressed)
         {

@@ -11,12 +11,19 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.graphics.texture.AdoptedTexture;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.GpuSampler;
 import net.minecraft.client.gl.MappableRingBuffer;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.texture.AbstractTexture;
+import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -63,8 +70,14 @@ public class BBSPickerRenderer
     /** Highlight colour for picker_preview's matched-pixel overlay (ARGB); unused by the geometry pickers. */
     private static int highlightColor = Colors.WHITE;
 
+    /** std140 size of the Projection block: a single mat4. */
+    private static final int PROJECTION_UBO_SIZE = 64;
+
     /** Per-frame triple-buffered ring for the BBSPicker UBO. Lazily created (needs the GPU device). */
     private static MappableRingBuffer uboRing;
+
+    /** Per-frame triple-buffered ring for the Projection UBO of the screen-space highlight overlay. */
+    private static MappableRingBuffer projectionRing;
 
     /** Off-screen colour/depth the picker draws render into (StencilFormFramebuffer). Null = the main framebuffer. */
     private static GpuTextureView targetColor;
@@ -232,6 +245,138 @@ public class BBSPickerRenderer
             pass.setUniform(BBSShaders.PICKER_UNIFORM, pickerUniform);
             pass.setVertexBuffer(0, vertexBuffer);
             pass.bindTexture("Sampler0", sampler0View, sampler0);
+            pass.setIndexBuffer(indexBuffer, indexType);
+            pass.drawIndexed(0, 0, buffer.getDrawParameters().indexCount(), 1);
+        }
+        finally
+        {
+            buffer.close();
+        }
+    }
+
+    /**
+     * Map the projection ring's current slot, write a single-mat4 std140 {@code Projection} block holding the
+     * given ortho matrix, and return its slice. Mirrors the engine's own {@code PROJECTION_MATRIX_UBO_SIZE}
+     * (one mat4) so the picker_preview vertex shader's {@code Projection { mat4 ProjMat; }} binds correctly.
+     */
+    private static GpuBufferSlice writeProjection(CommandEncoder encoder, Matrix4f projection)
+    {
+        if (projectionRing == null)
+        {
+            projectionRing = new MappableRingBuffer(() -> "bbs:picker_projection_ubo", GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_MAP_WRITE, PROJECTION_UBO_SIZE);
+        }
+
+        projectionRing.rotate();
+
+        GpuBuffer ubo = projectionRing.getBlocking();
+
+        try (GpuBuffer.MappedView view = encoder.mapBuffer(ubo, false, true))
+        {
+            Std140Builder.intoBuffer(view.data()).putMat4f(projection);
+        }
+
+        return ubo.slice(0L, PROJECTION_UBO_SIZE);
+    }
+
+    /**
+     * Draw the hover-highlight overlay: composite the picking framebuffer texture back over the viewport with the
+     * picker_preview pipeline, which recolours the pixels whose encoded index equals {@code index} with
+     * {@code highlightColor} and discards the rest. This is the faithful 1.21.5 replacement for the 1.21.1
+     * {@code program.getUniform("Target").set(index)} + {@code "HighlightColor"} set + {@code texturedBox(getPickerPreviewProgram, ...)}.
+     *
+     * <p>The 1.21.5 immediate {@code RenderLayer}/{@code Batcher2D.texturedBox} path cannot carry the custom
+     * {@code BBSPicker} UBO (it binds only the engine builtins), so — exactly like the pick-read pass in
+     * {@link #draw} — this drives a manual {@link RenderPass} that binds the {@code BBSPicker} block (Target +
+     * HighlightColor) alongside a screen-space ortho {@code Projection}, an identity {@code DynamicTransforms},
+     * and {@code Sampler0} (the picking texture, bridged zero-copy through {@link AdoptedTexture}). It draws into
+     * the main framebuffer over the already-composited viewport.</p>
+     *
+     * @param stencilTexture the picking framebuffer's colour texture (encoded index per pixel)
+     * @param index          the picked stencil index (the hovered bone/form/gizmo); becomes {@code Target}
+     * @param highlightColor ARGB colour matched pixels are painted with (BBSSettings.stencilHighlightColor)
+     * @param x,y,w,h        the destination rect in scaled-GUI screen-space (the viewport area)
+     */
+    public static void drawHighlight(Texture stencilTexture, int index, int highlightColor, float x, float y, float w, float h)
+    {
+        if (stencilTexture == null || !stencilTexture.isValid())
+        {
+            return;
+        }
+
+        /* Bridge the raw-GL picking texture into a vanilla GpuTextureView/GpuSampler (zero-copy, NEAREST so the
+         * encoded index texels decode exactly), the same path the pick pass uses for Sampler0. */
+        Identifier adopted = AdoptedTexture.identifier(stencilTexture);
+
+        if (adopted == null)
+        {
+            return;
+        }
+
+        AbstractTexture at = MinecraftClient.getInstance().getTextureManager().getTexture(adopted);
+        GpuTextureView textureView = at.getGlTextureView();
+        GpuSampler sampler = at.getSampler();
+
+        setTarget(index);
+        setHighlightColor(highlightColor);
+
+        /* Scaled-GUI ortho (origin top-left, y-down): maps the screen-space quad to NDC. The picker_preview
+         * vertex shader is ProjMat * ModelViewMat * Position, so ModelViewMat stays identity. */
+        net.minecraft.client.util.Window window = MinecraftClient.getInstance().getWindow();
+        Matrix4f projection = new Matrix4f().ortho(0F, (float) window.getScaledWidth(), (float) window.getScaledHeight(), 0F, -1000F, 1000F);
+
+        int color = Colors.WHITE;
+
+        /* Full-texture, V-flipped quad over [x,y]..[x+w,y+h] (the FBO colour texture is bottom-up), matching
+         * the original texturedBox(..., 0, h, w, 0, w, h) UVs and WHITE vertex colour. */
+        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+
+        builder.vertex(x, y + h, 0F).texture(0F, 0F).color(color);
+        builder.vertex(x + w, y + h, 0F).texture(1F, 0F).color(color);
+        builder.vertex(x + w, y, 0F).texture(1F, 1F).color(color);
+        builder.vertex(x, y, 0F).texture(0F, 1F).color(color);
+
+        BuiltBuffer buffer = builder.endNullable();
+
+        if (buffer == null)
+        {
+            return;
+        }
+
+        GpuDevice device = RenderSystem.getDevice();
+        CommandEncoder encoder = device.createCommandEncoder();
+
+        RenderPipeline pipeline = BBSShaders.getPickerPreviewProgram();
+
+        /* DynamicTransforms: identity ModelViewMat, ColorModulator (1,1,1,1) — the shader's final
+         * color * ColorModulator must be a no-op so HighlightColor passes through unchanged. */
+        GpuBufferSlice dynamicTransforms = RenderSystem.getDynamicUniforms()
+            .write(new Matrix4f(), new Vector4f(1F, 1F, 1F, 1F), new Vector3f(), new Matrix4f());
+
+        GpuBufferSlice projectionUniform = writeProjection(encoder, projection);
+        GpuBuffer pickerUniform = writeUniform(device, encoder);
+
+        VertexFormat format = pipeline.getVertexFormat();
+        GpuBuffer vertexBuffer = format.uploadImmediateVertexBuffer(buffer.getBuffer());
+
+        RenderSystem.ShapeIndexBuffer sequential = RenderSystem.getSequentialBuffer(buffer.getDrawParameters().mode());
+        GpuBuffer indexBuffer = sequential.getIndexBuffer(buffer.getDrawParameters().indexCount());
+        VertexFormat.IndexType indexType = sequential.getIndexType();
+
+        Framebuffer framebuffer = MinecraftClient.getInstance().getFramebuffer();
+        GpuTextureView colorTarget = framebuffer.getColorAttachmentView();
+
+        /* No depth attachment: this is a 2D screen-space overlay drawn on top of the already-composited
+         * viewport (the original drew it as a flat GUI textured box). With no depth buffer bound the
+         * pipeline's LEQUAL depth test has nothing to cull against, so every matched pixel survives. */
+        try (RenderPass pass = encoder.createRenderPass(() -> "bbs:picker_highlight", colorTarget, OptionalInt.empty()))
+        {
+            pass.setPipeline(pipeline);
+            RenderSystem.bindDefaultUniforms(pass);
+            pass.setUniform("Projection", projectionUniform);
+            pass.setUniform("DynamicTransforms", dynamicTransforms);
+            pass.setUniform(BBSShaders.PICKER_UNIFORM, pickerUniform);
+            pass.setVertexBuffer(0, vertexBuffer);
+            pass.bindTexture("Sampler0", textureView, sampler);
             pass.setIndexBuffer(indexBuffer, indexType);
             pass.drawIndexed(0, 0, buffer.getDrawParameters().indexCount(), 1);
         }

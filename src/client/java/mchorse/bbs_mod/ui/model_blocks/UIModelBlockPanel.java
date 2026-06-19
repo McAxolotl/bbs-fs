@@ -6,7 +6,7 @@ import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -650,19 +650,15 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         }
 
         Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
-        int w = texture.width;
-        int h = texture.height;
 
-        /* TODO(1.21.11 render): the picker-preview highlight overlay depends on the new
-         * uniform-upload path. RenderPipeline.getUniform("Target"/"HighlightColor")/GlUniform.set
-         * are gone (uniforms are UBO/DynamicUniform entries now), RenderSystem.enableBlend is gone,
-         * and Batcher2D.texturedBox is a no-op stub. Re-enable once the picker-preview pipeline +
-         * uniform upload are ported. Original intent: set Target=gizmoStencil.getIndex(),
-         * HighlightColor=stencilHighlightColor, then draw the stencil texture through the
-         * picker-preview program over the viewport. */
+        /* Highlight the hovered gizmo handle: composite the picking texture back over the viewport with the
+         * picker_preview pipeline, recolouring the pixels whose encoded index equals the hovered stencil index
+         * with BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor + texturedBox
+         * path). The custom BBSPicker UBO cannot ride the immediate RenderLayer/texturedBox path, so the overlay
+         * is drawn through BBSPickerRenderer's dedicated render pass that binds it. */
         int color = BBSSettings.stencilHighlightColor.get();
 
-        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, 0, 0, context.menu.width, context.menu.height, 0, h, w, 0, w, h);
+        BBSPickerRenderer.drawHighlight(texture, this.gizmoStencil.getIndex(), color, 0, 0, context.menu.width, context.menu.height);
     }
 
     @Override

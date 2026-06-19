@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.utils;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -21,7 +21,6 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
@@ -269,18 +268,15 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         int index = this.stencil.getIndex();
         Texture texture = this.stencil.getFramebuffer().getMainTexture();
         Pair<Form, String> pair = this.stencil.getPicked();
-        int w = texture.width;
-        int h = texture.height;
 
-        /* TODO(1.21.11 render): the picker-preview highlight overlay depends on the new
-         * uniform-upload path. RenderPipeline.getUniform("Target"/"HighlightColor")/GlUniform.set
-         * are gone (uniforms are UBO/DynamicUniform entries now), and Batcher2D.texturedBox is a
-         * no-op stub. Re-enable once the picker-preview pipeline + uniform upload are ported.
-         * Original intent: set Target=index, HighlightColor=stencilHighlightColor, then draw the
-         * stencil texture through the picker-preview program over the viewport. */
+        /* Highlight the hovered form/bone: composite the picking texture back over the viewport with the
+         * picker_preview pipeline, recolouring the pixels whose encoded index equals the picked index with
+         * BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor + texturedBox path).
+         * The custom BBSPicker UBO cannot ride the immediate RenderLayer/texturedBox path, so the overlay is
+         * drawn through BBSPickerRenderer's dedicated render pass that binds it. */
         int color = BBSSettings.stencilHighlightColor.get();
 
-        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, this.area.x, this.area.y, this.area.w, this.area.h, 0, h, w, 0, w, h);
+        BBSPickerRenderer.drawHighlight(texture, index, color, this.area.x, this.area.y, this.area.w, this.area.h);
 
         if (pair != null && pair.a != null)
         {
