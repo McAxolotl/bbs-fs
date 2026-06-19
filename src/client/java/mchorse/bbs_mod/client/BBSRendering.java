@@ -11,6 +11,7 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
+import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -507,6 +508,11 @@ public class BBSRendering
          * matrix, so billboards and particles keep facing the camera in world space. The context no longer
          * exposes camera()/positionMatrix(); pull the camera from the game renderer directly. */
         InverseView.set(new Matrix3f().rotation(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()));
+
+        /* Draw morph forms collected during the (build-phase) entity render. AFTER_ENTITIES is the only
+         * world context where the BBS immediate form pipeline lands correctly (entity queue flushed +
+         * camera model-view still active). See MorphRenderer / LivingEntityRendererMorphMixin. */
+        MorphRenderer.renderQueued();
 
         if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
         {
