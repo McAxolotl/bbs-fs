@@ -11,8 +11,10 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Intersectiond;
 import org.joml.Matrix3d;
 import org.joml.Matrix3f;
@@ -230,13 +232,8 @@ public abstract class UIModelRenderer extends UIElement
          * The colour texture is then blitted back into the deferred GUI (V-flipped, FBO origin is bottom-up). */
         if (vw > 0 && vh > 0)
         {
-            Matrix4f modelView = new Matrix4f(this.camera.view);
-
-            modelView.translate(-(float) this.camera.position.x, -(float) this.camera.position.y, -(float) this.camera.position.z);
-            modelView.mul(this.transform);
-
             ModelPreviewRenderer.ACTIVE = true;
-            this.preview.begin(vw, vh, this.camera.projection, modelView);
+            this.preview.begin(vw, vh, this.camera.projection);
 
             try
             {
@@ -255,6 +252,26 @@ public abstract class UIModelRenderer extends UIElement
         }
 
         this.processInputs(context);
+    }
+
+    /**
+     * Build the per-vertex {@link MatrixStack} pre-loaded with the camera model-view
+     * ({@code camera.view (rotation) * translate(-position) * transform}). The cubic geometry
+     * (CubicCubeRenderer) transforms its model-space vertices by this stack, so positions end up in
+     * VIEW space; {@link ModelPreviewRenderer#begin} keeps the global model-view identity and supplies
+     * only the perspective projection. This matches vanilla world entity rendering (camera baked into the
+     * per-vertex position matrix, ModelViewMat ~identity) and the old 1.21.1 BBS recipe. Subclasses must
+     * use this for the {@code FormRenderingContext} stack instead of a fresh identity {@code MatrixStack}.
+     */
+    protected MatrixStack createCameraStack()
+    {
+        MatrixStack stack = new MatrixStack();
+
+        MatrixStackUtils.multiply(stack, this.camera.view);
+        stack.translate(-this.camera.position.x, -this.camera.position.y, -this.camera.position.z);
+        MatrixStackUtils.multiply(stack, this.transform);
+
+        return stack;
     }
 
     protected void processInputs(UIContext context)

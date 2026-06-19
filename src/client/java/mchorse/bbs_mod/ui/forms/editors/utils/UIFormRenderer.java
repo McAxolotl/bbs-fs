@@ -22,11 +22,11 @@ public class UIFormRenderer extends UIModelRenderer
             return;
         }
 
-        /* TODO(1.21.11 render): getMatrices() now returns a 2D Matrix3x2fStack; the
-         * 3D form model-view is carried by this.camera/this.world inside the context,
-         * so pass a fresh identity MatrixStack here (matches the render-foundation bridge). */
+        /* 1.21.11 render: seed the per-vertex MatrixStack with the camera model-view (createCameraStack)
+         * so the cubic geometry lands in view space; the global model-view stays identity + perspective
+         * projection is set in ModelPreviewRenderer.begin. */
         FormRenderingContext formContext = new FormRenderingContext()
-            .set(FormRenderType.PREVIEW, this.entity, new MatrixStack(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
+            .set(FormRenderType.PREVIEW, this.entity, this.createCameraStack(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
             .camera(this.camera)
             .modelRenderer();
 

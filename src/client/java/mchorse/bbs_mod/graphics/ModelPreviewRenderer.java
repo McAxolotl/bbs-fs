@@ -83,20 +83,26 @@ public class ModelPreviewRenderer
      * Set up the off-screen 3D state and bind it as the active render target. Caller then draws the model
      * (cubic geometry routed through {@code RenderLayers.entityCutoutNoCull}) and finally calls {@link #end()}.
      */
-    public void begin(int w, int h, Matrix4f projectionMatrix, Matrix4f modelView)
+    public void begin(int w, int h, Matrix4f projectionMatrix)
     {
         this.resize(w, h);
 
+        /* Transparent clear: the model draws opaque where present (the entity pipeline writes alpha), the
+         * rest stays alpha 0 so the GUI behind the panel shows through after the blit. (The earlier opaque
+         * magenta probe confirmed the command-encoder clear DOES write alpha and the blit composites.) */
         RenderSystem.getDevice().createCommandEncoder()
             .clearColorAndDepthTextures(this.color, 0x00000000, this.depth, 1.0D);
 
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(this.projection.set(projectionMatrix), ProjectionType.PERSPECTIVE);
 
+        /* Keep the GLOBAL model-view identity: the camera model-view is baked into the per-vertex
+         * MatrixStack (UIModelRenderer.createCameraStack) so positions reach the shader already in view
+         * space. This matches vanilla entity rendering (ModelViewMat ~identity, camera in the position
+         * matrix). Pushing the camera here instead left the model flat (ModelViewMat not applied as hoped). */
         Matrix4fStack stack = RenderSystem.getModelViewStack();
         stack.pushMatrix();
         stack.identity();
-        stack.mul(modelView);
 
         MinecraftClient.getInstance().gameRenderer.getDiffuseLighting().setShaderLights(DiffuseLighting.Type.ENTITY_IN_UI);
 
