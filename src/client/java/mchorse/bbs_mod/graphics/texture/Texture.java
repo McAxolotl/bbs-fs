@@ -3,6 +3,7 @@ package mchorse.bbs_mod.graphics.texture;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 
@@ -114,7 +115,10 @@ public class Texture
 
     public void bind(int texture)
     {
-        GlStateManager._activeTexture(texture);
+        /* NOTE(1.21.11 port): use raw GL13.glActiveTexture (matches the old GlStateManager.glActiveTexture
+         * passthrough). GlStateManager._activeTexture tracks state as (arg - GL_TEXTURE0) and corrupts
+         * the vanilla texture-unit tracking when fed a non-enum, crashing later vanilla _bindTexture. */
+        GL13.glActiveTexture(texture);
         GL11.glBindTexture(this.target, this.id);
     }
 
@@ -125,7 +129,7 @@ public class Texture
 
     public void unbind(int texture)
     {
-        GlStateManager._activeTexture(texture);
+        GL13.glActiveTexture(texture);
         GL11.glBindTexture(this.target, 0);
     }
 
