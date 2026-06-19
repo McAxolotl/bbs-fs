@@ -36,10 +36,13 @@ import java.util.function.Supplier;
  *       {@link org.joml.Matrix3x2fStack} (not a 4x4 {@code MatrixStack}). The position-only vertex
  *       calls take a {@link Matrix3x2fc}; z is always 0 in the GUI.</li>
  *   <li>{@code RenderSystem.setShader(...)} / {@code BufferRenderer.drawWithGlobalProgram(...)} are
- *       gone. Solid geometry is built into a {@link BufferBuilder}, finished into a
- *       {@link BuiltBuffer}, then submitted through a {@link RenderLayer} that wraps a
- *       {@link RenderPipeline} (here BBS-owned POSITION_COLOR pipelines seeded from the vanilla
- *       GUI position-color snippet).</li>
+ *       gone. The GUI is two-phase/deferred: {@code DrawContext} accumulates a
+ *       {@link net.minecraft.client.gui.render.state.GuiRenderState} that vanilla composites AFTER
+ *       {@code Screen.render} returns. A self-issued {@code RenderLayer.draw} mid-frame would target
+ *       a different (un-composited) state, so solid rectangles and gradients now route through the
+ *       managed {@code context.fill}/{@code context.fillGradient} path, and text through
+ *       {@code context.drawText}. The batcher's {@code DrawContext} is swapped to vanilla's live
+ *       per-frame context by {@code UIScreen.render} (see {@link #setContext}).</li>
  *   <li>{@code DrawContext.draw()} no longer exists (the two-phase GUI flushes deferred draws by
  *       itself), and {@code RenderSystem.depthFunc(...)} is gone — both calls were removed.</li>
  * </ul>
@@ -50,10 +53,9 @@ import java.util.function.Supplier;
  * exposes yet. That bridge belongs to the Phase-4 Texture->GpuTexture migration. Until then the
  * geometry is built but not submitted, so textured UI (icons, previews) will not draw. See report.
  *
- * TODO(1.21.11 render): verify at runtime that submitting our POSITION_COLOR RenderLayer mid-GUI
- * picks up the current 2D projection. RenderLayer.draw issues its own GPU draw; if z-order or the
- * GUI projection comes out wrong, these solid fills may need to route through DrawContext's managed
- * draw path (e.g. context.fill) instead.
+ * TODO(1.21.11 render): fine gradients (horizontal/4-corner), drop shadows and circular shadows are
+ * approximated (solid fill) or skipped — the two-phase GUI has no native primitive for them. Restore
+ * via custom GuiRenderState elements / shader pipelines later.
  */
 public class Batcher2D
 {
@@ -147,6 +149,17 @@ public class Batcher2D
         return this.context;
     }
 
+    /**
+     * Swap in the live per-frame vanilla {@link DrawContext}. The 1.21.6+ GUI is two-phase: vanilla
+     * only composites the {@link net.minecraft.client.gui.render.state.GuiRenderState} that belongs
+     * to the {@code DrawContext} it passes into {@code Screen.render}. The batcher must therefore draw
+     * into that exact context each frame (set by {@code UIScreen.render}) or nothing is composited.
+     */
+    public void setContext(DrawContext context)
+    {
+        this.context = context;
+    }
+
     public FontRenderer getFont()
     {
         return this.font;
@@ -211,13 +224,27 @@ public class Batcher2D
 
     public void box(float x, float y, float w, float h, int color1, int color2, int color3, int color4)
     {
-        Matrix3x2fc matrix = this.matrix();
+        int x1 = (int) x;
+        int y1 = (int) y;
+        int x2 = (int) (x + w);
+        int y2 = (int) (y + h);
 
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
-
-        this.fillRect(builder, matrix, x, y, w, h, color1, color2, color3, color4);
-
-        flush(builder, getQuadsLayer());
+        if (color1 == color2 && color1 == color3 && color1 == color4)
+        {
+            /* Solid fill - composites correctly through the two-phase GUI (GuiRenderState). */
+            this.context.fill(x1, y1, x2, y2, color1);
+        }
+        else if (color1 == color2 && color3 == color4)
+        {
+            /* Vertical gradient (color1 = top, color3 = bottom). */
+            this.context.fillGradient(x1, y1, x2, y2, color1, color3);
+        }
+        else
+        {
+            /* TODO(1.21.11 render): horizontal / true 4-corner gradients have no native two-phase-GUI
+             * primitive. Approximate with a solid midpoint for the prototype (gradientHBox callers). */
+            this.context.fill(x1, y1, x2, y2, Colors.lerp(color1, color4, 0.5F));
+        }
     }
 
     public void fillRect(BufferBuilder builder, Matrix3x2fc matrix, float x, float y, float w, float h, int color1, int color2, int color3, int color4)
@@ -263,46 +290,10 @@ public class Batcher2D
 
     public void dropShadow(int left, int top, int right, int bottom, int offset, int opaque, int shadow)
     {
-        left -= offset;
-        top -= offset;
-        right += offset;
-        bottom += offset;
-
-        Matrix3x2fc matrix = this.matrix();
-
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
-
-        /* Draw opaque part */
-        builder.vertex(matrix, left + offset, top + offset).color(opaque);
-        builder.vertex(matrix, left + offset, bottom - offset).color(opaque);
-        builder.vertex(matrix, right - offset, bottom - offset).color(opaque);
-        builder.vertex(matrix, right - offset, top + offset).color(opaque);
-
-        /* Draw top shadow */
-        builder.vertex(matrix, left, top).color(shadow);
-        builder.vertex(matrix, left + offset, top + offset).color(opaque);
-        builder.vertex(matrix, right - offset, top + offset).color(opaque);
-        builder.vertex(matrix, right, top).color(shadow);
-
-        /* Draw bottom shadow */
-        builder.vertex(matrix, left + offset, bottom - offset).color(opaque);
-        builder.vertex(matrix, left, bottom).color(shadow);
-        builder.vertex(matrix, right, bottom).color(shadow);
-        builder.vertex(matrix, right - offset, bottom - offset).color(opaque);
-
-        /* Draw left shadow */
-        builder.vertex(matrix, left, top).color(shadow);
-        builder.vertex(matrix, left, bottom).color(shadow);
-        builder.vertex(matrix, left + offset, bottom - offset).color(opaque);
-        builder.vertex(matrix, left + offset, top + offset).color(opaque);
-
-        /* Draw right shadow */
-        builder.vertex(matrix, right - offset, top + offset).color(opaque);
-        builder.vertex(matrix, right - offset, bottom - offset).color(opaque);
-        builder.vertex(matrix, right, bottom).color(shadow);
-        builder.vertex(matrix, right, top).color(shadow);
-
-        flush(builder, getQuadsLayer());
+        /* TODO(1.21.11 render): the feathered drop shadow was a custom POSITION_COLOR gradient mesh;
+         * the two-phase GUI has no native primitive for it. Approximate with a flat opaque fill over
+         * the content bounds (drawn behind the content) for the prototype. */
+        this.box(left, top, right, bottom, opaque);
     }
 
     /* Gradients */
@@ -319,62 +310,14 @@ public class Batcher2D
 
     public void dropCircleShadow(int x, int y, int radius, int segments, int opaque, int shadow)
     {
-        Matrix3x2fc matrix = this.matrix();
-
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_COLOR);
-        builder.vertex(matrix, x, y).color(opaque);
-
-        for (int i = 0; i <= segments; i ++)
-        {
-            double a = i / (double) segments * Math.PI * 2 - Math.PI / 2;
-
-            builder.vertex(matrix, (float) (x - Math.cos(a) * radius), (float) (y + Math.sin(a) * radius)).color(shadow);
-        }
-
-        flush(builder, getTriangleFanLayer());
+        /* TODO(1.21.11 render): circular feathered shadow was a custom TRIANGLE_FAN mesh; no native
+         * two-phase-GUI primitive. Skipped for the prototype (purely decorative). */
     }
 
     public void dropCircleShadow(int x, int y, int radius, int offset, int segments, int opaque, int shadow)
     {
-        if (offset >= radius)
-        {
-            this.dropCircleShadow(x, y, radius, segments, opaque, shadow);
-
-            return;
-        }
-
-        Matrix3x2fc matrix = this.matrix();
-
-        /* Draw opaque base */
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_COLOR);
-        builder.vertex(matrix, x, y).color(opaque);
-
-        for (int i = 0; i <= segments; i ++)
-        {
-            double a = i / (double) segments * Math.PI * 2 - Math.PI / 2;
-
-            builder.vertex(matrix, (int) (x - Math.cos(a) * offset), (int) (y + Math.sin(a) * offset)).color(opaque);
-        }
-
-        flush(builder, getTriangleFanLayer());
-
-        /* Draw outer shadow */
-        builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-        for (int i = 0; i < segments; i ++)
-        {
-            double alpha1 = i / (double) segments * Math.PI * 2 - Math.PI / 2;
-            double alpha2 = (i + 1) / (double) segments * Math.PI * 2 - Math.PI / 2;
-
-            builder.vertex(matrix, (float) (x - Math.cos(alpha2) * offset), (float) (y + Math.sin(alpha2) * offset)).color(opaque);
-            builder.vertex(matrix, (float) (x - Math.cos(alpha1) * offset), (float) (y + Math.sin(alpha1) * offset)).color(opaque);
-            builder.vertex(matrix, (float) (x - Math.cos(alpha1) * radius), (float) (y + Math.sin(alpha1) * radius)).color(shadow);
-            builder.vertex(matrix, (float) (x - Math.cos(alpha2) * offset), (float) (y + Math.sin(alpha2) * offset)).color(opaque);
-            builder.vertex(matrix, (float) (x - Math.cos(alpha1) * radius), (float) (y + Math.sin(alpha1) * radius)).color(shadow);
-            builder.vertex(matrix, (float) (x - Math.cos(alpha2) * radius), (float) (y + Math.sin(alpha2) * radius)).color(shadow);
-        }
-
-        flush(builder, getTrianglesLayer());
+        /* TODO(1.21.11 render): circular feathered shadow was a custom TRIANGLE_FAN/TRIANGLES mesh; no
+         * native two-phase-GUI primitive. Skipped for the prototype (purely decorative). */
     }
 
     /* Outline methods */

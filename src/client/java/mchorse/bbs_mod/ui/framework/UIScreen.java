@@ -59,9 +59,9 @@ public class UIScreen extends Screen implements IFileDropListener
         MinecraftClient mc = MinecraftClient.getInstance();
 
         this.menu = menu;
-        // TODO(1.21.11 render): DrawContext now wraps a GuiRenderState (two-phase GUI, 1.21.6) instead of
-        // vertex consumers. This pre-built context is sized to the current window; verify the UI renders
-        // against the per-frame DrawContext at runtime (Batcher2D currently has no live-context setter).
+        /* Placeholder DrawContext just so the UIRenderingContext/Batcher2D exist for layout/event wiring.
+         * It is NEVER drawn into: render() swaps in vanilla's live per-frame DrawContext via
+         * this.context.setContext(...) before any drawing happens (two-phase GUI, 1.21.6+). */
         this.context = new UIRenderingContext(new DrawContext(mc, new GuiRenderState(), mc.getWindow().getScaledWidth(), mc.getWindow().getScaledHeight()));
 
         this.menu.context.setup(this.context);
@@ -202,6 +202,11 @@ public class UIScreen extends Screen implements IFileDropListener
     public void render(DrawContext context, int mouseX, int mouseY, float delta)
     {
         super.render(context, mouseX, mouseY, delta);
+
+        /* Two-phase GUI (1.21.6+): vanilla only composites the GuiRenderState that belongs to the
+         * DrawContext it hands to render(). Draw the whole BBS UI into THIS live context, not the
+         * placeholder built in the constructor, or nothing reaches the screen. */
+        this.context.setContext(context);
 
         RenderTickCounter tick = this.client.getRenderTickCounter();
 
