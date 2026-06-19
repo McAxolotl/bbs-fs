@@ -45,7 +45,6 @@ public class BBSSettings {
 	public static ValueBoolean axesKeepScreenSize;
 	public static ValueBoolean rotate3dSphere;
 	public static ValueInt rotate3dSphereMode;
-	public static ValueInt rotate3dSphereColor;
 	public static ValueBoolean rotateHideRings;
 	public static ValueBoolean hideInactiveHandles;
 	public static ValueFloat snapTranslate;
@@ -463,7 +462,6 @@ public class BBSSettings {
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
 		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
-		rotate3dSphereColor = builder.getInt("rotate_3d_sphere_color", Colors.setA(Colors.WHITE, 0F)).colorAlpha();
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
