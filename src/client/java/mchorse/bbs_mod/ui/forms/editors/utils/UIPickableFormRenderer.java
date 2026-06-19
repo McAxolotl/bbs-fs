@@ -174,39 +174,22 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         this.renderAxes(context);
 
-        if (this.area.isInside(context))
-        {
-            /* TODO(1.21.11 render): GlStateManager._disable/_enableScissorTest removed;
-             * scissor now goes through RenderSystem.enableScissorForRenderTypeDraws. */
-            this.stencilMap.setup();
-            this.stencil.apply();
-
-            FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
-
-            Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-            MatrixStack stack = new MatrixStack();
-
-            stack.push();
-
-            if (matrix != null)
-            {
-                MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
-            }
-
-            Gizmo.INSTANCE.renderStencil(stack, this.stencilMap);
-
-            stack.pop();
-
-            this.stencil.pickGUI(context, this.area);
-            this.stencil.unbind(this.stencilMap);
-
-            /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebinding the
-             * main framebuffer for writing now goes through the GpuTexture/command-queue API. */
-        }
-        else
-        {
-            this.stencil.clearPicking();
-        }
+        /* TODO(1.21.11 render): the stencil-picking pass is DISABLED. In 1.21.5+ an immediate
+         * RenderLayer.draw renders into RenderSystem.outputColorTextureOverride — which
+         * ModelPreviewRenderer.begin points at the preview FBO — NOT into the raw-GL framebuffer that
+         * StencilFormFramebuffer.apply() binds. So this second (picking) render of the model leaked into the
+         * preview FBO and visibly darkened/overwrote the model whenever the cursor was over the panel
+         * (the pass is hover-gated by area.isInside). Picking is non-functional regardless until
+         * StencilFormFramebuffer is ported to bind via the GpuTexture/output-override path (so the picking
+         * render targets the stencil FBO and glReadPixels reads that target). Re-enable the block then:
+         *
+         *   if (this.area.isInside(context)) {
+         *       this.stencilMap.setup(); this.stencil.apply();
+         *       FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
+         *       ... Gizmo.INSTANCE.renderStencil(...); this.stencil.pickGUI(context, this.area);
+         *       this.stencil.unbind(this.stencilMap);
+         *   } */
+        this.stencil.clearPicking();
 
         this.gizmo.update(context);
     }
