@@ -54,9 +54,12 @@ import java.util.function.Supplier;
  * {@code AbstractTexture}/{@code GpuTextureView}, registered under an {@code Identifier}, and drawn via
  * {@code context.drawTexture(RenderPipelines.GUI_TEXTURED, ...)} so it composites in the two-phase GUI.
  *
- * TODO(1.21.11 render): the raw-GL-id overloads {@code texturedBox(int,...)} / {@code texturedBox(Supplier,...)}
- * are still STUBBED - those are the in-panel framebuffer previews (film / picker / model-block) whose
- * FBO compositing is itself deferred. Wire them once the framebuffer path is ported.
+ * The raw-GL-id overloads {@code texturedBox(int,...)} / {@code texturedBox(Supplier,...)} (in-panel
+ * framebuffer previews: film / picker / model-block) are bridged the same way, via
+ * {@link AdoptedTexture#identifier(int, int, int, boolean)} which adopts the bare FBO color-attachment
+ * GL id zero-copy. The {@code Supplier<RenderPipeline>} shader selector is ignored (always GUI_TEXTURED);
+ * callers that depended on a CUSTOM pipeline's per-draw uniforms (multilink, subtitle blur) still need
+ * those uniforms re-wired - see the per-call-site TODOs.
  *
  * TODO(1.21.11 render): fine gradients (horizontal/4-corner), drop shadows and circular shadows are
  * approximated (solid fill) or skipped — the two-phase GUI has no native primitive for them. Restore
@@ -472,20 +475,62 @@ public class Batcher2D
             (int) (u2 - u1), (int) (v2 - v1), textureW, textureH, color);
     }
 
+    /**
+     * Raw-GL-id overload: the callers (film / picker / model-block in-panel previews) hand us a
+     * framebuffer color-attachment GL id directly. Bridged through {@link AdoptedTexture} (zero-copy)
+     * and drawn via the same two-phase {@code context.drawTexture} path as the {@link Texture} overload.
+     *
+     * <p>FBO color textures are bottom-up (V-flipped); callers already pass {@code v1=height, v2=0} to
+     * flip, which yields a negative {@code (v2 - v1)} region span (vanilla flips the V axis). We do NOT
+     * add a flip here - the u/v are plumbed through faithfully. Previews use LINEAR sampling.</p>
+     */
     public void texturedBox(int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        /* TODO(1.21.11 render): STUBBED. The old int overload bound a raw GL texture id via
-         * RenderSystem.setShaderTexture, which no longer exists. No draw is issued. */
+        /* TODO(1.21.11 render): verify at runtime. */
+        this.drawAdoptedGlTexture(texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
     }
 
     /**
      * @deprecated 1.21.5 removed the per-draw shader-program supplier; the {@code shader} argument is
-     * ignored. Kept for source compatibility with the 1.21.1 callers. STUBBED (no draw).
+     * ignored (the bridge always uses {@code GUI_TEXTURED}). Kept for source compatibility with the
+     * 1.21.1 callers. The real texture is the {@code int} id, so it is routed through the same path as
+     * {@link #texturedBox(int, int, float, float, float, float, float, float, float, float, int, int)}.
+     *
+     * TODO(1.21.11 render): callers that supplied a CUSTOM pipeline (multilink pixelate/erase atlas,
+     * subtitle blur) lose their per-draw uniforms/samplers here - that is the separate already-documented
+     * "re-wire custom GUI shaders" TODO at those call sites, not a regression of this bridge.
      */
     @Deprecated
     public void texturedBox(Supplier<RenderPipeline> shader, int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        /* TODO(1.21.11 render): STUBBED. See class javadoc; needs the Texture->GpuTexture bridge. */
+        /* TODO(1.21.11 render): verify at runtime. The Supplier (pipeline selector) is ignored. */
+        this.drawAdoptedGlTexture(texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
+    }
+
+    /**
+     * Shared draw path for the raw-GL-id overloads: adopt {@code glId} via {@link AdoptedTexture} and
+     * composite it through {@code context.drawTexture} exactly like the {@link Texture} overload. The
+     * region span is signed ({@code u2 - u1} / {@code v2 - v1}); a negative span flips that axis.
+     */
+    private void drawAdoptedGlTexture(int glId, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
+    {
+        Identifier id = AdoptedTexture.identifier(glId, textureW, textureH, true);
+
+        if (id == null)
+        {
+            return;
+        }
+
+        /* GUI_TEXTURED multiplies the sampled texel by the vertex color; alpha 0 would make it
+         * invisible, so promote to opaque (mirrors the Texture overload / text path). */
+        if (Colors.getA(color) <= 0F)
+        {
+            color = Colors.opaque(color);
+        }
+
+        this.context.drawTexture(RenderPipelines.GUI_TEXTURED, id,
+            (int) x, (int) y, u1, v1, (int) w, (int) h,
+            (int) (u2 - u1), (int) (v2 - v1), textureW, textureH, color);
     }
 
     private void fillTexturedBox(BufferBuilder builder, Matrix3x2fc matrix, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)

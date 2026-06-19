@@ -12,6 +12,7 @@ import net.minecraft.client.texture.GlTexture;
 import net.minecraft.client.texture.GlTextureView;
 import net.minecraft.util.Identifier;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -40,6 +41,12 @@ public final class AdoptedTexture extends AbstractTexture
     private static final int USAGE = GpuTexture.USAGE_TEXTURE_BINDING;
 
     private static final Map<Texture, Identifier> REGISTRY = new WeakHashMap<>();
+
+    /* Raw-GL-id cache (e.g. framebuffer-preview color textures handed to the int / Supplier overloads).
+     * Keyed by glId rather than identity: ids are reused/bounded, so a plain map is fine. Unlike the
+     * Texture-keyed cache this cannot be weak (the key is a primitive box), so this map retains its
+     * wrappers — see the bounded-leak TODO in the class javadoc. */
+    private static final Map<Integer, Identifier> GLID_REGISTRY = new HashMap<>();
     private static int counter;
 
     /**
@@ -59,21 +66,59 @@ public final class AdoptedTexture extends AbstractTexture
         {
             id = Identifier.of(BBSMod.MOD_ID, "adopted/" + (counter++));
 
-            MinecraftClient.getInstance().getTextureManager().registerTexture(id, new AdoptedTexture(texture));
+            MinecraftClient.getInstance().getTextureManager().registerTexture(id,
+                new AdoptedTexture(texture.id, "bbs_adopted_" + texture.id,
+                    texture.width, texture.height, texture.isLinear()));
             REGISTRY.put(texture, id);
         }
 
         return id;
     }
 
-    private AdoptedTexture(Texture texture)
+    /**
+     * By-GL-id variant of {@link #identifier(Texture)}: adopt (zero-copy) an existing raw GL texture id
+     * directly. Used by the {@code texturedBox(int,...)} / {@code texturedBox(Supplier,...)} bridges,
+     * whose callers hand us a framebuffer-preview color texture as a bare {@code glId}.
+     *
+     * <p>{@code linear} selects the sampler filter (NEAREST for pixel UI, LINEAR for FBO previews).</p>
+     *
+     * TODO(1.21.11 render): verify at runtime. Caches by glId; the same id is assumed to keep its
+     * dimensions/filter intent across frames (FBO previews resize by reallocating the same id, so the
+     * cached wrapper's static width/height may go stale — re-register if preview resizing misbehaves).
+     */
+    public static Identifier identifier(int glId, int width, int height, boolean linear)
     {
-        AdoptedGlTexture glTexture = new AdoptedGlTexture(texture);
+        if (glId < 0)
+        {
+            return null;
+        }
+
+        Identifier id = GLID_REGISTRY.get(glId);
+
+        if (id == null)
+        {
+            id = Identifier.of(BBSMod.MOD_ID, "adopted/glid_" + glId);
+
+            MinecraftClient.getInstance().getTextureManager().registerTexture(id,
+                new AdoptedTexture(glId, "bbs_adopted_glid_" + glId, width, height, linear));
+            GLID_REGISTRY.put(glId, id);
+        }
+
+        return id;
+    }
+
+    /**
+     * Shared constructor for both entry points: adopt the existing GL id {@code glId} (zero-copy) into
+     * a vanilla {@link GlTexture}/{@link GlTextureView} pair with a clamping sampler.
+     */
+    private AdoptedTexture(int glId, String label, int width, int height, boolean linear)
+    {
+        AdoptedGlTexture glTexture = new AdoptedGlTexture(glId, label, width, height);
 
         this.glTexture = glTexture;
         this.glTextureView = new AdoptedGlTextureView(glTexture);
 
-        FilterMode filter = texture.isLinear() ? FilterMode.LINEAR : FilterMode.NEAREST;
+        FilterMode filter = linear ? FilterMode.LINEAR : FilterMode.NEAREST;
 
         this.sampler = RenderSystem.getSamplerCache().get(
             AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE, filter, filter, false);
@@ -88,10 +133,10 @@ public final class AdoptedTexture extends AbstractTexture
     /** {@link GlTexture} that adopts an existing GL id instead of allocating a new GL texture. */
     private static final class AdoptedGlTexture extends GlTexture
     {
-        private AdoptedGlTexture(Texture texture)
+        private AdoptedGlTexture(int glId, String label, int width, int height)
         {
-            super(USAGE, "bbs_adopted_" + texture.id, TextureFormat.RGBA8,
-                Math.max(1, texture.width), Math.max(1, texture.height), 1, 1, texture.id);
+            super(USAGE, label, TextureFormat.RGBA8,
+                Math.max(1, width), Math.max(1, height), 1, 1, glId);
         }
 
         @Override
