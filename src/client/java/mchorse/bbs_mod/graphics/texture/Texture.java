@@ -108,29 +108,37 @@ public class Texture
         return this.id >= 0;
     }
 
+    /* NOTE(1.21.11 render): bind/unbind/delete MUST go through GlStateManager, not raw GL.
+     * The 1.21.1 original used raw GL11.glBindTexture and it was fine, but the 1.21.5+ GPU rewrite
+     * made the new GL backend (GlCommandEncoder / RenderPassImpl) — which vanilla's glyph-atlas
+     * UPLOAD and SAMPLING now run through — trust GlStateManager's per-unit bound-texture cache and
+     * SKIP the real glBindTexture when the cache says the id is already bound. Raw binds here mutate
+     * real GL state without updating that cache, desyncing it; vanilla then skips a needed bind for
+     * whichever glyph is being baked at that moment, so that one atlas tile samples foreign GPU
+     * memory (observed: the '5' glyph rendering as garbage). Routing through GlStateManager keeps the
+     * cache coherent. The unit arg is a raw 0-based index, so it must become the GL_TEXTURE0+unit enum
+     * — passing the raw index also caused the GL_INVALID_ENUM "exceeds max combined texture image
+     * units" spam. (target is always GL_TEXTURE_2D, which _bindTexture targets.) */
     public void bind()
     {
-        GL11.glBindTexture(this.target, this.id);
+        GlStateManager._bindTexture(this.id);
     }
 
-    public void bind(int texture)
+    public void bind(int unit)
     {
-        /* NOTE(1.21.11 port): use raw GL13.glActiveTexture (matches the old GlStateManager.glActiveTexture
-         * passthrough). GlStateManager._activeTexture tracks state as (arg - GL_TEXTURE0) and corrupts
-         * the vanilla texture-unit tracking when fed a non-enum, crashing later vanilla _bindTexture. */
-        GL13.glActiveTexture(texture);
-        GL11.glBindTexture(this.target, this.id);
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + unit);
+        GlStateManager._bindTexture(this.id);
     }
 
     public void unbind()
     {
-        GL11.glBindTexture(this.target, 0);
+        GlStateManager._bindTexture(0);
     }
 
-    public void unbind(int texture)
+    public void unbind(int unit)
     {
-        GL13.glActiveTexture(texture);
-        GL11.glBindTexture(this.target, 0);
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + unit);
+        GlStateManager._bindTexture(0);
     }
 
     public void setFormat(TextureFormat format)
@@ -188,7 +196,11 @@ public class Texture
 
     public void delete()
     {
-        GL11.glDeleteTextures(this.id);
+        /* Use GlStateManager._deleteTexture (not raw GL11.glDeleteTextures): it also walks the
+         * per-unit bound-texture cache and resets any entry holding this id. Otherwise the cache
+         * keeps claiming a freed id is bound, and when the driver recycles that id (e.g. for a new
+         * glyph-atlas page) vanilla skips the real bind → corruption. */
+        GlStateManager._deleteTexture(this.id);
         this.id = -1;
     }
 
