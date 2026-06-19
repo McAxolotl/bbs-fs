@@ -95,7 +95,8 @@ public class UIScreen extends Screen implements IFileDropListener
             }
             catch (Exception e)
             {
-                System.out.println("[BBS preview] renderModelToTexture failed: " + e);
+                System.out.println("[BBS preview] renderModelToTexture failed on " + renderer.getClass().getSimpleName() + ":");
+                e.printStackTrace();
             }
         }
     }

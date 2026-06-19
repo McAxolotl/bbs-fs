@@ -249,6 +249,16 @@ public abstract class UIModelRenderer extends UIElement
             {
                 this.renderUserModel(context);
             }
+            catch (Exception e)
+            {
+                /* The MODEL geometry already drew into the FBO before any failure; only editor overlays
+                 * (renderAxes/gizmo) NPE in the world phase because they need GUI-flow state. Swallow so the
+                 * model still blits; overlays are handled separately. */
+                if (context.getTick() % 60L == 0L)
+                {
+                    System.out.println("[BBS preview] overlay failed (model still drawn): " + e);
+                }
+            }
             finally
             {
                 this.preview.end();
