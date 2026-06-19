@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.ui.film;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.clips.misc.Subtitle;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -16,8 +14,6 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -53,16 +49,15 @@ public class UISubtitleRenderer
             return;
         }
 
-        ShaderProgram program = BBSShaders.getSubtitlesProgram();
-        GlUniform blur = program.getUniform("Blur");
-        GlUniform textureSize = program.getUniform("TextureSize");
-        Supplier<ShaderProgram> supplier = () -> program;
+        RenderPipeline program = BBSShaders.getSubtitlesProgram();
+        Supplier<RenderPipeline> supplier = () -> program;
 
         net.minecraft.client.gl.Framebuffer fb = MinecraftClient.getInstance().getFramebuffer();
         int width = fb.textureWidth;
         int height = fb.textureHeight;
 
-        Matrix4f cache = new Matrix4f(RenderSystem.getProjectionMatrix());
+        /* TODO(1.21.11 render): projection matrix is GPU-owned now (RenderSystem.getProjectionMatrix/setProjectionMatrix(Matrix4f) removed).
+         * The subtitle compositing previously cached + swapped the projection; restore via the new pipeline foundation. */
 
         width /= 2;
         height /= 2;
@@ -72,8 +67,7 @@ public class UISubtitleRenderer
         Matrix4f ortho = new Matrix4f().ortho(0, width, height, 0, -100, 100);
         FontRenderer font = Batcher2D.getDefaultTextRenderer();
 
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        RenderSystem.disableCull();
+        /* TODO(1.21.11 render): depth/cull state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.depthFunc(GL_ALWAYS)/disableCull() */
 
         for (Subtitle subtitle : subtitles)
         {
@@ -128,7 +122,8 @@ public class UISubtitleRenderer
             int fw = (int) ((contentW + 10) * scale);
             int fh = (int) ((contentH + 10) * scale);
 
-            RenderSystem.setProjectionMatrix(new Matrix4f().ortho(0, contentW + 10, 0, contentH + 10, -100, 100), VertexSorter.BY_Z);
+            /* TODO(1.21.11 render): projection is GPU-owned; previously set an ortho projection for the offscreen
+             * subtitle framebuffer here via RenderSystem.setProjectionMatrix(Matrix4f). Restore via new foundation. */
 
             framebuffer.resize(fw, fh);
             framebuffer.applyClear();
@@ -169,9 +164,9 @@ public class UISubtitleRenderer
             }
 
             /* Render the texture */
-            fb.beginWrite(true);
-
-            RenderSystem.setProjectionMatrix(ortho, VertexSorter.BY_Z);
+            /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebind MC main framebuffer as the
+             * draw target + restore the screen-ortho projection (was RenderSystem.setProjectionMatrix(ortho))
+             * via the new pipeline foundation before compositing the subtitle texture. */
 
             Transform transform = new Transform();
 
@@ -181,25 +176,18 @@ public class UISubtitleRenderer
             stack.translate(x, y, 0);
             MatrixStackUtils.applyTransform(stack, transform);
 
-            if (blur != null)
-            {
-                blur.set(subtitle.shadow, subtitle.shadowOpaque ? 1F : 0F);
-            }
+            /* TODO(1.21.11 render): the subtitles shader's per-draw uniforms ("Blur" = subtitle.shadow/shadowOpaque,
+             * "TextureSize" = texture.width/height) were set via GlUniform on the old ShaderProgram. RenderPipeline
+             * has no GlUniform accessor; feed these through the new uniform/UBO mechanism once available. */
 
-            if (textureSize != null)
-            {
-                textureSize.set((float) texture.width, (float) texture.height);
-            }
-
-            RenderSystem.enableBlend();
-            RenderSystem.blendFuncSeparate(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SrcFactor.ONE, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA);
-
+            /* TODO(1.21.11 render): blend state now lives in the RenderPipeline/RenderLayer; removed
+             * RenderSystem.enableBlend()/blendFuncSeparate(...) */
             batcher.texturedBox(supplier, texture.id, Colors.setA(Colors.WHITE, alpha), -fw * subtitle.anchorX, -fh * subtitle.anchorY, texture.width, texture.height, 0, 0, texture.width, texture.height, texture.width, texture.height);
 
             stack.pop();
         }
 
-        RenderSystem.setProjectionMatrix(cache, VertexSorter.BY_Z);
-        RenderSystem.enableCull();
+        /* TODO(1.21.11 render): restore the cached projection + cull state via the new pipeline foundation
+         * (was RenderSystem.setProjectionMatrix(cache)/enableCull()). */
     }
 }

@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.ui.forms.editors.utils;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -24,9 +22,6 @@ import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
@@ -159,8 +154,11 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         this.formEditor.preFormRender(context, this.form);
 
+        /* TODO(1.21.11 render): getMatrices() is now a 2D Matrix3x2fStack; the 3D form
+         * model-view comes from this.camera/this.world inside the context, so feed a fresh
+         * identity MatrixStack here (matches the render-foundation bridge). */
         FormRenderingContext formContext = new FormRenderingContext()
-            .set(FormRenderType.PREVIEW, this.target == null ? this.entity : this.target, context.batcher.getContext().getMatrices(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
+            .set(FormRenderType.PREVIEW, this.target == null ? this.entity : this.target, new MatrixStack(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
             .camera(this.camera)
             .modelRenderer();
 
@@ -178,15 +176,15 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         if (this.area.isInside(context))
         {
-            GlStateManager._disableScissorTest();
-
+            /* TODO(1.21.11 render): GlStateManager._disable/_enableScissorTest removed;
+             * scissor now goes through RenderSystem.enableScissorForRenderTypeDraws. */
             this.stencilMap.setup();
             this.stencil.apply();
 
             FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
 
             Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-            MatrixStack stack = context.render.batcher.getContext().getMatrices();
+            MatrixStack stack = new MatrixStack();
 
             stack.push();
 
@@ -195,16 +193,15 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                 MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
             }
 
-            Gizmo.INSTANCE.renderStencil(context.batcher.getContext().getMatrices(), this.stencilMap);
+            Gizmo.INSTANCE.renderStencil(stack, this.stencilMap);
 
             stack.pop();
 
             this.stencil.pickGUI(context, this.area);
             this.stencil.unbind(this.stencilMap);
 
-            MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
-
-            GlStateManager._enableScissorTest();
+            /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebinding the
+             * main framebuffer for writing now goes through the GpuTexture/command-queue API. */
         }
         else
         {
@@ -217,7 +214,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     private void renderAxes(UIContext context)
     {
         Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-        MatrixStack stack = context.render.batcher.getContext().getMatrices();
+        /* TODO(1.21.11 render): getMatrices() is now 2D; axes/gizmo render in 3D, so build
+         * a MatrixStack from the origin instead (the depth state is encoded by the layer). */
+        MatrixStack stack = new MatrixStack();
 
         stack.push();
 
@@ -229,9 +228,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         /* Draw axes */
         if (UIBaseMenu.renderAxes)
         {
-            RenderSystem.disableDepthTest();
+            /* TODO(1.21.11 render): RenderSystem.disable/enableDepthTest removed; depth state
+             * is now part of the RenderPipeline used by the gizmo render layer. */
             Gizmo.INSTANCE.render(stack);
-            RenderSystem.enableDepthTest();
         }
 
         stack.pop();
@@ -243,12 +242,16 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         float hitboxH = this.form.hitboxHeight.get();
         float eyeHeight = hitboxH * this.form.hitboxEyeHeight.get();
 
+        /* TODO(1.21.11 render): getMatrices() is now a 2D Matrix3x2fStack; hitbox boxes render
+         * in 3D world space, so draw against a fresh MatrixStack at the model origin. */
+        MatrixStack stack = new MatrixStack();
+
         /* Draw look vector */
         final float thickness = 0.01F;
-        Draw.renderBox(context.batcher.getContext().getMatrices(), -thickness, -thickness + eyeHeight, -thickness, thickness, thickness, 2F, 1F, 0F, 0F);
+        Draw.renderBox(stack, -thickness, -thickness + eyeHeight, -thickness, thickness, thickness, 2F, 1F, 0F, 0F);
 
         /* Draw hitbox */
-        Draw.renderBox(context.batcher.getContext().getMatrices(), -hitboxW / 2, 0, -hitboxW / 2, hitboxW, hitboxH, hitboxW);
+        Draw.renderBox(stack, -hitboxW / 2, 0, -hitboxW / 2, hitboxW, hitboxH, hitboxW);
     }
 
     @Override
@@ -278,23 +281,14 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         int w = texture.width;
         int h = texture.height;
 
-        ShaderProgram previewProgram = BBSShaders.getPickerPreviewProgram();
-        GlUniform target = previewProgram.getUniform("Target");
+        /* TODO(1.21.11 render): the picker-preview highlight overlay depends on the new
+         * uniform-upload path. RenderPipeline.getUniform("Target"/"HighlightColor")/GlUniform.set
+         * are gone (uniforms are UBO/DynamicUniform entries now), and Batcher2D.texturedBox is a
+         * no-op stub. Re-enable once the picker-preview pipeline + uniform upload are ported.
+         * Original intent: set Target=index, HighlightColor=stencilHighlightColor, then draw the
+         * stencil texture through the picker-preview program over the viewport. */
+        int color = BBSSettings.stencilHighlightColor.get();
 
-        if (target != null)
-        {
-            target.set(index);
-        }
-
-        GlUniform highlight = previewProgram.getUniform("HighlightColor");
-
-        if (highlight != null)
-        {
-            int color = BBSSettings.stencilHighlightColor.get();
-            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-        }
-
-        RenderSystem.enableBlend();
         context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, this.area.x, this.area.y, this.area.w, this.area.h, 0, h, w, 0, w, h);
 
         if (pair != null && pair.a != null)

@@ -84,7 +84,7 @@ public final class FilmEditorUserActivity
 
         for (int key = GLFW.GLFW_KEY_SPACE; key <= GLFW.GLFW_KEY_LAST; key++)
         {
-            if (key != GLFW.GLFW_KEY_UNKNOWN && InputUtil.isKeyPressed(handle, key))
+            if (key != GLFW.GLFW_KEY_UNKNOWN && InputUtil.isKeyPressed(mc.getWindow(), key))
             {
                 return true;
             }

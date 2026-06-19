@@ -12,11 +12,9 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 
@@ -95,15 +93,15 @@ public class UIItemStack extends UIElement
 
         if (this.stack != null && !this.stack.isEmpty())
         {
-            MatrixStack matrices = context.batcher.getContext().getMatrices();
+            org.joml.Matrix3x2fStack matrices = context.batcher.getContext().getMatrices();
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
-            matrices.push();
+            matrices.pushMatrix();
             consumers.setUI(true);
             context.batcher.getContext().drawItem(this.stack, this.area.mx() - 8, this.area.my() - 8);
-            context.batcher.getContext().drawItemInSlot(context.batcher.getFont().getRenderer(), this.stack, this.area.mx() - 8, this.area.my() - 8);
+            context.batcher.getContext().drawStackOverlay(context.batcher.getFont().getRenderer(), this.stack, this.area.mx() - 8, this.area.my() - 8);
             consumers.setUI(false);
-            matrices.pop();
+            matrices.popMatrix();
         }
 
         super.render(context);
@@ -135,7 +133,7 @@ public class UIItemStack extends UIElement
 
         if (customData != null && !customData.isEmpty())
         {
-            command.append("[minecraft:custom_data=").append(customData.getNbt()).append(']');
+            command.append("[minecraft:custom_data=").append(customData.copyNbt()).append(']');
         }
 
         command.append(' ').append(stack.getCount());

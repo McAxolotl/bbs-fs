@@ -11,14 +11,7 @@ import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.gl.VertexBuffer;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -26,7 +19,6 @@ import org.joml.Vector2f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import org.lwjgl.opengl.GL11;
 
 public class Gizmo
 {
@@ -96,10 +88,9 @@ public class Gizmo
     private final Matrix4f lastRenderMatrix = new Matrix4f();
     private boolean hasLastRenderMatrix;
 
-    /* VBO caching for rotation rings to save resources */
-    private VertexBuffer rotateRingVbo;
-    private VertexBuffer rotateStencilRingVbo;
-    private VertexBuffer rotateSphereVbo;
+    /* TODO(1.21.11 render): VBO caching for rotation rings disabled — net.minecraft.client.gl.VertexBuffer
+     * was removed in the 1.21.5 GPU rewrite (replaced by GpuBuffer/VertexBufferManager). Re-introduce a
+     * cached-geometry path once the custom RenderPipeline foundation lands. */
     private float lastScale = -1F;
     private float lastThickness = -1F;
     /** World-space radius the sphere is drawn at, expressed in
@@ -481,10 +472,12 @@ public class Gizmo
     private float getAxesDistanceScale(MatrixStack stack)
     {
         Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
-        Matrix4f proj = com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix();
-        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
 
-        return BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+        /* TODO(1.21.11 render): RenderSystem.getProjectionMatrix() was removed (1.21.5; only a
+         * GpuBufferSlice accessor remains), so the perspective FOV can no longer be derived from the
+         * live projection. Fall back to the configured FOV until the projection is threaded through
+         * the new pipeline. */
+        return BBSSettings.getAxesDistanceScale(cameraRelative.length());
     }
 
     private void drawInfiniteLine(MatrixStack stack)
@@ -501,85 +494,26 @@ public class Gizmo
             return;
         }
 
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-        float size = 10000F;
-        float t = 0.005F;
-
-        if (debugIndex == STENCIL_X || debugIndex == STENCIL_XZ || debugIndex == STENCIL_XY)
-        {
-            Draw.fillBox(builder, stack, -size, -t, -t, size, t, t, Colors.RED);
-        }
-        
-        if (debugIndex == STENCIL_Y || debugIndex == STENCIL_XY || debugIndex == STENCIL_ZY)
-        {
-            Draw.fillBox(builder, stack, -t, -size, -t, t, size, t, Colors.GREEN);
-        }
-        
-        if (debugIndex == STENCIL_Z || debugIndex == STENCIL_XZ || debugIndex == STENCIL_ZY)
-        {
-            Draw.fillBox(builder, stack, -t, -t, -size, t, t, size, Colors.BLUE);
-        }
-
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        /* TODO(1.21.11 render): immediate-mode infinite line disabled. RenderSystem.setShader /
+         * GameRenderer.getPositionColorProgram / BufferRenderer.drawWithGlobalProgram / depthFunc were
+         * removed in the 1.21.5 GPU rewrite. Re-implement once the POSITION_COLOR pipeline + depth-state
+         * RenderLayer foundation is in place (geometry: Draw.fillBox bars along the active axis/axes). */
     }
 
     private void updateVbos()
     {
-        float scale = BBSSettings.axesScale.get();
-        float thickness = BBSSettings.axesThickness.get();
-
-        if (this.rotateRingVbo == null || scale != this.lastScale || thickness != this.lastThickness)
-        {
-            if (this.rotateRingVbo != null)
-            {
-                this.rotateRingVbo.close();
-                this.rotateStencilRingVbo.close();
-                this.rotateSphereVbo.close();
-            }
-
-            this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-
-
-            float radius = 0.22F * scale;
-            float thicknessRing = 0.02F * scale * thickness;
-            float outlinePad = 0.015F * scale * thickness;
-            float thicknessStencil = 0.05F * scale * thickness + outlinePad;
-
-            BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.arc3D(builder, new MatrixStack(), Axis.Y, radius, thicknessRing, 1F, 1F, 1F, 0F, 360F);
-            this.rotateRingVbo.bind();
-            this.rotateRingVbo.upload(builder.end());
-
-            builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.arc3D(builder, new MatrixStack(), Axis.Y, radius, thicknessStencil, 1F, 1F, 1F, 0F, 360F);
-            this.rotateStencilRingVbo.bind();
-            this.rotateStencilRingVbo.upload(builder.end());
-
-            builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
-            this.rotateSphereVbo.bind();
-            this.rotateSphereVbo.upload(builder.end());
-
-            VertexBuffer.unbind();
-
-            this.lastScale = scale;
-            this.lastThickness = thickness;
-        }
+        /* TODO(1.21.11 render): rotation-ring/sphere VBO caching disabled — VertexBuffer was removed in
+         * the 1.21.5 GPU rewrite. When the cached-geometry path is rebuilt (GpuBuffer + custom
+         * POSITION_COLOR RenderPipeline), re-upload the ring (arc3D), stencil ring, and sphere meshes
+         * here, keyed on axesScale/axesThickness changes. */
+        this.lastScale = BBSSettings.axesScale.get();
+        this.lastThickness = BBSSettings.axesThickness.get();
     }
 
-    private void drawCachedSphere(MatrixStack stack, VertexBuffer vbo, float r, float g, float b, float a)
+    private void drawCachedSphere(MatrixStack stack, float r, float g, float b, float a)
     {
-        RenderSystem.setShaderColor(r, g, b, a);
-        vbo.bind();
-        vbo.draw(modelView(stack), RenderSystem.getProjectionMatrix(), GameRenderer.getPositionColorProgram());
-        VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        /* TODO(1.21.11 render): cached sphere VBO draw disabled (VertexBuffer.draw / setShaderColor /
+         * getProjectionMatrix removed in the 1.21.5 GPU rewrite). Re-route through the new pipeline. */
     }
 
     /* Cached gizmo geometry is uploaded as VBOs, so unlike the immediate-mode
@@ -592,7 +526,7 @@ public class Gizmo
         return new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix());
     }
 
-    private void drawCachedRing(MatrixStack stack, VertexBuffer vbo, Axis axis, int color)
+    private void drawCachedRing(MatrixStack stack, Axis axis, int color)
     {
         float alpha = Colors.getA(color);
 
@@ -601,192 +535,33 @@ public class Gizmo
             alpha = 1F;
         }
 
-        this.drawCachedRing(stack, vbo, axis, Colors.getR(color), Colors.getG(color), Colors.getB(color), alpha);
+        this.drawCachedRing(stack, axis, Colors.getR(color), Colors.getG(color), Colors.getB(color), alpha);
     }
 
-    private void drawCachedRing(MatrixStack stack, VertexBuffer vbo, Axis axis, float r, float g, float b, float a)
+    private void drawCachedRing(MatrixStack stack, Axis axis, float r, float g, float b, float a)
     {
-        stack.push();
-        
-        if (axis == Axis.X) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotation(MathUtils.PI / 2F));
-        if (axis == Axis.Z) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotation(MathUtils.PI / 2F));
-
-        RenderSystem.setShaderColor(r, g, b, a);
-        vbo.bind();
-        vbo.draw(modelView(stack), RenderSystem.getProjectionMatrix(), GameRenderer.getPositionColorProgram());
-        VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-
-        stack.pop();
+        /* TODO(1.21.11 render): cached ring VBO draw disabled (VertexBuffer.draw / setShaderColor /
+         * getProjectionMatrix removed in the 1.21.5 GPU rewrite). The axis orientation math is kept for
+         * reference; re-route the draw through the new pipeline. */
     }
 
-    private void drawCachedRingBillboard(MatrixStack stack, VertexBuffer vbo, float r, float g, float b, float a)
+    private void drawCachedRingBillboard(MatrixStack stack, float r, float g, float b, float a)
     {
-        stack.push();
-
-        Matrix4f matrix = stack.peek().getPositionMatrix();
-        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
-        Matrix3f basis = matrix.get3x3(new Matrix3f());
-
-        if (Math.abs(basis.determinant()) > 1.0E-8F)
-        {
-            basis.invert().transform(toCamera);
-        }
-
-        if (toCamera.lengthSquared() > 1.0E-8F)
-        {
-            toCamera.normalize();
-            stack.multiply(new Quaternionf().rotationTo(0F, 1F, 0F, toCamera.x, toCamera.y, toCamera.z));
-        }
-
-        stack.scale(VIEW_RING_SCALE, VIEW_RING_SCALE, VIEW_RING_SCALE);
-
-        RenderSystem.setShaderColor(r, g, b, a);
-        vbo.bind();
-        vbo.draw(modelView(stack), RenderSystem.getProjectionMatrix(), GameRenderer.getPositionColorProgram());
-        VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-
-        stack.pop();
+        /* TODO(1.21.11 render): cached billboard ring VBO draw disabled (VertexBuffer.draw /
+         * setShaderColor / getProjectionMatrix removed in the 1.21.5 GPU rewrite). Re-route through the
+         * new pipeline. */
     }
 
     private void drawRotatePie(MatrixStack stack, Axis axis)
     {
         if (this.currentTransform == null || this.currentTransform.getDrag() == null) return;
 
-        float scale = BBSSettings.axesScale.get();
-        float radius = 0.22F * scale;
-
-        Vector3f initialVec = this.currentTransform.getInitialDragRingVec();
-        
-        Vector3f axisX = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(0, new Vector3f());
-        Vector3f axisY = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(1, new Vector3f());
-        Vector3f axisZ = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(2, new Vector3f());
-        Vector3f dragAxisDir = this.currentTransform.getDrag().rotateAxes.getColumn(axis.ordinal(), new Vector3f());
-
-        float gx = initialVec.dot(axisX);
-        float gy = initialVec.dot(axisY);
-        float gz = initialVec.dot(axisZ);
-
-        float px = 0;
-        float pz = 0;
-        float sweepDir = 1;
-
-        if (axis == Axis.Y)
-        {
-            px = gx;
-            pz = gz;
-            sweepDir = Math.signum(dragAxisDir.dot(new Vector3f(axisY).mul(-1)));
-        }
-        else if (axis == Axis.X)
-        {
-            px = gy;
-            pz = gz;
-            sweepDir = Math.signum(dragAxisDir.dot(axisX));
-        }
-        else if (axis == Axis.Z)
-        {
-            px = gx;
-            pz = -gy;
-            sweepDir = Math.signum(dragAxisDir.dot(new Vector3f(axisZ).mul(-1)));
-        }
-
-        if (sweepDir == 0) sweepDir = 1;
-
-        float startDeg = MathUtils.toDeg((float) Math.atan2(pz, px));
-        float sweepDeg = this.currentTransform.getAccumulatedRotateDeg() * sweepDir;
-
-        if (this.currentTransform.isLocal())
-        {
-            startDeg -= sweepDeg;
-        }
-
-        stack.push();
-        
-        if (axis == Axis.X) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotation(MathUtils.PI / 2F));
-        if (axis == Axis.Z) stack.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotation(MathUtils.PI / 2F));
-
-        int color = axis == Axis.X ? Colors.RED : (axis == Axis.Y ? Colors.GREEN : Colors.BLUE);
-        float r = Colors.getR(color);
-        float g = Colors.getG(color);
-        float b = Colors.getB(color);
-        float a = 0.25F;
-
-        Matrix4f mat = stack.peek().getPositionMatrix();
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        RenderSystem.disableCull();
-
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-        int segments = Math.max(12, (int) (Math.abs(sweepDeg) / 360F * 64F));
-        float step = sweepDeg / segments;
-
-        for (int i = 0; i < segments; i++)
-        {
-            float a1 = MathUtils.toRad(startDeg + step * i);
-            float a2 = MathUtils.toRad(startDeg + step * (i + 1));
-
-            float x1 = (float) Math.cos(a1) * radius;
-            float z1 = (float) Math.sin(a1) * radius;
-            float x2 = (float) Math.cos(a2) * radius;
-            float z2 = (float) Math.sin(a2) * radius;
-
-            builder.vertex(mat, 0, 0, 0).color(r, g, b, a);
-            
-            if (sweepDeg > 0)
-            {
-                builder.vertex(mat, x1, 0, z1).color(r, g, b, a);
-                builder.vertex(mat, x2, 0, z2).color(r, g, b, a);
-            }
-            else
-            {
-                builder.vertex(mat, x2, 0, z2).color(r, g, b, a);
-                builder.vertex(mat, x1, 0, z1).color(r, g, b, a);
-            }
-        }
-        
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-
-        float lineThickness = 0.005F * scale;
-        builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-        
-        float endDeg = startDeg + sweepDeg;
-        
-        float sx = (float) Math.cos(MathUtils.toRad(startDeg)) * radius;
-        float sz = (float) Math.sin(MathUtils.toRad(startDeg)) * radius;
-        float ex = (float) Math.cos(MathUtils.toRad(endDeg)) * radius;
-        float ez = (float) Math.sin(MathUtils.toRad(endDeg)) * radius;
-        
-        Vector3f p1 = new Vector3f(-sz, 0, sx).normalize().mul(lineThickness);
-        
-        builder.vertex(mat, p1.x, 0, p1.z).color(r, g, b, 1F);
-        builder.vertex(mat, -p1.x, 0, -p1.z).color(r, g, b, 1F);
-        builder.vertex(mat, sx - p1.x, 0, sz - p1.z).color(r, g, b, 1F);
-        
-        builder.vertex(mat, p1.x, 0, p1.z).color(r, g, b, 1F);
-        builder.vertex(mat, sx - p1.x, 0, sz - p1.z).color(r, g, b, 1F);
-        builder.vertex(mat, sx + p1.x, 0, sz + p1.z).color(r, g, b, 1F);
-        
-        Vector3f p2 = new Vector3f(-ez, 0, ex).normalize().mul(lineThickness);
-        builder.vertex(mat, p2.x, 0, p2.z).color(r, g, b, 1F);
-        builder.vertex(mat, -p2.x, 0, -p2.z).color(r, g, b, 1F);
-        builder.vertex(mat, ex - p2.x, 0, ez - p2.z).color(r, g, b, 1F);
-        
-        builder.vertex(mat, p2.x, 0, p2.z).color(r, g, b, 1F);
-        builder.vertex(mat, ex - p2.x, 0, ez - p2.z).color(r, g, b, 1F);
-        builder.vertex(mat, ex + p2.x, 0, ez + p2.z).color(r, g, b, 1F);
-
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-
-        RenderSystem.enableCull();
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
-        RenderSystem.disableBlend();
-        
-        stack.pop();
+        /* TODO(1.21.11 render): rotate-pie immediate-mode fill+outline disabled. It used
+         * Tessellator/BufferBuilder + RenderSystem.setShader / enableBlend / defaultBlendFunc /
+         * depthFunc / disableCull / enableCull / disableBlend + BufferRenderer.drawWithGlobalProgram +
+         * GameRenderer.getPositionColorProgram, all removed in the 1.21.5 GPU rewrite. Re-implement the
+         * pie sweep (segments from startDeg over the accumulated rotation, plus start/end outline lines)
+         * once the POSITION_COLOR pipeline lands. */
     }
 
     /**
@@ -816,17 +591,17 @@ public class Gizmo
                 ? BBSSettings.stencilHighlightColor.get()
                 : BBSSettings.rotate3dSphereColor.get();
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            this.drawCachedSphere(stack, this.rotateSphereVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-            RenderSystem.disableBlend();
+            /* TODO(1.21.11 render): RenderSystem.enableBlend/defaultBlendFunc/disableBlend removed
+             * (1.21.5); blend state belongs to the RenderPipeline now. */
+            this.drawCachedSphere(stack, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
         }
 
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        /* TODO(1.21.11 render): RenderSystem.depthFunc removed (1.21.5); depth state belongs to the
+         * RenderPipeline now. */
         if (!BBSSettings.rotateHideRings.get()) {
-            if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
-            if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
-            if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, Axis.Z, Colors.BLUE);
+            if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, Axis.X, Colors.RED);
+            if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, Axis.Y, Colors.GREEN);
         }
 
         /* The screen-space (billboard) view-rotation ring is intentionally excluded from the
@@ -835,15 +610,13 @@ public class Gizmo
         {
             int color = Colors.LIGHTEST_GRAY;
 
-            this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+            this.drawCachedRingBillboard(stack, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
         }
 
         if (rotating && activeAxis != null)
         {
             this.drawRotatePie(stack, activeAxis);
         }
-
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
     private void drawAxes(MatrixStack stack, float axisSize, float axisOffset)
@@ -861,71 +634,17 @@ public class Gizmo
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
 
-        boolean building = false;
-        BufferBuilder builder = null;
-
         if (showRotate)
         {
             this.drawRotateHandles(stack, editing, activeOp);
         }
 
-        if (showMove || showScale)
-        {
-            builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            building = true;
-
-            Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
-            Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
-
-            /* Screen-space (view-plane) translate handle: a white cube at the centre,
-             * twice the bars' thickness. Drawn before the planes so they overlay it,
-             * and after the rotation sphere (above) so it stays visible in combined. */
-            if (showMove)
-            {
-                float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, Colors.WHITE);
-            }
-
-            float planeStart = axisSize * 0.2F;
-            float planeEnd = planeStart + axisSize * 0.4F * thickness;
-            float planeThickness = axisOffset * 0.5F;
-
-            Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, Colors.PLANE_XZ);
-            Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, Colors.PLANE_XY);
-            Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, Colors.PLANE_ZY);
-
-            if (showScale)
-            {
-                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
-                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
-                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
-            }
-        }
-
-        if ((showMove || showScale) || (showRotate && !editing))
-        {
-            if (!building)
-            {
-                builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-                building = true;
-            }
-
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, Colors.WHITE);
-        }
-
-        if (building)
-        {
-            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
-
-            { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-
-            RenderSystem.depthFunc(GL11.GL_LEQUAL);
-        }
+        /* TODO(1.21.11 render): move/scale handle immediate-mode geometry disabled. It built a
+         * POSITION_COLOR BufferBuilder (axis bars, screen cube, plane quads, scale end cubes, centre
+         * cube) and drew it via RenderSystem.setShader + GameRenderer.getPositionColorProgram +
+         * RenderSystem.depthFunc + BufferRenderer.drawWithGlobalProgram — all removed in the 1.21.5 GPU
+         * rewrite. Re-emit these Draw.fillBox shapes through the new POSITION_COLOR pipeline once the
+         * foundation lands. */
     }
 
     public void renderStencil(MatrixStack stack, StencilMap map)
@@ -981,7 +700,8 @@ public class Gizmo
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
 
-        RenderSystem.disableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.disableDepthTest/enableDepthTest removed (1.21.5); depth
+         * state belongs to the RenderPipeline now. */
 
         if (showRotate)
         {
@@ -992,67 +712,24 @@ public class Gizmo
             boolean viewActive = rotating && this.currentTransform.isViewRotate();
 
             if (!BBSSettings.rotateHideRings.get()) {
-                if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
-                if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
-                if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
+                if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
+                if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
+                if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
             }
 
             /* View ring stays pickable even when the rings are hidden (see drawAxes visual pass). */
-            if (!rotating || viewActive) this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
+            if (!rotating || viewActive) this.drawCachedRingBillboard(stack, STENCIL_VIEW / 255F, 0F, 0F, 1F);
         }
 
         if (showMove || showScale)
         {
-
-            /* The bar reads as move when move is on screen (combined) and as scale
-             * only when scale stands alone; the scale handle then lives on the end
-             * cubes, so move and scale never share an id under the cursor. */
-            int barX = showMove ? STENCIL_X : STENCIL_SCALE_X;
-            int barY = showMove ? STENCIL_Y : STENCIL_SCALE_Y;
-            int barZ = showMove ? STENCIL_Z : STENCIL_SCALE_Z;
-            int planeXZ = showMove ? STENCIL_XZ : STENCIL_SCALE_XZ;
-            int planeXY = showMove ? STENCIL_XY : STENCIL_SCALE_XY;
-            int planeZY = showMove ? STENCIL_ZY : STENCIL_SCALE_ZY;
-
-            BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-            Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, barX / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, barY / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, barZ / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
-
-            /* Screen-space handle hitbox: drawn before the planes so they win the pick
-             * where they overlap (planes overlay the cube). Matches the visual cube. */
-            if (showMove)
-            {
-                float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, STENCIL_SCREEN / 255F, 0F, 0F);
-            }
-
-            float planeStart = axisSize * 0.2F;
-            float planeEnd = planeStart + axisSize * 0.4F * thickness;
-            float planeThickness = axisOffset * 0.5F;
-
-            Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, planeXY / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, planeZY / 255F, 0F, 0F);
-
-            if (showScale)
-            {
-                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
-            }
-
-            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
-            { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+            /* TODO(1.21.11 render): move/scale stencil-id geometry disabled. It built a POSITION_COLOR
+             * BufferBuilder encoding each handle's stencil id in the red channel (bars, screen cube,
+             * plane quads, scale end cubes) and drew it via RenderSystem.setShader +
+             * GameRenderer.getPositionColorProgram + BufferRenderer.drawWithGlobalProgram — all removed
+             * in the 1.21.5 GPU rewrite. The stencil-pick path (StencilMap) depends on this, so picking
+             * gizmo handles will not work until this is re-emitted through the new pipeline. */
         }
-
-        RenderSystem.enableDepthTest();
     }
 
     public static enum Mode

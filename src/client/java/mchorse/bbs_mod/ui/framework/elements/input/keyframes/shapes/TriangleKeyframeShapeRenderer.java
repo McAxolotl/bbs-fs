@@ -6,7 +6,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import net.minecraft.client.render.BufferBuilder;
-import org.joml.Matrix4f;
+import org.joml.Matrix3x2fc;
 
 public class TriangleKeyframeShapeRenderer implements IKeyframeShapeRenderer
 {
@@ -22,13 +22,13 @@ public class TriangleKeyframeShapeRenderer implements IKeyframeShapeRenderer
     }
 
     @Override
-    public void renderKeyframe(UIContext uiContext, BufferBuilder builder, Matrix4f matrix, int x, int y, int offset, int c)
+    public void renderKeyframe(UIContext uiContext, BufferBuilder builder, Matrix3x2fc matrix, int x, int y, int offset, int c)
     {
         float fOffset = offset * 1.75F;
 
-        builder.vertex(matrix, x, y - fOffset, 0).color(c);
-        builder.vertex(matrix, x - fOffset, y + fOffset, 0).color(c);
-        builder.vertex(matrix, x + fOffset, y + fOffset, 0).color(c);
-        builder.vertex(matrix, x + fOffset, y + fOffset, 0).color(c);
+        builder.vertex(matrix, x, y - fOffset).color(c);
+        builder.vertex(matrix, x - fOffset, y + fOffset).color(c);
+        builder.vertex(matrix, x + fOffset, y + fOffset).color(c);
+        builder.vertex(matrix, x + fOffset, y + fOffset).color(c);
     }
 }

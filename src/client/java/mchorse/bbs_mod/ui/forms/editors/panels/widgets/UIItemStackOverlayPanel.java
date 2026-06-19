@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.forms.editors.panels.widgets;
 
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -14,6 +13,8 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.registry.Registries;
@@ -71,7 +72,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
         {
             try
             {
-                NbtCompound nbtCompound = new StringNbtReader(new StringReader(v)).parseCompound();
+                NbtCompound nbtCompound = StringNbtReader.readCompound(v);
                 ItemStack itemStack = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbtCompound).result().orElse(ItemStack.EMPTY);
 
                 this.pickItemStack(itemStack);
@@ -102,7 +103,9 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     private void updateNbt()
     {
-        this.nbt.setText((ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.stack).result().get()).asString());
+        NbtElement encoded = ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.stack).result().orElse(new NbtCompound());
+
+        this.nbt.setText(encoded instanceof NbtCompound compound ? NbtHelper.toNbtProviderString(compound) : encoded.toString());
     }
 
     private void pickItemStack(ItemStack itemStack)

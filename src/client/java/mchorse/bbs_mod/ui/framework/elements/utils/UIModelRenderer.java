@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
 import mchorse.bbs_mod.graphics.InverseView;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -12,23 +10,13 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.MatrixStackUtils;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.DiffuseLighting;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Intersectiond;
 import org.joml.Matrix3d;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
-import org.lwjgl.opengl.GL11;
 
 /**
  * Model renderer GUI element
@@ -207,52 +195,18 @@ public abstract class UIModelRenderer extends UIElement
      */
     private void renderModel(UIContext context)
     {
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
-
         this.setupPosition();
         this.setupViewport(context);
 
-        MatrixStack stack = context.render.batcher.getContext().getMatrices();
-
-        /* Cache the global stuff */
-        MatrixStackUtils.cacheMatrices();
-
-        RenderSystem.setProjectionMatrix(this.camera.projection, VertexSorter.BY_Z);
+        /* TODO(1.21.11 render): the 3D model-viewport render is disabled. It depended on the 1.21.5+
+         * GPU rewrite removals: RenderSystem.depthFunc, RenderSystem.setProjectionMatrix(Matrix4f,
+         * VertexSorter) (now GpuBufferSlice/ProjectionType), RenderSystem.setupLevelDiffuseLighting,
+         * DiffuseLighting.disableGuiDepthLighting (UBO-based now), RenderSystem.viewport, and a 3D
+         * MatrixStack from DrawContext.getMatrices() (now a 2D Matrix3x2fStack). The camera setup math
+         * (setupPosition/setupViewport) and InverseView are preserved so subclasses and the immersive
+         * morphing camera keep working; restore the projection push + camera-view multiply + light setup
+         * + renderGrid()/renderUserModel() draw through the new pipeline + a 3D MatrixStack foundation. */
         InverseView.set(new Matrix3f(this.camera.view).invert());
-
-        /* Rendering begins... */
-        stack.push();
-        MatrixStackUtils.multiply(stack, this.camera.view);
-        stack.translate(-this.camera.position.x, -this.camera.position.y, -this.camera.position.z);
-        MatrixStackUtils.multiply(stack, this.transform);
-
-        Vector3f a = new Vector3f(0F, 0.85F, -1F).normalize();
-        Vector3f b = new Vector3f(0F, 0.85F, 1F).normalize();
-        Matrix3f lightMatrix = new Matrix3f(this.camera.view);
-
-        lightMatrix.transform(a);
-        lightMatrix.transform(b);
-
-        RenderSystem.setupLevelDiffuseLighting(a, b);
-
-        if (this.grid)
-        {
-            this.renderGrid(context);
-        }
-
-        this.renderUserModel(context);
-
-        DiffuseLighting.disableGuiDepthLighting();
-
-        stack.pop();
-
-        /* Return back to orthographic projection */
-        MinecraftClient mc = MinecraftClient.getInstance();
-
-        RenderSystem.viewport(0, 0, mc.getWindow().getFramebufferWidth(), mc.getWindow().getFramebufferHeight());
-        MatrixStackUtils.restoreMatrices();
-
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
         this.processInputs(context);
     }
@@ -321,8 +275,9 @@ public abstract class UIModelRenderer extends UIElement
 
     protected void setupViewport(UIContext context)
     {
-        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-
+        /* TODO(1.21.11 render): GL11.glClear(GL_DEPTH_BUFFER_BIT) + RenderSystem.viewport(...) disabled.
+         * Depth clear and viewport scoping must go through the new framebuffer/RenderPass model; the
+         * per-element scissor/viewport rect (vx/vy/vw/vh below) is still computed for when that lands. */
         MinecraftClient mc = MinecraftClient.getInstance();
 
         float rx = (float) Math.round(mc.getWindow().getWidth() / (double) context.menu.width);
@@ -334,7 +289,6 @@ public abstract class UIModelRenderer extends UIElement
         int vw = (int) (this.area.w * rx);
         int vh = (int) (this.area.h * ry);
 
-        RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
         this.camera.updatePerspectiveProjection(vw, vh);
         this.camera.updateView();
     }
@@ -350,39 +304,10 @@ public abstract class UIModelRenderer extends UIElement
      */
     protected void renderGrid(UIContext context)
     {
-        Matrix4f matrix4f = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
-
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
-
-        for (int x = 0; x <= 10; x ++)
-        {
-            if (x == 0)
-            {
-                builder.vertex(matrix4f, x - 5, 0, -5).color(0F, 0F, 1F, 1F);
-                builder.vertex(matrix4f, x - 5, 0, 5).color(0F, 0F, 1F, 1F);
-            }
-            else
-            {
-                builder.vertex(matrix4f, x - 5, 0, -5).color(0.25F, 0.25F, 0.25F, 1F);
-                builder.vertex(matrix4f, x - 5, 0, 5).color(0.25F, 0.25F, 0.25F, 1F);
-            }
-        }
-
-        for (int x = 0; x <= 10; x ++)
-        {
-            if (x == 0)
-            {
-                builder.vertex(matrix4f, -5, 0, x - 5).color(1F, 0F, 0F, 1F);
-                builder.vertex(matrix4f, 5, 0, x - 5).color(1F, 0F, 0F, 1F);
-            }
-            else
-            {
-                builder.vertex(matrix4f, -5, 0, x - 5).color(0.25F, 0.25F, 0.25F, 1F);
-                builder.vertex(matrix4f, 5, 0, x - 5).color(0.25F, 0.25F, 0.25F, 1F);
-            }
-        }
-
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        /* TODO(1.21.11 render): ground-grid line render disabled. It built a POSITION_COLOR/DEBUG_LINES
+         * BufferBuilder (11x11 grid with coloured X/Z centre axes) drawn via RenderSystem.setShader +
+         * GameRenderer.getPositionColorProgram + BufferRenderer.drawWithGlobalProgram, all removed in the
+         * 1.21.5 GPU rewrite, and it read a 3D position matrix from DrawContext.getMatrices() (now 2D).
+         * Re-emit through the new POSITION_COLOR line pipeline once the foundation lands. */
     }
 }

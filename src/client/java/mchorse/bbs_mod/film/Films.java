@@ -293,8 +293,7 @@ public class Films
 
     public void render(WorldRenderContext context)
     {
-        RenderSystem.enableDepthTest();
-
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
         for (BaseFilmController controller : this.controllers)
         {
             controller.render(context);
@@ -304,8 +303,6 @@ public class Films
         {
             this.recorder.render(context);
         }
-
-        RenderSystem.disableDepthTest();
     }
 
     public void renderHud(Batcher2D batcher2D, float tickDelta)

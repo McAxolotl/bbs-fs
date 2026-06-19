@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.framework;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IViewport;
@@ -10,10 +9,9 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.opengl.GL11;
 
 /**
  * Base class for GUI screens using this framework
@@ -220,7 +218,7 @@ public abstract class UIBaseMenu
 
     public void renderMenu(UIRenderingContext context, int mouseX, int mouseY)
     {
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        // TODO(1.21.11 render): RenderSystem.depthFunc removed (1.21.5); depth state now lives in the RenderPipeline.
 
         this.context.resetMatrix();
         this.context.setMouse(mouseX, mouseY);
@@ -246,7 +244,7 @@ public abstract class UIBaseMenu
 
         this.context.applyCursor();
 
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        // TODO(1.21.11 render): RenderSystem.depthFunc removed (1.21.5); depth state now lives in the RenderPipeline.
     }
 
     protected void preRenderMenu(UIRenderingContext context)

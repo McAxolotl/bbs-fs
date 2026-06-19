@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.data.types.MapType;
@@ -24,12 +23,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import org.joml.Matrix4f;
+import org.joml.Matrix3x2fc;
 
 import java.util.Collections;
 import java.util.List;
@@ -528,7 +522,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     @SuppressWarnings({"rawtypes", "IntegerDivisionInFloatingPointContext"})
     protected void renderGraph(UIContext context)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        Matrix3x2fc matrix = context.batcher.getContext().getMatrices();
 
         UIKeyframeSheet sheet = this.sheet;
         List keyframes = sheet.channel.getKeyframes();
@@ -620,15 +614,13 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         lineBuilder.render(context.batcher, SolidColorLineRenderer.get(Colors.COLOR.set(Colors.setA(sheet.color, 1F))));
 
         /* Render track bars (horizontal lines) */
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        BufferBuilder builder = UIKeyframeDopeSheet.beginShapes();
         this.renderGraphPointShapes(context, builder, matrix, keyframes);
 
-        RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        UIKeyframeDopeSheet.drawShapes(builder);
     }
 
-    protected void renderGraphPointShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, List keyframes)
+    protected void renderGraphPointShapes(UIContext context, BufferBuilder builder, Matrix3x2fc matrix, List keyframes)
     {
         /* Draw keyframe handles (outer) */
         int forcedIndex = 0;
@@ -730,15 +722,13 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     public void renderTopmostKeyframes(UIContext context)
     {
         Area area = this.keyframes.graphArea;
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        Matrix3x2fc matrix = context.batcher.getContext().getMatrices();
         List keyframes = this.sheet.channel.getKeyframes();
 
         context.batcher.clip(area, context);
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        BufferBuilder builder = UIKeyframeDopeSheet.beginShapes();
         this.renderGraphPointShapes(context, builder, matrix, keyframes);
-        RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        UIKeyframeDopeSheet.drawShapes(builder);
         context.batcher.unclip(context);
     }
 

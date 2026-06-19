@@ -1,8 +1,9 @@
 package mchorse.bbs_mod.particles.emitter;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.Variable;
@@ -15,12 +16,10 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
@@ -35,7 +34,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 public class ParticleEmitter
 {
@@ -461,17 +459,24 @@ public class ParticleEmitter
                 render.renderUI(this.uiParticle, builder, matrix, transition);
             }
 
-            RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
-            RenderSystem.disableCull();
-            { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-            RenderSystem.enableCull();
+            /* TODO(1.21.11 render): verify at runtime. The old path bound this emitter's texture
+             * via bindTexture() + GameRenderer::getPositionTexColorProgram and drew through the
+             * global buffer. Pipelines now sample from a RenderLayer's own texture/sampler set; the
+             * picker-particles BBS layer is the closest POSITION_TEXTURE_COLOR-ish equivalent, but
+             * the per-emitter texture-to-Sampler0 binding still needs wiring in the new layer. */
+            BuiltBuffer built = builder.endNullable();
+
+            if (built != null)
+            {
+                BBSShaders.getPickerParticlesLayer().draw(built);
+            }
         }
     }
 
     /**
      * Render all the particles in this particle emitter
      */
-    public void render(VertexFormat format, Supplier<ShaderProgram> program, MatrixStack stack, int overlay, float transition)
+    public void render(VertexFormat format, RenderLayer layer, MatrixStack stack, int overlay, float transition)
     {
         if (this.scheme == null)
         {
@@ -503,11 +508,17 @@ public class ParticleEmitter
                 }
             }
 
-            RenderSystem.setShader(program);
-            RenderSystem.disableBlend();
-            RenderSystem.disableCull();
-            { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-            RenderSystem.enableCull();
+            /* TODO(1.21.11 render): verify at runtime. Blend/cull/depth and the active shader are
+             * now encoded in the supplied RenderLayer's RenderPipeline instead of the removed
+             * RenderSystem.setShader/disableBlend/disableCull state calls. The per-emitter texture
+             * binding (bindTexture above, old GL-style) still needs to be wired to the layer's
+             * Sampler0; until then the geometry is built faithfully but may sample the wrong texture. */
+            BuiltBuffer built = builder.endNullable();
+
+            if (built != null)
+            {
+                layer.draw(built);
+            }
         }
 
         for (IComponentParticleRender component : renders)

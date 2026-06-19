@@ -84,7 +84,7 @@ import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.gl.GlUniform;
@@ -738,7 +738,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 return true;
             }
 
-            InputUtil.Key utilKey = InputUtil.fromKeyCode(context.getKeyCode(), context.getScanCode());
+            InputUtil.Key utilKey = InputUtil.fromKeyCode(new net.minecraft.client.input.KeyInput(context.getKeyCode(), context.getScanCode(), 0));
 
             if (this.canControlWithKeyboard(utilKey))
             {
@@ -1221,16 +1221,17 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         boolean altPressed = Window.isAltPressed();
 
-        RenderSystem.depthFunc(GL11.GL_LESS);
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.depthFunc(GL_LESS) */
 
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorter.BY_Z);
+        /* TODO(1.21.11 render): projection matrix is now GPU-owned (RenderSystem.getProjectionMatrix/setProjectionMatrix(Matrix4f) removed).
+         * Restore the picking projection (this.panel.lastProjection) via the new pipeline foundation once available. */
         InverseView.set(new Matrix3f(BBSRendering.camera).invert());
 
         /* Render the stencil */
-        MatrixStack worldStack = this.worldRenderContext.matrixStack();
+        MatrixStack worldStack = this.worldRenderContext.matrices();
 
         worldStack.push();
         worldStack.loadIdentity();
@@ -1241,7 +1242,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         /* Return back to orthographic projection */
         MatrixStackUtils.restoreMatrices();
 
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.depthFunc(GL_ALWAYS) */
 
         this.hoveredReplayIndex = -1;
         this.gizmo.update(context);
@@ -1257,24 +1258,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
         int w = texture.width;
         int h = texture.height;
 
-        ShaderProgram previewProgram = BBSShaders.getPickerPreviewProgram();
-        Supplier<ShaderProgram> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
-        GlUniform target = previewProgram.getUniform("Target");
+        com.mojang.blaze3d.pipeline.RenderPipeline previewProgram = BBSShaders.getPickerPreviewProgram();
+        Supplier<com.mojang.blaze3d.pipeline.RenderPipeline> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
 
-        if (target != null)
-        {
-            target.set(index);
-        }
+        /* TODO(1.21.11 render): per-draw uniforms ("Target", "HighlightColor") were set via GlUniform on the
+         * old ShaderProgram; RenderPipeline has no GlUniform accessor. The picker-preview shader needs these
+         * fed through the new uniform/UBO mechanism once the render foundation exposes it.
+         * Selected stencil index = index; highlight color = BBSSettings.stencilHighlightColor. */
 
-        GlUniform highlight = previewProgram.getUniform("HighlightColor");
-
-        if (highlight != null)
-        {
-            int color = BBSSettings.stencilHighlightColor.get();
-            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-        }
-
-        RenderSystem.enableBlend();
+        /* TODO(1.21.11 render): blend state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableBlend() */
         context.batcher.texturedBox(getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, h, w, 0, w, h);
 
         if (altPressed)
@@ -1327,7 +1319,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         this.worldRenderContext = context;
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
 
         if (this.editorController != null)
         {
@@ -1337,7 +1329,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             if (povMode != UIFilmController.CAMERA_MODE_CAMERA && BBSSettings.recordingCameraPreview.get())
             {
-                Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
+                Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), MinecraftClient.getInstance().gameRenderer.getCamera(), context.matrices());
             }
         }
 
@@ -1372,7 +1364,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         this.lastMouse.set(x, y);
 
-        RenderSystem.disableDepthTest();
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.disableDepthTest() */
     }
 
     private void renderOrbitCenterMarker(WorldRenderContext context)
@@ -1389,12 +1381,12 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return;
         }
 
-        net.minecraft.client.render.Camera camera = context.camera();
-        double x = center.x - camera.getPos().x;
-        double y = center.y - camera.getPos().y;
-        double z = center.z - camera.getPos().z;
+        net.minecraft.client.render.Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        double x = center.x - camera.getCameraPos().x;
+        double y = center.y - camera.getCameraPos().y;
+        double z = center.z - camera.getCameraPos().z;
         float distanceScale = BBSSettings.getAxesDistanceScale((float) Math.sqrt(x * x + y * y + z * z));
-        MatrixStack stack = context.matrixStack();
+        MatrixStack stack = context.matrices();
 
         stack.push();
         stack.translate(x, y, z);
@@ -1402,7 +1394,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         Draw.coolerAxes(stack, 0.12F, 0.007F);
         stack.pop();
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
     }
 
     private float getCurrentTransition()
@@ -1462,7 +1454,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 FilmControllerContext filmContext = FilmControllerContext.instance
                     .setup(this.getEntities(), entry.getValue(), replay, renderContext)
-                    .transition(isPlaying ? renderContext.tickCounter().getTickDelta(false) : 0)
+                    .transition(isPlaying ? MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false) : 0)
                     .stencil(this.stencilMap)
                     .relative(replay.relative.get());
 
@@ -1491,7 +1483,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             BaseFilmController.renderEntity(FilmControllerContext.instance
                 .setup(this.getEntities(), entity, replay, renderContext)
-                .transition(isPlaying ? renderContext.tickCounter().getTickDelta(false) : 0)
+                .transition(isPlaying ? MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false) : 0)
                 .stencil(this.stencilMap)
                 .relative(replay.relative.get())
                 .bone(bone == null ? null : bone.a, bone != null && bone.b));
@@ -1503,7 +1495,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.stencil.pick(x, y);
         this.stencil.unbind(this.stencilMap);
 
-        MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+        /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebind MC main framebuffer as the
+         * draw target via the new pipeline foundation (BBSRendering needs the same fix). */
     }
 
     private void ensureStencilFramebuffer()

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.dashboard;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -41,7 +40,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
@@ -312,8 +311,8 @@ public class UIDashboard extends UIBaseMenu
         Link background = BBSSettings.backgroundImage.get();
         int color = BBSSettings.backgroundColor.get();
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
+        /* TODO(1.21.11 render): RenderSystem.enableBlend/defaultBlendFunc removed; blending is
+         * now encoded by the RenderPipeline backing the Batcher2D draw layer. */
 
         if (background == null)
         {

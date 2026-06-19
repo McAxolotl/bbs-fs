@@ -458,20 +458,11 @@ public class UIFilmPreview extends UIElement
 
     private void renderCursor(UIContext context)
     {
-        net.minecraft.client.render.Camera mcCamera = MinecraftClient.getInstance().gameRenderer.getCamera();
-        org.joml.Matrix4fStack stack = RenderSystem.getModelViewStack();
-
-        stack.pushMatrix();
-
-        stack.mul(context.batcher.getContext().getMatrices().peek().getPositionMatrix());
-        stack.translate(area.x + 16, area.ey() - 12, 0F);
-        stack.rotate(RotationAxis.NEGATIVE_X.rotationDegrees(mcCamera.getPitch()));
-        stack.rotate(RotationAxis.POSITIVE_Y.rotationDegrees(mcCamera.getYaw()));
-        stack.scale(-1F, -1F, -1F);
-        RenderSystem.applyModelViewMatrix();
-        RenderSystem.renderCrosshair(10);
-
-        stack.popMatrix();
-        RenderSystem.applyModelViewMatrix();
+        /* TODO(1.21.11 render): STUBBED. This drew a 3D orientation crosshair gizmo (showing the camera's
+         * pitch/yaw) over the preview corner. It relied on:
+         *   - context.getMatrices().peek().getPositionMatrix() — GUI matrices are now 2D (Matrix3x2fStack), no peek()/Matrix4f;
+         *   - RenderSystem.applyModelViewMatrix() — removed (model-view is GPU/pipeline-owned now);
+         *   - RenderSystem.renderCrosshair(int) — removed.
+         * Re-implement against the new pipeline foundation (2D->3D matrix bridge + a crosshair draw). No draw is issued. */
     }
 }

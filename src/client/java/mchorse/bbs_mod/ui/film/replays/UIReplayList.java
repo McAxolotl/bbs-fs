@@ -1426,7 +1426,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
                     return cached;
                 }
 
-                double top = world.getTopY() + 5;
+                double top = world.getTopYInclusive() + 5;
                 Vec3d pos = new Vec3d(x, top, z);
                 BlockHitResult result = RayTracing.rayTrace(world, pos, new Vec3d(0D, -1D, 0D), top - world.getBottomY() + 5D);
 

@@ -13,6 +13,7 @@ import net.minecraft.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
+// TODO(1.21.11 render): re-add when render path ported
 @Mixin(EntityRenderDispatcher.class)
 public class EntityRenderDispatcherMixin
 {

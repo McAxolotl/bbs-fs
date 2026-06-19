@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.film;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
@@ -22,12 +24,14 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
@@ -59,6 +63,29 @@ public class Recorder extends WorldFilmController
 
     private static Matrix4f perspective = new Matrix4f();
 
+    /* BBS-owned 3D POSITION_COLOR triangles pipeline/layer for the camera-frustum preview.
+     * 1.21.5 removed RenderSystem.setShader(GameRenderer::getPositionColorProgram) +
+     * BufferRenderer.drawWithGlobalProgram(); finished BufferBuilders go through a RenderLayer. */
+    private static final RenderPipeline POSITION_COLOR_TRIS = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(net.minecraft.util.Identifier.of(BBSMod.MOD_ID, "pipeline/recorder_camera_preview"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BlendFunction.TRANSLUCENT)
+            .build()
+    );
+
+    private static RenderLayer cameraPreviewLayer;
+
+    private static RenderLayer getCameraPreviewLayer()
+    {
+        if (cameraPreviewLayer == null)
+        {
+            cameraPreviewLayer = RenderLayer.of(BBSMod.MOD_ID + "_recorder_camera_preview", RenderSetup.builder(POSITION_COLOR_TRIS).translucent().build());
+        }
+
+        return cameraPreviewLayer;
+    }
+
     public Form lastForm;
     public Vector3d lastPosition;
     public Vector4f lastRotation;
@@ -89,7 +116,6 @@ public class Recorder extends WorldFilmController
             .rotateX(MathUtils.toRad(-position.angle.pitch));
 
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         transformFrustum(vector, matrix, 1F, 1F);
@@ -107,9 +133,16 @@ public class Recorder extends WorldFilmController
         transformFrustum(vector, matrix, 0F, 0F);
         Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 0F, 0.5F, 1F, 1F);
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        BuiltBuffer built = builder.endNullable();
 
-        RenderSystem.disableDepthTest();
+        if (built != null)
+        {
+            /* TODO(1.21.11 render): verify at runtime. RenderLayer.draw uploads + draws with the layer
+             * pipeline; previously this was RenderSystem.setShader + BufferRenderer.drawWithGlobalProgram. */
+            getCameraPreviewLayer().draw(built);
+        }
+
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.disableDepthTest() */
     }
 
     private static void transformFrustum(Vector4f vector, Matrix4f matrix, float x, float y)

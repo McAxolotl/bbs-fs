@@ -77,7 +77,7 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.Vec3d;
@@ -2937,7 +2937,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.entered)
         {
             ClientPlayerEntity player = MinecraftClient.getInstance().player;
-            Vec3d pos = player.getPos();
+            Vec3d pos = player.getEntityPos();
             Vector3d cameraPos = this.camera.position;
             double distance = cameraPos.distance(pos.x, pos.y, pos.z);
             int value = MinecraftClient.getInstance().options.getViewDistance().getValue();
@@ -3088,11 +3088,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (!BBSRendering.isIrisShadowPass())
         {
-            this.lastProjection.set(RenderSystem.getProjectionMatrix());
-            /* 1.21.1 carries the camera view rotation in positionMatrix(); the context's
-             * MatrixStack base is just an identity stack for entity-relative rendering, so
-             * reading the view from it would drop the camera angle and misaim every raycast. */
-            this.lastView.set(context.positionMatrix());
+            /* TODO(1.21.11 render): projection matrix is GPU-owned now (RenderSystem.getProjectionMatrix(Matrix4f) removed)
+             * and WorldRenderContext no longer exposes positionMatrix(). Capture lastProjection/lastView (used by
+             * UIFilmController picking raycasts) via the new pipeline foundation once it provides the camera view +
+             * projection. Leaving the cached matrices as-is keeps picking compiling but not yet accurate. */
         }
 
         this.controller.renderFrame(context);

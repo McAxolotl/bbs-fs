@@ -13,7 +13,6 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -94,15 +93,15 @@ public class UIBlockStateEditor extends UIElement
 
         if (!stack.isEmpty())
         {
-            MatrixStack matrices = context.batcher.getContext().getMatrices();
+            org.joml.Matrix3x2fStack matrices = context.batcher.getContext().getMatrices();
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
-            matrices.push();
+            matrices.pushMatrix();
             consumers.setUI(true);
             context.batcher.getContext().drawItem(stack, this.area.mx() - 8, this.area.my() - 8);
-            context.batcher.getContext().drawItemInSlot(context.batcher.getFont().getRenderer(), stack, this.area.mx() - 8, this.area.my() - 8);
+            context.batcher.getContext().drawStackOverlay(context.batcher.getFont().getRenderer(), stack, this.area.mx() - 8, this.area.my() - 8);
             consumers.setUI(false);
-            matrices.pop();
+            matrices.popMatrix();
         }
 
         super.render(context);

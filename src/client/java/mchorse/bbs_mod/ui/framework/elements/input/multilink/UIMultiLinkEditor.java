@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.multilink;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -14,13 +14,9 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.utils.UICanvasEditor;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.FilteredLink;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.GameRenderer;
 
 public class UIMultiLinkEditor extends UICanvasEditor
 {
@@ -223,22 +219,15 @@ public class UIMultiLinkEditor extends UICanvasEditor
                     context.batcher.box(area.x, area.y, area.ex(), area.ey(), Colors.setA(Colors.RED, 0.25F));
                 }
 
-                ShaderProgram shader = GameRenderer.getPositionTexColorProgram();
-
-                if (needsMultLinkShader)
-                {
-                    shader = BBSShaders.getMultilinkProgram();
-
-                    GlUniform size = shader.getUniform("Size");
-                    GlUniform filters = shader.getUniform("Filters");
-
-                    size.set((float) ow, (float) oh);
-                    filters.set((float) child.pixelate, child.erase ? 1F : 0F, 0F, 0F);
-                }
-
-                RenderSystem.setShaderTexture(3, context.render.getTextures().getTexture(Icons.ATLAS).id);
-
-                final ShaderProgram finalProgram = shader;
+                /* TODO(1.21.11 render): the pixelate/erase "multilink" filter used to push
+                 * Size/Filters uniforms + an atlas texture sampler onto a custom ShaderProgram.
+                 * GlUniform/RenderSystem.setShaderTexture/ShaderProgram are gone in 1.21.5+; uniforms
+                 * and samplers are now declared on the RenderPipeline (BBSShaders.getMultilinkProgram()).
+                 * texturedBox is itself a no-op stub right now, so the buffer just compiles. Re-wire
+                 * the Size/Filters uniforms + atlas sampler when textured GUI drawing is ported. */
+                final RenderPipeline finalProgram = needsMultLinkShader
+                    ? BBSShaders.getMultilinkProgram()
+                    : net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED;
 
                 context.batcher.texturedBox(() -> finalProgram, texture.id, child.color, area.x, area.y, area.w, area.h, 0, 0, texture.width, texture.height, texture.width, texture.height);
             }

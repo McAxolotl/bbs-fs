@@ -1,6 +1,10 @@
 package mchorse.bbs_mod.ui.framework.elements.input.color;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormats;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -14,13 +18,13 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import org.joml.Matrix4f;
+import org.joml.Matrix3x2fc;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -78,22 +82,49 @@ public class UIColorPicker extends UIElement
     private final Color tempColor = new Color();
     private final Color tempColor2 = new Color();
 
+    /* TODO(1.21.11 render): POSITION_COLOR TRIANGLES pipeline/layer mirrored from Batcher2D (its
+     * pipeline + layer are private). Used by the alpha-gradient preview quad. Verify at runtime
+     * that this picks up the current 2D GUI projection. */
+    private static final RenderPipeline ALPHA_TRIANGLES = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(net.minecraft.util.Identifier.of(BBSMod.MOD_ID, "pipeline/color_alpha_triangles"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer alphaTrianglesLayer;
+
+    private static RenderLayer getAlphaTrianglesLayer()
+    {
+        if (alphaTrianglesLayer == null)
+        {
+            alphaTrianglesLayer = RenderLayer.of(BBSMod.MOD_ID + "_color_alpha_triangles", RenderSetup.builder(ALPHA_TRIANGLES).translucent().build());
+        }
+
+        return alphaTrianglesLayer;
+    }
+
     public static void renderAlphaPreviewQuad(Batcher2D batcher, int x1, int y1, int x2, int y2, Color color)
     {
-        Matrix4f matrix4f = batcher.getContext().getMatrices().peek().getPositionMatrix();
+        Matrix3x2fc matrix4f = batcher.getContext().getMatrices();
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.enableBlend();
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
-        builder.vertex(matrix4f, x1, y1, 0F).color(color.r, color.g, color.b, 1);
-        builder.vertex(matrix4f, x1, y2, 0F).color(color.r, color.g, color.b, 1);
-        builder.vertex(matrix4f, x2, y1, 0F).color(color.r, color.g, color.b, 1);
-        builder.vertex(matrix4f, x2, y1, 0F).color(color.r, color.g, color.b, color.a);
-        builder.vertex(matrix4f, x1, y2, 0F).color(color.r, color.g, color.b, color.a);
-        builder.vertex(matrix4f, x2, y2, 0F).color(color.r, color.g, color.b, color.a);
+        builder.vertex(matrix4f, x1, y1).color(color.r, color.g, color.b, 1);
+        builder.vertex(matrix4f, x1, y2).color(color.r, color.g, color.b, 1);
+        builder.vertex(matrix4f, x2, y1).color(color.r, color.g, color.b, 1);
+        builder.vertex(matrix4f, x2, y1).color(color.r, color.g, color.b, color.a);
+        builder.vertex(matrix4f, x1, y2).color(color.r, color.g, color.b, color.a);
+        builder.vertex(matrix4f, x2, y2).color(color.r, color.g, color.b, color.a);
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            getAlphaTrianglesLayer().draw(built);
+        }
     }
 
     public UIColorPicker(Consumer<Integer> callback)

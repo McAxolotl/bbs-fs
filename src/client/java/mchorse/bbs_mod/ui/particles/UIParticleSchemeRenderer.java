@@ -1,27 +1,23 @@
 package mchorse.bbs_mod.ui.particles;
 
-import mchorse.bbs_mod.graphics.InverseView;
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -37,11 +33,11 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
     private Vector3f vector = new Vector3f(0, 0, 0);
 
-    private static int getWhiteLightmapTextureId()
+    private static NativeImageBackedTexture getWhiteLightmapTexture()
     {
         if (whiteLightmapTexture == null)
         {
-            whiteLightmapTexture = new NativeImageBackedTexture(16, 16, false);
+            whiteLightmapTexture = new NativeImageBackedTexture("bbs_particle_white_lightmap", 16, 16, false);
 
             NativeImage image = whiteLightmapTexture.getImage();
 
@@ -56,7 +52,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
             whiteLightmapTexture.upload();
         }
 
-        return whiteLightmapTexture.getGlId();
+        return whiteLightmapTexture;
     }
 
     public UIParticleSchemeRenderer()
@@ -95,31 +91,25 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.emitter.setupCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
-        MatrixStack stack = context.batcher.getContext().getMatrices();
+        /* TODO(1.21.11 render): verify at runtime. The GUI matrix stack is now 2D
+         * (DrawContext.getMatrices() returns a Matrix3x2fStack), so this 3D particle preview can no
+         * longer borrow it. Build a fresh 3D MatrixStack seeded with the inverse view; the actual
+         * camera/view wiring for in-GUI 3D previews is part of the UIModelRenderer foundation port. */
+        MatrixStack stack = new MatrixStack();
 
         stack.push();
         stack.loadIdentity();
         stack.multiplyPositionMatrix(new Matrix4f(InverseView.get()).invert());
 
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): blend/depth state and the active shader are now encoded in the
+         * RenderLayer's RenderPipeline; the removed RenderSystem.enableBlend/enableDepthTest/
+         * setShaderColor/setShaderTexture calls are gone. The old workaround bound a 16x16 white
+         * texture to the light-map sampler (Sampler2) so the particle shader sampled fullbright
+         * instead of black; getWhiteLightmapTexture() still builds that texture, but binding it to
+         * the picker-particles layer's sampler must be re-wired in the new pipeline. */
+        getWhiteLightmapTexture();
 
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-
-        /* The vanilla dynamic light map binding (Sampler2) does not survive into this screen's
-         * draw call, so the particle shader (particle.vsh does vertexColor = Color *
-         * texelFetch(Sampler2, ...)) samples a black light map and the particles render pitch
-         * black — only their alpha/shape survives. The editor preview has no world context
-         * (emitter.world == null), so the billboard always uses pack(15, 15), i.e. fully bright,
-         * which a correctly bound light map would sample as pure white anyway. Bind our own
-         * 16x16 white texture to Sampler2 right before the draw to get that fullbright result
-         * without depending on the (here broken) light map binding. In-world particles are
-         * unaffected: they render through ParticleFormRenderer with the real light map. */
-        RenderSystem.setShaderTexture(2, getWhiteLightmapTextureId());
-
-        this.emitter.render(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleProgram, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
-        RenderSystem.disableDepthTest();
-        RenderSystem.disableBlend();
+        this.emitter.render(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, BBSShaders.getPickerParticlesLayer(), stack, OverlayTexture.DEFAULT_UV, context.getTransition());
 
         stack.pop();
 
@@ -133,7 +123,13 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
     private void renderPlane(UIContext context, float a, float b, float c, float d)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        /* TODO(1.21.11 render): verify at runtime. This kill-plane gizmo is a 3D POSITION_COLOR draw
+         * that previously shared the model viewport's 3D MatrixStack (now a 2D Matrix3x2fStack) and
+         * the removed GameRenderer::getPositionColorProgram. The geometry is still built faithfully
+         * against the inverse-view matrix, but there is no 3D POSITION_COLOR RenderLayer wired here
+         * yet, so the buffer is closed without a GPU submit until the UIModelRenderer 3D foundation
+         * provides one. */
+        Matrix4f matrix = new Matrix4f(InverseView.get()).invert();
         final float alpha = 0.5F;
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
@@ -152,10 +148,12 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.calculate(1, 1, a, b, c, d);
         builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha);
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.disableCull();
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-        RenderSystem.enableCull();
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            built.close();
+        }
     }
 
     private void calculate(float i, float j, float a, float b, float c, float d)
@@ -189,7 +187,14 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         if (UIBaseMenu.renderAxes)
         {
-            Draw.coolerAxes(context.batcher.getContext().getMatrices(), 1F, 0.005F);
+            /* TODO(1.21.11 render): verify at runtime. coolerAxes is a 3D draw and the GUI matrix
+             * stack is now 2D (Matrix3x2fStack), so seed a fresh 3D MatrixStack with the inverse
+             * view to match the particle preview's space until the UIModelRenderer 3D foundation
+             * exposes the viewport's model-view stack directly. */
+            MatrixStack stack = new MatrixStack();
+
+            stack.multiplyPositionMatrix(new Matrix4f(InverseView.get()).invert());
+            Draw.coolerAxes(stack, 1F, 0.005F);
         }
     }
 }

@@ -211,7 +211,7 @@ public abstract class BaseFilmController
             stack.pop();
         }
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
     }
 
     private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, IEntity entity, float transition, MatrixStack stack)
@@ -235,7 +235,7 @@ public abstract class BaseFilmController
                 Gizmo.INSTANCE.renderStencil(stack, stencilMap);
             }
 
-            RenderSystem.enableDepthTest();
+            /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
             stack.pop();
         }
     }
@@ -472,8 +472,7 @@ public abstract class BaseFilmController
         int background = (int) (opacity * 255F) << 24;
         float h = (float) (-textRenderer.getWidth(text) / 2);
 
-        RenderSystem.disableCull();
-
+        /* TODO(1.21.11 render): cull state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.disableCull() */
         textRenderer.draw(text, h, 0, 0x20ffffff, false, matrix4f, consumers, sneaking ? TextRenderer.TextLayerType.SEE_THROUGH : TextRenderer.TextLayerType.NORMAL, background, light);
 
         if (sneaking)
@@ -483,8 +482,7 @@ public abstract class BaseFilmController
 
         consumers.draw();
 
-        RenderSystem.enableCull();
-
+        /* TODO(1.21.11 render): cull state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableCull() */
         matrices.pop();
     }
 
@@ -893,8 +891,7 @@ public abstract class BaseFilmController
 
     public void render(WorldRenderContext context)
     {
-        RenderSystem.enableDepthTest();
-
+        /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableDepthTest() */
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
             int i = entry.getKey();

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.model_blocks;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
@@ -46,10 +45,8 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.hit.BlockHitResult;
@@ -102,7 +99,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         {
             MinecraftClient mc = MinecraftClient.getInstance();
             Camera camera = mc.gameRenderer.getCamera();
-            BlockHitResult blockHitResult = RayTracing.rayTrace(mc.world, camera.getPos(), RayTracing.fromVector3f(this.mouseDirection), 512F);
+            BlockHitResult blockHitResult = RayTracing.rayTrace(mc.world, camera.getCameraPos(), RayTracing.fromVector3f(this.mouseDirection), 512F);
 
             if (blockHitResult.getType() != HitResult.Type.MISS)
             {
@@ -348,23 +345,25 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         }
 
         MinecraftClient mc = MinecraftClient.getInstance();
-        MatrixStack stack = context.matrixStack();
+        MatrixStack stack = context.matrices();
 
         /* Capture the on-screen camera frame for the drag math: the gizmo is
          * drawn straight onto Minecraft's world stack, so feeding that same
          * view/projection/position back to the gizmo keeps rendering, picking
-         * and dragging in one coordinate frame. */
-        this.gizmoProjection.set(RenderSystem.getProjectionMatrix());
+         * and dragging in one coordinate frame.
+         * TODO(1.21.11 render): RenderSystem.getProjectionMatrix() and
+         * WorldRenderContext.positionMatrix() are removed. The projection and the
+         * camera view rotation must come from the new render-pipeline foundation
+         * (BBSRendering still feeds the old WorldRenderContextImpl). Until that's
+         * ported the gizmo projection/view stay at their previous values, so
+         * picking/dragging won't be frame-accurate yet. */
         this.gizmoCamera.projection.set(this.gizmoProjection);
-        /* 1.21.1 carries the camera view rotation in positionMatrix(); the context's
-         * MatrixStack base is just an identity stack for entity-relative rendering, so
-         * reading the view from it would drop the camera angle and break picking/dragging. */
-        this.gizmoCamera.view.set(context.positionMatrix());
         this.gizmoCamera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
 
         this.renderGizmoStencil(stack, cameraPos, mc);
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.enableDepthTest() removed; depth state
+         * is now part of the RenderPipeline backing the gizmo render layer. */
     }
 
     /**
@@ -396,9 +395,9 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             MatrixStackUtils.multiply(matrices, new Matrix4f().set(transform.createRotationMatrix()));
         }
 
-        RenderSystem.disableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.disable/enableDepthTest removed; depth state
+         * is now encoded by the RenderPipeline backing the gizmo render layer. */
         Gizmo.INSTANCE.render(matrices);
-        RenderSystem.enableDepthTest();
 
         matrices.pop();
     }
@@ -456,7 +455,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.gizmoStencil.pick((int) mc.mouse.getX(), (int) (h - mc.mouse.getY()));
         this.gizmoStencil.unbind(this.gizmoStencilMap);
 
-        mc.getFramebuffer().beginWrite(true);
+        /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebinding the main
+         * framebuffer for writing now goes through the GpuTexture/command-queue API. */
     }
 
     private void addCameraController(UIFormPalette palette)
@@ -653,24 +653,15 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         int w = texture.width;
         int h = texture.height;
 
-        ShaderProgram previewProgram = BBSShaders.getPickerPreviewProgram();
-        GlUniform target = previewProgram.getUniform("Target");
+        /* TODO(1.21.11 render): the picker-preview highlight overlay depends on the new
+         * uniform-upload path. RenderPipeline.getUniform("Target"/"HighlightColor")/GlUniform.set
+         * are gone (uniforms are UBO/DynamicUniform entries now), RenderSystem.enableBlend is gone,
+         * and Batcher2D.texturedBox is a no-op stub. Re-enable once the picker-preview pipeline +
+         * uniform upload are ported. Original intent: set Target=gizmoStencil.getIndex(),
+         * HighlightColor=stencilHighlightColor, then draw the stencil texture through the
+         * picker-preview program over the viewport. */
+        int color = BBSSettings.stencilHighlightColor.get();
 
-        if (target != null)
-        {
-            target.set(this.gizmoStencil.getIndex());
-        }
-
-        GlUniform highlight = previewProgram.getUniform("HighlightColor");
-
-        if (highlight != null)
-        {
-            int color = BBSSettings.stencilHighlightColor.get();
-
-            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-        }
-
-        RenderSystem.enableBlend();
         context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, 0, 0, context.menu.width, context.menu.height, 0, h, w, 0, w, h);
     }
 
@@ -679,21 +670,28 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         super.renderInWorld(context);
 
-        Camera camera = context.camera();
-        Vec3d pos = camera.getPos();
-
         MinecraftClient mc = MinecraftClient.getInstance();
+        Camera camera = mc.gameRenderer.getCamera();
+        Vec3d pos = camera.getCameraPos();
+
         double x = mc.mouse.getX();
         double y = mc.mouse.getY();
 
+        /* TODO(1.21.11 render): RenderSystem.getProjectionMatrix() and
+         * WorldRenderContext.positionMatrix() are removed. The hover ray-pick needs the live
+         * projection + camera-view matrices from the new render-pipeline foundation (BBSRendering
+         * still drives the old WorldRenderContextImpl). Using the cached gizmo projection and an
+         * identity view keeps this compiling; the cursor pick won't be accurate until ported. */
         this.mouseDirection.set(CameraUtils.getMouseDirection(
-            RenderSystem.getProjectionMatrix(),
-            context.positionMatrix(),
+            this.gizmoProjection,
+            new Matrix4f(),
             (int) x, (int) y, 0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight()
         ));
         this.hovered = this.getClosestObject(new Vector3d(pos.x, pos.y, pos.z), this.mouseDirection);
 
-        RenderSystem.enableDepthTest();
+        /* TODO(1.21.11 render): RenderSystem.enable/disableDepthTest removed; depth state is now
+         * encoded by the RenderPipeline backing the Draw.renderBox render layer. */
+        MatrixStack matrices = context.matrices();
 
         for (ModelBlockEntity entity : this.modelBlocks.getList())
         {
@@ -701,23 +699,21 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
             if (!this.isEditing(entity))
             {
-                context.matrixStack().push();
-                context.matrixStack().translate(blockPos.getX() - pos.x, blockPos.getY() - pos.y, blockPos.getZ() - pos.z);
+                matrices.push();
+                matrices.translate(blockPos.getX() - pos.x, blockPos.getY() - pos.y, blockPos.getZ() - pos.z);
 
                 if (this.hovered == entity || entity == this.modelBlock)
                 {
-                    Draw.renderBox(context.matrixStack(), 0D, 0D, 0D, 1D, 1D, 1D, 0, 0.5F, 1F);
+                    Draw.renderBox(matrices, 0D, 0D, 0D, 1D, 1D, 1D, 0, 0.5F, 1F);
                 }
                 else
                 {
-                    Draw.renderBox(context.matrixStack(), 0D, 0D, 0D, 1D, 1D, 1D);
+                    Draw.renderBox(matrices, 0D, 0D, 0D, 1D, 1D, 1D);
                 }
 
-                context.matrixStack().pop();
+                matrices.pop();
             }
         }
-
-        RenderSystem.disableDepthTest();
 
         this.renderGizmo(context, pos);
     }

@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+// TODO(1.21.11 render): re-add when render path ported
 @Mixin(PlayerEntityRenderer.class)
 public class PlayerEntityRendererMixin
 {

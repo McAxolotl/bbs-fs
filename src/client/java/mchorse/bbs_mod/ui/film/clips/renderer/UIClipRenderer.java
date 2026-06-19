@@ -16,12 +16,19 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import mchorse.bbs_mod.BBSMod;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
-import org.joml.Matrix4f;
+import org.joml.Matrix3x2fc;
 import org.joml.Vector2f;
 
 public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
@@ -31,6 +38,31 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
     /* Temporary objects */
     private static Vector2f vector = new Vector2f();
     private static Vector2f previous = new Vector2f();
+
+    /* BBS-owned 2D POSITION_COLOR triangles pipeline/layer (GUI overlay, no depth, translucent),
+     * mirroring Batcher2D. 1.21.11: BufferRenderer.drawWithGlobalProgram() was removed; finished
+     * BufferBuilders are submitted through a RenderLayer wrapping a RenderPipeline. */
+    private static final RenderPipeline GUI_TRIANGLES = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(net.minecraft.util.Identifier.of(BBSMod.MOD_ID, "pipeline/clip_envelope_triangles"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BlendFunction.TRANSLUCENT)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer guiTrianglesLayer;
+
+    private static RenderLayer getTrianglesLayer()
+    {
+        if (guiTrianglesLayer == null)
+        {
+            guiTrianglesLayer = RenderLayer.of(BBSMod.MOD_ID + "_clip_envelope_triangles", RenderSetup.builder(GUI_TRIANGLES).translucent().build());
+        }
+
+        return guiTrianglesLayer;
+    }
 
     @Override
     public void renderClip(UIContext context, UIClips clips, T clip, Area area, boolean selected, boolean current)
@@ -96,7 +128,7 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
      */
     private void renderEnvelope(UIContext context, Envelope envelope, int duration, int x1, int y1, int x2, int y2)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        Matrix3x2fc matrix = context.batcher.getContext().getMatrices();
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
@@ -112,13 +144,18 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
             this.renderSimpleEnvelope(builder, matrix, envelope, duration, x1, y1, x2, y2);
         }
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            getTrianglesLayer().draw(built);
+        }
     }
 
     /**
      * Render keyframe based envelope.
      */
-    private void renderEnvelopesKeyframes(BufferBuilder builder, Matrix4f matrix, KeyframeChannel<Double> channel, int duration, int x1, int y1, int x2, int y2)
+    private void renderEnvelopesKeyframes(BufferBuilder builder, Matrix3x2fc matrix, KeyframeChannel<Double> channel, int duration, int x1, int y1, int x2, int y2)
     {
         Keyframe<Double> prevKeyframe = null;
         int c = ENVELOPE_COLOR.getARGBColor();
@@ -130,13 +167,13 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
                 Vector2f point = this.calculateEnvelopePoint(vector, (int) keyframe.getTick(), keyframe.getValue().floatValue(), duration, x1, y1, x2, y2);
                 Vector2f prevPoint = this.calculateEnvelopePoint(previous, (int) prevKeyframe.getTick(), prevKeyframe.getValue().floatValue(), duration, x1, y1, x2, y2);
 
-                builder.vertex(matrix, prevPoint.x, y2, 0F).color(c);
-                builder.vertex(matrix, point.x, point.y, 0F).color(c);
-                builder.vertex(matrix, prevPoint.x, prevPoint.y, 0F).color(c);
+                builder.vertex(matrix, prevPoint.x, y2).color(c);
+                builder.vertex(matrix, point.x, point.y).color(c);
+                builder.vertex(matrix, prevPoint.x, prevPoint.y).color(c);
 
-                builder.vertex(matrix, point.x, y2, 0F).color(c);
-                builder.vertex(matrix, point.x, point.y, 0F).color(c);
-                builder.vertex(matrix, prevPoint.x, y2, 0F).color(c);
+                builder.vertex(matrix, point.x, y2).color(c);
+                builder.vertex(matrix, point.x, point.y).color(c);
+                builder.vertex(matrix, prevPoint.x, y2).color(c);
             }
 
             prevKeyframe = keyframe;
@@ -147,49 +184,49 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
         {
             Vector2f point = this.calculateEnvelopePoint(vector, (int) prevKeyframe.getTick(), prevKeyframe.getValue().floatValue(), duration, x1, y1, x2, y2);
 
-            builder.vertex(matrix, point.x, y2, 0F).color(c);
-            builder.vertex(matrix, x2, point.y, 0F).color(c);
-            builder.vertex(matrix, point.x, point.y, 0F).color(c);
+            builder.vertex(matrix, point.x, y2).color(c);
+            builder.vertex(matrix, x2, point.y).color(c);
+            builder.vertex(matrix, point.x, point.y).color(c);
 
-            builder.vertex(matrix, x2, y2, 0F).color(c);
-            builder.vertex(matrix, x2, point.y, 0F).color(c);
-            builder.vertex(matrix, point.x, y2, 0F).color(c);
+            builder.vertex(matrix, x2, y2).color(c);
+            builder.vertex(matrix, x2, point.y).color(c);
+            builder.vertex(matrix, point.x, y2).color(c);
         }
     }
 
     /**
      * Render simple envelope (using start and end values).
      */
-    protected void renderSimpleEnvelope(BufferBuilder builder, Matrix4f matrix, Envelope envelope, int duration, int x1, int y1, int x2, int y2)
+    protected void renderSimpleEnvelope(BufferBuilder builder, Matrix3x2fc matrix, Envelope envelope, int duration, int x1, int y1, int x2, int y2)
     {
         /* First triangle */
         int c = ENVELOPE_COLOR.getARGBColor();
         Vector2f point = this.calculateEnvelopePoint(vector, (int) envelope.getStartX(duration), 0, duration, x1, y1, x2, y2);
-        builder.vertex(matrix, point.x, point.y, 0F).color(c);
+        builder.vertex(matrix, point.x, point.y).color(c);
 
         previous.set(point);
         point = this.calculateEnvelopePoint(vector, (int) envelope.getStartDuration(duration), 1, duration, x1, y1, x2, y2);
-        builder.vertex(matrix, point.x, y2, 0F).color(c);
-        builder.vertex(matrix, point.x, point.y, 0F).color(c);
+        builder.vertex(matrix, point.x, y2).color(c);
+        builder.vertex(matrix, point.x, point.y).color(c);
 
         /* Second triangle */
         previous.set(point);
         point = this.calculateEnvelopePoint(vector, (int) envelope.getEndDuration(duration), 1, duration, x1, y1, x2, y2);
-        builder.vertex(matrix, point.x, point.y, 0F).color(c);
-        builder.vertex(matrix, previous.x, y2, 0F).color(c);
-        builder.vertex(matrix, point.x, y2, 0F).color(c);
+        builder.vertex(matrix, point.x, point.y).color(c);
+        builder.vertex(matrix, previous.x, y2).color(c);
+        builder.vertex(matrix, point.x, y2).color(c);
 
         /* Third triangle */
-        builder.vertex(matrix, point.x, point.y, 0F).color(c);
-        builder.vertex(matrix, previous.x, previous.y, 0F).color(c);
-        builder.vertex(matrix, previous.x, y2, 0F).color(c);
+        builder.vertex(matrix, point.x, point.y).color(c);
+        builder.vertex(matrix, previous.x, previous.y).color(c);
+        builder.vertex(matrix, previous.x, y2).color(c);
 
         /* Fourth triangle */
         previous.set(point);
         point = this.calculateEnvelopePoint(vector, (int) envelope.getEndX(duration), 0, duration, x1, y1, x2, y2);
-        builder.vertex(matrix, previous.x, previous.y, 0F).color(c);
-        builder.vertex(matrix, previous.x, y2, 0F).color(c);
-        builder.vertex(matrix, point.x, point.y, 0F).color(c);
+        builder.vertex(matrix, previous.x, previous.y).color(c);
+        builder.vertex(matrix, previous.x, y2).color(c);
+        builder.vertex(matrix, point.x, point.y).color(c);
     }
 
     protected Vector2f calculateEnvelopePoint(Vector2f vector, int tick, float value, int duration, int x1, int y1, int x2, int y2)

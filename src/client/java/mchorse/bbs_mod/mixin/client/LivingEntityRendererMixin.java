@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Map;
 
+// TODO(1.21.11 render): re-add when render path ported
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin
 {

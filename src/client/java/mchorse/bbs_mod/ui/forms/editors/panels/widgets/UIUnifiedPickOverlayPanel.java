@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.forms.editors.panels.widgets;
 
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -25,7 +24,6 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.component.DataComponentTypes;
@@ -278,7 +276,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
             try
             {
-                NbtCompound nbt = new StringNbtReader(new StringReader(v.toString())).parseCompound();
+                NbtCompound nbt = StringNbtReader.readCompound(v.toString());
                 ItemStack parsed = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbt).result().orElse(ItemStack.EMPTY);
 
                 this.acceptItem(parsed);
@@ -584,22 +582,22 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             {
                 int x = startX + i * (SLOT_SIZE + SLOT_GAP);
                 ItemStack stack = inventory.getStack(i);
-                int border = i == inventory.selectedSlot ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
+                int border = i == inventory.getSelectedSlot() ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
 
                 context.batcher.box(x, y, x + SLOT_SIZE, y + SLOT_SIZE, border);
                 context.batcher.box(x + 1, y + 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, Colors.A50);
 
                 if (!stack.isEmpty())
                 {
-                    MatrixStack matrices = context.batcher.getContext().getMatrices();
+                    org.joml.Matrix3x2fStack matrices = context.batcher.getContext().getMatrices();
                     CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
-                    matrices.push();
+                    matrices.pushMatrix();
                     consumers.setUI(true);
                     context.batcher.getContext().drawItem(stack, x + 2, y + 2);
-                    context.batcher.getContext().drawItemInSlot(context.batcher.getFont().getRenderer(), stack, x + 2, y + 2);
+                    context.batcher.getContext().drawStackOverlay(context.batcher.getFont().getRenderer(), stack, x + 2, y + 2);
                     consumers.setUI(false);
-                    matrices.pop();
+                    matrices.popMatrix();
                 }
 
             }
@@ -649,15 +647,15 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
             if (!stack.isEmpty())
             {
-                MatrixStack matrices = context.batcher.getContext().getMatrices();
+                org.joml.Matrix3x2fStack matrices = context.batcher.getContext().getMatrices();
                 CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
-                matrices.push();
+                matrices.pushMatrix();
                 consumers.setUI(true);
                 context.batcher.getContext().drawItem(stack, iconLeft + 1, iconTop + 1);
-                context.batcher.getContext().drawItemInSlot(context.batcher.getFont().getRenderer(), stack, iconLeft + 1, iconTop + 1);
+                context.batcher.getContext().drawStackOverlay(context.batcher.getFont().getRenderer(), stack, iconLeft + 1, iconTop + 1);
                 consumers.setUI(false);
-                matrices.pop();
+                matrices.popMatrix();
             }
 
             int textX = iconLeft + LIST_ICON_SLOT + LIST_ICON_GAP;

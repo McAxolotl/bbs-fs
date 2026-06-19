@@ -239,7 +239,7 @@ public class OrbitFilmCameraController implements ICameraController
             return;
         }
 
-        float dt = MinecraftClient.getInstance().getRenderTickCounter().getLastFrameDuration();
+        float dt = MinecraftClient.getInstance().getRenderTickCounter().getDynamicDeltaTicks();
         float factor = MathUtils.clamp(1F - (float) Math.pow(Math.min(smoothness, 0.99F), dt), 0F, 1F);
 
         this.rotation.lerp(this.targetRotation, factor);
