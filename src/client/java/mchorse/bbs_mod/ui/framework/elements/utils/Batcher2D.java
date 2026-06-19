@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.graphics.texture.AdoptedTexture;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -21,6 +22,7 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormats;
+import net.minecraft.util.Identifier;
 import org.joml.Matrix3x2fc;
 
 import java.util.List;
@@ -47,11 +49,14 @@ import java.util.function.Supplier;
  *       itself), and {@code RenderSystem.depthFunc(...)} is gone — both calls were removed.</li>
  * </ul>
  *
- * TODO(1.21.11 render): TEXTURED drawing (texturedBox / texturedArea / icons) is currently STUBBED.
- * BBS's {@link Texture} is a raw GL texture id; the new pipeline texture system binds a
- * {@code GpuTextureView}/sampler or a registered {@code Identifier}, neither of which {@code Texture}
- * exposes yet. That bridge belongs to the Phase-4 Texture->GpuTexture migration. Until then the
- * geometry is built but not submitted, so textured UI (icons, previews) will not draw. See report.
+ * TEXTURED drawing for BBS {@link Texture} objects (texturedBox / texturedArea / icons) is bridged
+ * through {@link AdoptedTexture}: the raw GL id is adopted (zero-copy) into a vanilla
+ * {@code AbstractTexture}/{@code GpuTextureView}, registered under an {@code Identifier}, and drawn via
+ * {@code context.drawTexture(RenderPipelines.GUI_TEXTURED, ...)} so it composites in the two-phase GUI.
+ *
+ * TODO(1.21.11 render): the raw-GL-id overloads {@code texturedBox(int,...)} / {@code texturedBox(Supplier,...)}
+ * are still STUBBED - those are the in-panel framebuffer previews (film / picker / model-block) whose
+ * FBO compositing is itself deferred. Wire them once the framebuffer path is ported.
  *
  * TODO(1.21.11 render): fine gradients (horizontal/4-corner), drop shadows and circular shadows are
  * approximated (solid fill) or skipped — the two-phase GUI has no native primitive for them. Restore
@@ -445,8 +450,26 @@ public class Batcher2D
 
     public void texturedBox(Texture texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        /* TODO(1.21.11 render): STUBBED. Needs a GpuTextureView/sampler (or registered Identifier)
-         * built from the raw-GL BBS Texture; see class javadoc. No draw is issued. */
+        Identifier id = AdoptedTexture.identifier(texture);
+
+        if (id == null)
+        {
+            return;
+        }
+
+        /* GUI_TEXTURED multiplies the sampled texel by the vertex color; alpha 0 would make the icon
+         * invisible, so promote to opaque (mirrors the text path). */
+        if (Colors.getA(color) <= 0F)
+        {
+            color = Colors.opaque(color);
+        }
+
+        /* drawTexture(pipeline, id, x, y, u, v, width, height, regionW, regionH, texW, texH, color):
+         * vanilla computes u1=u/texW, u2=(u+regionW)/texW, v1=v/texH, v2=(v+regionH)/texH, so the
+         * region sizes are the sampled span in texels (signed - negative flips the axis). */
+        this.context.drawTexture(RenderPipelines.GUI_TEXTURED, id,
+            (int) x, (int) y, u1, v1, (int) w, (int) h,
+            (int) (u2 - u1), (int) (v2 - v1), textureW, textureH, color);
     }
 
     public void texturedBox(int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
@@ -479,8 +502,24 @@ public class Batcher2D
 
     public void texturedArea(Texture texture, int color, float x, float y, float w, float h, float u, float v, float tileW, float tileH, int tw, int th)
     {
-        /* TODO(1.21.11 render): STUBBED. Tiled textured fill - same Texture->GpuTexture dependency
-         * as texturedBox. The tiling geometry below is preserved for the eventual port. */
+        if (tileW <= 0 || tileH <= 0)
+        {
+            return;
+        }
+
+        /* Tile the (tileW x tileH) region at [u,v] across the (w x h) area, clipping the trailing
+         * partial tiles. Each tile is one composited drawTexture (see texturedBox). */
+        for (float dy = 0; dy < h; dy += tileH)
+        {
+            float ph = Math.min(tileH, h - dy);
+
+            for (float dx = 0; dx < w; dx += tileW)
+            {
+                float pw = Math.min(tileW, w - dx);
+
+                this.texturedBox(texture, color, x + dx, y + dy, pw, ph, u, v, u + pw, v + ph, tw, th);
+            }
+        }
     }
 
     /* Text with default font */

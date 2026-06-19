@@ -1,0 +1,118 @@
+package mchorse.bbs_mod.graphics.texture;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.TextureFormat;
+import mchorse.bbs_mod.BBSMod;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.texture.AbstractTexture;
+import net.minecraft.client.texture.GlTexture;
+import net.minecraft.client.texture.GlTextureView;
+import net.minecraft.util.Identifier;
+
+import java.util.Map;
+import java.util.WeakHashMap;
+
+/**
+ * Bridges a BBS raw-GL {@link Texture} (its {@code int} GL texture id) into the vanilla two-phase GUI
+ * (1.21.6+) so {@link net.minecraft.client.gui.DrawContext#drawTexture} can sample it.
+ *
+ * <p>Zero-copy: the existing GL id is ADOPTED by subclassing {@link GlTexture}/{@link GlTextureView}
+ * (their constructors are {@code protected}, so reachable from subclasses without reflection) and
+ * pointing the {@code glId} field at the BBS texture. Because we wrap the live GL object, dynamic BBS
+ * textures (re-uploaded into the same id, e.g. animated frames or framebuffer previews) are reflected
+ * automatically — no per-frame copy.</p>
+ *
+ * <p>BBS owns the GL id lifecycle ({@link Texture#delete()}); this wrapper therefore must NEVER delete
+ * it, so {@link #close()} and the adopted {@link GlTexture#close()} are no-ops.</p>
+ *
+ * <p>Each adopted texture is registered once in the vanilla {@link net.minecraft.client.texture.TextureManager}
+ * under a unique {@link Identifier}; the mapping is cached weakly by BBS {@link Texture} identity.</p>
+ *
+ * TODO(1.21.11 render): registered wrappers are never removed from the vanilla TextureManager (small,
+ * bounded leak across the bounded BBS texture set). Add explicit deregistration if texture churn grows.
+ */
+public final class AdoptedTexture extends AbstractTexture
+{
+    /* Sampling-only usage; the GUI textured pipeline binds the texture to a sampler slot. */
+    private static final int USAGE = GpuTexture.USAGE_TEXTURE_BINDING;
+
+    private static final Map<Texture, Identifier> REGISTRY = new WeakHashMap<>();
+    private static int counter;
+
+    /**
+     * Return (registering on first use) the vanilla {@link Identifier} that resolves to a wrapper of
+     * the given BBS texture. Returns {@code null} if the texture is not valid yet.
+     */
+    public static Identifier identifier(Texture texture)
+    {
+        if (texture == null || !texture.isValid())
+        {
+            return null;
+        }
+
+        Identifier id = REGISTRY.get(texture);
+
+        if (id == null)
+        {
+            id = Identifier.of(BBSMod.MOD_ID, "adopted/" + (counter++));
+
+            MinecraftClient.getInstance().getTextureManager().registerTexture(id, new AdoptedTexture(texture));
+            REGISTRY.put(texture, id);
+        }
+
+        return id;
+    }
+
+    private AdoptedTexture(Texture texture)
+    {
+        AdoptedGlTexture glTexture = new AdoptedGlTexture(texture);
+
+        this.glTexture = glTexture;
+        this.glTextureView = new AdoptedGlTextureView(glTexture);
+
+        FilterMode filter = texture.isLinear() ? FilterMode.LINEAR : FilterMode.NEAREST;
+
+        this.sampler = RenderSystem.getSamplerCache().get(
+            AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE, filter, filter, false);
+    }
+
+    @Override
+    public void close()
+    {
+        /* BBS owns the underlying GL id; never delete it here. */
+    }
+
+    /** {@link GlTexture} that adopts an existing GL id instead of allocating a new GL texture. */
+    private static final class AdoptedGlTexture extends GlTexture
+    {
+        private AdoptedGlTexture(Texture texture)
+        {
+            super(USAGE, "bbs_adopted_" + texture.id, TextureFormat.RGBA8,
+                Math.max(1, texture.width), Math.max(1, texture.height), 1, 1, texture.id);
+        }
+
+        @Override
+        public void close()
+        {
+            /* BBS owns the GL id; do not free it. */
+        }
+    }
+
+    /** View over an {@link AdoptedGlTexture} (single mip level). */
+    private static final class AdoptedGlTextureView extends GlTextureView
+    {
+        private AdoptedGlTextureView(AdoptedGlTexture texture)
+        {
+            super(texture, 0, 1);
+        }
+
+        @Override
+        public void close()
+        {
+            /* Underlying texture not owned; nothing to release. */
+        }
+    }
+}
