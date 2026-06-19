@@ -1,33 +1,31 @@
 package mchorse.bbs_mod.client.renderer.item;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
-import mchorse.bbs_mod.blocks.entities.ModelProperties;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
-import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.forms.renderers.FormRenderType;
-import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
-import mchorse.bbs_mod.utils.MatrixStackUtils;
-import mchorse.bbs_mod.utils.pose.Transform;
-import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
+import net.minecraft.entity.TypedEntityData;
+import net.minecraft.item.ItemDisplayContext;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-public class ModelBlockItemRenderer implements BuiltinItemRendererRegistry.DynamicItemRenderer
+/**
+ * TODO(1.21.11 render): BuiltinItemRendererRegistry / DynamicItemRenderer were removed in
+ * the 1.21.4 item-model rewrite. This class no longer implements that interface and its
+ * render(...) body is neutralized. The class + fields are kept so it can be re-wired to the
+ * new item-model / SpecialModelRenderer system later. Registration in BBSModClient must be
+ * removed (see report).
+ */
+public class ModelBlockItemRenderer
 {
     private Map<ItemStack, Item> map = new HashMap<>();
 
@@ -50,35 +48,13 @@ public class ModelBlockItemRenderer implements BuiltinItemRendererRegistry.Dynam
         }
     }
 
-    @Override
-    public void render(ItemStack stack, ModelTransformationMode mode, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, int overlay)
+    public void render(ItemStack stack, ItemDisplayContext mode, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, int overlay)
     {
-        Item item = this.get(stack);
-
-        if (item != null)
-        {
-            ModelProperties properties = item.entity.getProperties();
-            Form form = properties.getForm(mode);
-
-            if (form != null)
-            {
-                item.expiration = 20;
-
-                Transform transform = properties.getTransform(mode);
-
-                matrices.push();
-                matrices.translate(0.5F, 0F, 0.5F);
-                MatrixStackUtils.applyTransform(matrices, transform);
-
-                RenderSystem.enableDepthTest();
-                FormUtilsClient.render(form, new FormRenderingContext()
-                    .set(FormRenderType.fromModelMode(mode), item.formEntity, matrices, light, overlay, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false))
-                    .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
-                RenderSystem.disableDepthTest();
-
-                matrices.pop();
-            }
-        }
+        // TODO(1.21.11 render): BuiltinItemRendererRegistry/DynamicItemRenderer removed (1.21.4
+        // item-model rewrite). Re-implement custom item rendering via the item-model /
+        // SpecialModelRenderer system. Previously this rendered the block's Form for the given
+        // ItemDisplayContext through FormUtilsClient.render(...).
+        this.get(stack);
     }
 
     public Item get(ItemStack stack)
@@ -98,19 +74,19 @@ public class ModelBlockItemRenderer implements BuiltinItemRendererRegistry.Dynam
 
         this.map.put(stack, item);
 
-        NbtComponent nbtComponent = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        TypedEntityData<?> beComponent = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
 
-        if (nbtComponent == null)
+        if (beComponent == null)
         {
             return item;
         }
 
-        World world = MinecraftClient.getInstance().world;
+        NbtCompound nbt = beComponent.copyNbtWithoutId();
 
-        if (world != null)
-        {
-            entity.readNbt(nbtComponent.getNbt(), world.getRegistryManager());
-        }
+        // TODO(1.21.11 render): populate the ModelBlockEntity from `nbt`. The old
+        // entity.readNbt(nbt, registryManager) was removed by the 1.21.6 persistence rewrite;
+        // ModelBlockEntity.readData(ReadView) is protected and not callable from here. Re-wire
+        // once the item-model render path is restored (e.g. via NbtReadView + an accessor).
 
         return item;
     }

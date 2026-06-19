@@ -3,7 +3,6 @@ package mchorse.bbs_mod.client;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import mchorse.bbs_mod.graphics.InverseView;
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -27,13 +26,13 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.impl.client.rendering.WorldRenderContextImpl;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.WindowFramebuffer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.render.state.GuiRenderState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
@@ -253,7 +252,8 @@ public class BBSRendering
             return;
         }
 
-        framebuffer.resize(w, h, MinecraftClient.IS_SYSTEM_MAC);
+        /* 1.21.11: Framebuffer.resize lost the legacy macOS flag arg. */
+        framebuffer.resize(w, h);
     }
 
     public static void toggleFramebuffer(boolean toggleFramebuffer)
@@ -277,22 +277,23 @@ public class BBSRendering
 
             if (framebuffer.textureWidth != w || framebuffer.textureHeight != h)
             {
-                framebuffer.resize(w, h, MinecraftClient.IS_SYSTEM_MAC);
+                framebuffer.resize(w, h);
             }
 
             clientFramebuffer = mc.getFramebuffer();
 
             reassignFramebuffer(framebuffer);
 
-            framebuffer.beginWrite(true);
+            /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) was removed (render targets are now bound
+             * through the GPU command queue / RenderPass). Rebind our custom framebuffer as the active draw
+             * target via the new pipeline foundation. */
         }
         else
         {
-            int drawW = window.getFramebufferWidth();
-            int drawH = window.getFramebufferHeight();
             reassignFramebuffer(clientFramebuffer);
 
-            mc.getFramebuffer().beginWrite(true);
+            /* TODO(1.21.11 render): Framebuffer.beginWrite(boolean) removed; rebind MC's main framebuffer as the
+             * draw target via the new pipeline foundation. */
 
             if (width != 0)
             {
@@ -303,7 +304,8 @@ public class BBSRendering
                     && dashboard.getPanels().panel instanceof UIFilmPanel;
                 if (!filmPanelShowing)
                 {
-                    framebuffer.draw(drawW, drawH);
+                    /* TODO(1.21.11 render): Framebuffer.draw(w, h) removed; blit our framebuffer to the window
+                     * via Framebuffer.blitToScreen()/drawBlit(GpuTextureView) once the pipeline foundation lands. */
                 }
             }
         }
@@ -319,13 +321,13 @@ public class BBSRendering
     public static void onWorldRenderBegin()
     {
         MinecraftClient mc = MinecraftClient.getInstance();
-        BBSModClient.getFilms().startRenderFrame(mc.getRenderTickCounter().getTickDelta(false));
+        BBSModClient.getFilms().startRenderFrame(mc.getRenderTickCounter().getTickProgress(false));
 
         UIBaseMenu menu = UIScreen.getCurrentMenu();
 
         if (menu != null)
         {
-            menu.startRenderFrame(mc.getRenderTickCounter().getTickDelta(false));
+            menu.startRenderFrame(mc.getRenderTickCounter().getTickProgress(false));
         }
 
         renderingWorld = true;
@@ -344,10 +346,14 @@ public class BBSRendering
 
         if (BBSModClient.getCameraController().getCurrent() instanceof PlayCameraController controller)
         {
-            DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
+            /* 1.21.11: DrawContext now takes (client, GuiRenderState, width, height); the Immediate-based
+             * constructor was removed. */
+            DrawContext drawContext = new DrawContext(mc, new GuiRenderState(), mc.getWindow().getScaledWidth(), mc.getWindow().getScaledHeight());
             Batcher2D batcher = new Batcher2D(drawContext);
 
-            UISubtitleRenderer.renderSubtitles(batcher.getContext().getMatrices(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
+            /* 1.21.11: UISubtitleRenderer.renderSubtitles takes a 3D MatrixStack (context.getMatrices() is now a
+             * 2D Matrix3x2fStack). The subtitle renderer manages its own transform stack, so feed a fresh one. */
+            UISubtitleRenderer.renderSubtitles(new MatrixStack(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
         }
 
         if (!customSize)
@@ -363,7 +369,7 @@ public class BBSRendering
         {
             if (dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
-                UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().getMatrices(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
+                UISubtitleRenderer.renderSubtitles(new MatrixStack(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
             }
         }
 
@@ -396,18 +402,17 @@ public class BBSRendering
 
     public static void onRenderChunkLayer(Matrix4f positionMatrix)
     {
-        WorldRenderContextImpl worldRenderContext = new WorldRenderContextImpl();
-        MinecraftClient mc = MinecraftClient.getInstance();
-
-        worldRenderContext.prepare(
-            mc.worldRenderer, mc.getRenderTickCounter(), false,
-            mc.gameRenderer.getCamera(), mc.gameRenderer, mc.gameRenderer.getLightmapTextureManager(),
-            RenderSystem.getProjectionMatrix(), positionMatrix, mc.getBufferBuilders().getEntityVertexConsumers(), mc.getProfiler(), false, mc.world
-        );
-
+        /* TODO(1.21.11 render): this Iris-only chunk-layer hook used to hand-build a Fabric WorldRenderContextImpl
+         * via the old prepare(worldRenderer, tickCounter, blockOutlines, camera, gameRenderer, lightmap,
+         * projectionMatrix, positionMatrix, consumers, profiler, advancedTranslucency, world) signature. That API
+         * is gone: the context now lives in net.fabricmc.fabric.impl.client.rendering.world and prepare(...) takes
+         * the new world-render-state objects (WorldRenderState/SectionRenderState/GpuBufferSlice command queue),
+         * and RenderSystem.getProjectionMatrix()/MinecraftClient.getProfiler() were removed. Iris support is
+         * permanently disabled (isIrisShadersEnabled() == false), so this path is currently dead; rebuild the
+         * context through the new pipeline foundation if/when Iris is reintroduced. */
         if (isIrisShadersEnabled())
         {
-            renderCoolStuff(worldRenderContext);
+            /* renderCoolStuff(context) — needs a reconstructed WorldRenderContext (see TODO above). */
         }
     }
 
@@ -454,21 +459,13 @@ public class BBSRendering
 
     public static void renderCoolStuff(WorldRenderContext worldRenderContext)
     {
-        /* 1.21's Fabric no longer threads a matrix stack through the world render
-         * context (it carries a position matrix instead), so rebuild one from the
-         * view matrix for forms and gizmos that still render against a stack. */
-        if (worldRenderContext.matrixStack() == null && worldRenderContext instanceof WorldRenderContextImpl impl)
-        {
-            MatrixStack matrices = new MatrixStack();
+        /* 1.21.11: the relocated Fabric WorldRenderContext (api.client.rendering.v1.world) again threads a real
+         * MatrixStack through context.matrices(), so the previous position-matrix rebuild is no longer needed. */
 
-            matrices.multiplyPositionMatrix(worldRenderContext.positionMatrix());
-            impl.setMatrixStack(matrices);
-        }
-
-        /* Feed the world camera orientation into the holder that replaced
-         * RenderSystem's inverse view rotation matrix (removed in 1.21.1), so
-         * billboards and particles keep facing the camera in world space. */
-        InverseView.set(new Matrix3f().rotation(worldRenderContext.camera().getRotation()));
+        /* Feed the world camera orientation into the holder that replaced RenderSystem's inverse view rotation
+         * matrix, so billboards and particles keep facing the camera in world space. The context no longer
+         * exposes camera()/positionMatrix(); pull the camera from the game renderer directly. */
+        InverseView.set(new Matrix3f().rotation(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()));
 
         if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
         {

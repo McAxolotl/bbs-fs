@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.client.renderer;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -17,8 +16,8 @@ import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.RotationAxis;
@@ -43,10 +42,13 @@ public class MorphRenderer
         {
             if (canRender())
             {
-                RenderSystem.enableDepthTest();
-
+                /* TODO(1.21.11 render): depth state is now pipeline-encoded; RenderSystem.enableDepthTest
+                 * was removed. */
                 float bodyYaw = Lerps.lerp(player.lastBodyYaw, player.bodyYaw, g);
-                int overlay = LivingEntityRenderer.getOverlay(player, 0F);
+                /* TODO(1.21.11 render): LivingEntityRenderer.getOverlay now takes a LivingEntityRenderState
+                 * (unavailable here); fall back to the default overlay UV until the white-flash overlay is
+                 * sourced from the render state. */
+                int overlay = OverlayTexture.DEFAULT_UV;
 
                 matrixStack.push();
                 matrixStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
@@ -56,8 +58,6 @@ public class MorphRenderer
                     .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
 
                 matrixStack.pop();
-
-                RenderSystem.disableDepthTest();
             }
 
             return true;
@@ -98,8 +98,8 @@ public class MorphRenderer
 
         if (form != null)
         {
-            RenderSystem.enableDepthTest();
-
+            /* TODO(1.21.11 render): depth state is now pipeline-encoded; RenderSystem.enableDepthTest
+             * was removed. */
             float bodyYaw = Lerps.lerp(livingEntity.lastBodyYaw, livingEntity.bodyYaw, g);
 
             matrixStack.push();
@@ -110,8 +110,6 @@ public class MorphRenderer
                 .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
 
             matrixStack.pop();
-
-            RenderSystem.disableDepthTest();
 
             return true;
         }

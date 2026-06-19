@@ -22,9 +22,6 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.render.DiffuseLighting;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -294,11 +291,11 @@ public class UIFormList extends UIElement
             this.setSelected(selected);
         }
 
-        DiffuseLighting.method_34742();
-
+        /* TODO(1.21.11 render): DiffuseLighting.enableGuiDepthLighting()/disableGuiDepthLighting()
+         * were removed by the GPU-pipeline rewrite (GUI item lighting is now driven by the
+         * RenderPipeline). The explicit enable/disable around the child render is dropped; verify
+         * item-form icons still light correctly at runtime. */
         super.render(context);
-
-        DiffuseLighting.disableGuiDepthLighting();
 
         /* Render form's display name and ID */
         Form selected = this.getSelected();

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.client.renderer;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
@@ -17,7 +16,6 @@ import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.Draw;
-import mchorse.bbs_mod.mixin.client.EntityRendererDispatcherInvoker;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
@@ -31,6 +29,9 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.block.entity.BlockEntityRenderer;
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactory;
+import net.minecraft.client.render.block.entity.state.BlockEntityRenderState;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
@@ -38,7 +39,7 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockEntity>
+public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockEntity, ModelBlockEntityRenderer.ModelBlockRenderState>
 {
     private static ActorEntity entity;
 
@@ -64,14 +65,15 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         entity.lastY = y;
         entity.lastZ = z;
 
-        double distance = MinecraftClient.getInstance().getEntityRenderDispatcher().getSquaredDistanceToCamera(x, y, z);
-
-        opacity = (float) ((1D - distance / 256D) * opacity);
-
         matrices.push();
         matrices.translate(tx, ty, tz);
 
-        EntityRendererDispatcherInvoker.bbs$renderShadow(matrices, provider, entity, opacity, tickDelta, entity.getEntityWorld(), radius);
+        /* TODO(1.21.11 render): EntityRenderDispatcher#renderShadow was removed by the 1.21.2 entity
+         * render-state rewrite (EntityRendererDispatcherInvoker#bbs$renderShadow now targets a method
+         * that no longer exists and is not applied at runtime). The shadow draw — and the
+         * EntityRenderManager#getSquaredDistanceToCamera(x, y, z) distance fade it depended on (that
+         * overload was also removed) — are neutralized until the shadow path is re-ported onto the new
+         * OrderedRenderCommandQueue pipeline. */
 
         matrices.pop();
     }
@@ -97,14 +99,40 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
     {}
 
     @Override
-    public boolean rendersOutsideBoundingBox(ModelBlockEntity blockEntity)
+    public ModelBlockRenderState createRenderState()
     {
-        return blockEntity.getProperties().isGlobal();
+        return new ModelBlockRenderState();
     }
 
     @Override
-    public void render(ModelBlockEntity entity, float tickDelta, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, int overlay)
+    public void updateRenderState(ModelBlockEntity blockEntity, ModelBlockRenderState state, float tickDelta, Vec3d cameraPos, net.minecraft.client.render.command.ModelCommandRenderer.CrumblingOverlayCommand crumblingOverlay)
     {
+        BlockEntityRenderer.super.updateRenderState(blockEntity, state, tickDelta, cameraPos, crumblingOverlay);
+
+        state.entity = blockEntity;
+        state.tickDelta = tickDelta;
+    }
+
+    @Override
+    public boolean rendersOutsideBoundingBox()
+    {
+        /* TODO(1.21.11 render): rendersOutsideBoundingBox no longer receives the block entity; global
+         * model blocks must always be allowed to render outside their bounding box, so report true. */
+        return true;
+    }
+
+    @Override
+    public void render(ModelBlockRenderState state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState cameraState)
+    {
+        ModelBlockEntity entity = state.entity;
+
+        if (entity == null)
+        {
+            return;
+        }
+
+        float tickDelta = state.tickDelta;
+        int overlay = net.minecraft.client.render.OverlayTexture.DEFAULT_UV;
         MinecraftClient mc = MinecraftClient.getInstance();
         ModelProperties properties = entity.getProperties();
         Transform transform = properties.getTransform();
@@ -136,14 +164,13 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             MatrixStackUtils.applyTransform(matrices, applied);
 
-            int lightAbove = WorldRenderer.getLightmapCoordinates(entity.getEntityWorld(), pos.add((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
+            int lightAbove = WorldRenderer.getLightmapCoordinates(entity.getWorld(), pos.add((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
             Camera camera = mc.gameRenderer.getCamera();
 
-            RenderSystem.enableDepthTest();
+            /* TODO(1.21.11 render): depth state is now pipeline-encoded; RenderSystem.enableDepthTest was removed. */
             FormUtilsClient.render(properties.getForm(), new FormRenderingContext()
                 .set(FormRenderType.MODEL_BLOCK, entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
                 .camera(camera));
-            RenderSystem.disableDepthTest();
 
             if (this.canRenderAxes(entity) && UIBaseMenu.renderAxes)
             {
@@ -162,8 +189,6 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             modelBlockPanel.renderWorldGizmo(matrices, entity);
         }
 
-        RenderSystem.disableDepthTest();
-
         if (mc.getDebugHud().shouldShowDebugHud())
         {
             Draw.renderBox(matrices, -0.5D, 0, -0.5D, 1, 1, 1, 0, 0.5F, 1F, 0.5F);
@@ -180,7 +205,10 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             double y = pos.getY() + ty;
             double z = pos.getZ() + tz;
 
-            renderShadow(vertexConsumers, matrices, tickDelta, x, y, z, tx, ty, tz);
+            /* TODO(1.21.11 render): the shadow path no longer has a VertexConsumerProvider here (the new
+             * render signature exposes only an OrderedRenderCommandQueue). renderShadow itself is
+             * currently a neutralized stub, so pass null until the shadow draw is re-ported. */
+            renderShadow(null, matrices, tickDelta, x, y, z, tx, ty, tz);
         }
     }
 
@@ -314,5 +342,17 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         }
 
         return true;
+    }
+
+    /**
+     * Carries the live block entity + tick delta through the render-state model.
+     *
+     * TODO(1.21.11 render): carrying the live entity is a build-only bridge until the BBS form
+     * pipeline is adapted to read off the render state.
+     */
+    public static class ModelBlockRenderState extends BlockEntityRenderState
+    {
+        public ModelBlockEntity entity;
+        public float tickDelta;
     }
 }

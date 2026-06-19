@@ -1,6 +1,5 @@
 package mchorse.bbs_mod;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
@@ -26,7 +25,6 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.FramebufferManager;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.items.GunProperties;
@@ -57,31 +55,21 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.WorldExportWindowSession;
-import mchorse.bbs_mod.utils.colors.Color;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.impl.client.rendering.BlockEntityRendererRegistryImpl;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.Window;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
@@ -464,44 +452,18 @@ public class BBSModClient implements ClientModInitializer
 
                 if (d > 0)
                 {
-                    MatrixStack stack = context.matrixStack();
-                    Integer fromCurve = BBSRendering.getChromaSkyColorArgb();
-                    Color color = Colors.COLOR.set(fromCurve != null ? fromCurve : BBSSettings.chromaSkyColor.get());
-
-                    stack.push();
-
-                    MatrixStack.Entry peek = stack.peek();
-
-                    peek.getPositionMatrix().identity();
-                    peek.getNormalMatrix().identity();
-                    stack.translate(0F, 0F, -d);
-
-                    RenderSystem.enableDepthTest();
-
-                    BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-                    float fov = MinecraftClient.getInstance().options.getFov().getValue();
-                    float dd = d * (float) Math.pow(fov / 40F, 2F);
-
-                    Draw.fillQuad(builder, stack,
-                        -dd, -dd, 0,
-                        dd, -dd, 0,
-                        dd, dd, 0,
-                        -dd, dd, 0,
-                        color.r, color.g, color.b, 1F
-                    );
-
-                    RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
-                    { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
-                    RenderSystem.disableDepthTest();
-
-                    stack.pop();
+                    /* TODO(1.21.11 render): chroma-sky billboard debug draw. The 1.21.5 GPU rewrite removed
+                     * RenderSystem.enableDepthTest/disableDepthTest/setShader, GameRenderer::getPositionColorProgram,
+                     * BufferRenderer.drawWithGlobalProgram, and net.minecraft.client.render.{VertexFormat,VertexFormats}
+                     * (now com.mojang.blaze3d.vertex.*). The relocated Fabric WorldRenderContext also dropped
+                     * matrixStack() in favour of matrices(). Re-implement this quad via Tessellator.begin(
+                     * VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR) -> BuiltBuffer -> RenderLayer.draw
+                     * using context.matrices() once the pipeline foundation lands. Stubbed to keep the build green. */
                 }
             }
         });
 
-        WorldRenderEvents.LAST.register((context) ->
+        WorldRenderEvents.END_MAIN.register((context) ->
         {
             if (videoRecorder.isRecording() && BBSRendering.canRender)
             {
@@ -659,10 +621,15 @@ public class BBSModClient implements ClientModInitializer
         EntityRendererRegistry.register(BBSMod.ACTOR_ENTITY, ActorEntityRenderer::new);
         EntityRendererRegistry.register(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
 
-        BlockEntityRendererRegistryImpl.register(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
+        /* 1.21.11: net.fabricmc.fabric.impl...BlockEntityRendererRegistryImpl is gone; use the public
+         * BlockEntityRendererRegistry API. This compiles once ModelBlockEntityRenderer adopts the 2-type-arg
+         * BlockEntityRenderer<T, S extends BlockEntityRenderState> form (migrated separately). */
+        BlockEntityRendererRegistry.register(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
 
-        BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.MODEL_BLOCK_ITEM, modelBlockItemRenderer);
-        BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.GUN_ITEM, gunItemRenderer);
+        /* TODO(1.21.11 render): BuiltinItemRendererRegistry/DynamicItemRenderer were removed in the 1.21.4 item-model
+         * rewrite. Custom dynamic item rendering (modelBlockItemRenderer / gunItemRenderer) must move to the
+         * SpecialModelRenderer / item-model system. Registrations dropped to keep the build green; items render
+         * vanilla/nothing until reimplemented. */
 
         /* Create folders */
         BBSMod.getAudioFolder().mkdirs();

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.mixin.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -35,7 +34,8 @@ public class WorldRendererMixin
 
             GL11.glClearColor(color.r, color.g, color.b, 1F);
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
-            RenderSystem.setShaderFogColor(color.r, color.g, color.b, 1F);
+            // TODO(1.21.11 render): RenderSystem.setShaderFogColor removed; fog is now a
+            // GpuBufferSlice via RenderSystem.setShaderFog(...). Neutralized (mixin disabled).
 
             info.cancel();
         }
@@ -55,7 +55,9 @@ public class WorldRendererMixin
     @Inject(method = "renderLayer", at = @At("TAIL"))
     public void onRenderChunkLayer(RenderLayer layer, double x, double y, double z, Matrix4f positionMatrix, Matrix4f projectionMatrix, CallbackInfo info)
     {
-        if (layer == RenderLayer.getSolid())
+        // TODO(1.21.11 render): RenderLayer.getSolid() removed; chunk layers are now driven
+        // by the state-based pipeline. Neutralized (mixin disabled) — was: layer == getSolid().
+        if (false)
         {
             BBSRendering.onRenderChunkLayer(positionMatrix);
         }

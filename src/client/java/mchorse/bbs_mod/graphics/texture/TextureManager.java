@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.graphics.texture;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.resources.AssetProvider;
@@ -101,7 +100,11 @@ public class TextureManager implements IWatchDogListener
     {
         BBSRendering.trackTexture(texture);
 
-        RenderSystem.setShaderTexture(unit, texture.id);
+        /* TODO(1.21.11 render): RenderSystem.setShaderTexture(unit, id) was removed by the GPU-pipeline
+         * rewrite (samplers are now bound through the RenderPipeline). Falling back to a raw GL active-
+         * texture bind to preserve the legacy unit-binding behaviour; verify at runtime that custom
+         * shaders that relied on this still pick the texture up. */
+        texture.bind(unit);
     }
 
     public void bind(Link texture)

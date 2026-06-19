@@ -54,7 +54,11 @@ public class PlayerEntityRendererMixin
             if (form != null)
             {
                 FormRenderer renderer = FormUtilsClient.getRenderer(form);
-                Hand hand = ((PlayerEntityRenderer) (Object) this).getModel().rightArm == arm ? Hand.MAIN_HAND : Hand.OFF_HAND;
+                // getModel() on a raw PlayerEntityRenderer erases to EntityModel (no rightArm);
+                // PlayerEntityModel inherits rightArm from BipedEntityModel, so cast the model to it.
+                net.minecraft.client.render.entity.model.PlayerEntityModel model =
+                    (net.minecraft.client.render.entity.model.PlayerEntityModel) ((PlayerEntityRenderer<?>) (Object) this).getModel();
+                Hand hand = model.rightArm == arm ? Hand.MAIN_HAND : Hand.OFF_HAND;
 
                 if (renderer != null && renderer.renderArm(matrices, light, player, hand))
                 {

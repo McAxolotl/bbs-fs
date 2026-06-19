@@ -3,7 +3,6 @@ package mchorse.bbs_mod.ui.framework.elements.input.color;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormats;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
@@ -24,6 +23,7 @@ import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 import org.joml.Matrix3x2fc;
 import org.lwjgl.glfw.GLFW;
 

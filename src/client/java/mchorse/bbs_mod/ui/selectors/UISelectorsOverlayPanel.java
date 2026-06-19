@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.selectors;
 
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -93,7 +92,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
                 }
                 else
                 {
-                    this.current.nbt = (new StringNbtReader(new StringReader(t))).parseCompound();
+                    this.current.nbt = StringNbtReader.readCompound(t);
                 }
 
                 BBSModClient.getSelectors().update();

@@ -2,7 +2,6 @@ package mchorse.bbs_mod.utils;
 
 import mchorse.bbs_mod.graphics.InverseView;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.util.math.MatrixStack;
@@ -15,8 +14,6 @@ public class MatrixStackUtils
 {
     private static Matrix3f normal = new Matrix3f();
 
-    private static Matrix4f oldProjection = new Matrix4f();
-    private static Matrix4f oldMV = new Matrix4f();
     private static Matrix3f oldInverse = new Matrix3f();
 
     public static void scaleStack(MatrixStack stack, float x, float y, float z)
@@ -28,27 +25,30 @@ public class MatrixStackUtils
     public static void cacheMatrices()
     {
         /* Cache the global stuff */
-        oldProjection.set(RenderSystem.getProjectionMatrix());
-        oldMV.set(RenderSystem.getModelViewMatrix());
         oldInverse.set(InverseView.get());
+
+        /* TODO(1.21.11 render): the projection matrix is now GPU-owned (RenderSystem.getProjectionMatrix()
+         * / setProjectionMatrix(Matrix4f, VertexSorter) were removed). Using the new GPU-side projection
+         * backup/restore pair instead of caching/re-applying a Matrix4f. RenderSystem.applyModelViewMatrix()
+         * was also removed (the model-view stack is auto-applied), so it is no longer called. Verify at
+         * runtime that the picking projection is correctly preserved across this push. */
+        RenderSystem.backupProjectionMatrix();
 
         Matrix4fStack renderStack = RenderSystem.getModelViewStack();
 
         renderStack.pushMatrix();
         renderStack.identity();
-        RenderSystem.applyModelViewMatrix();
     }
 
     public static void restoreMatrices()
     {
         /* Return back to orthographic projection */
-        RenderSystem.setProjectionMatrix(oldProjection, VertexSorter.BY_Z);
+        RenderSystem.restoreProjectionMatrix();
         InverseView.set(oldInverse);
 
         Matrix4fStack renderStack = RenderSystem.getModelViewStack();
 
         renderStack.popMatrix();
-        RenderSystem.applyModelViewMatrix();
     }
 
     public static void applyTransform(MatrixStack stack, Transform transform)

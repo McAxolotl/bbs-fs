@@ -1,57 +1,59 @@
-# BBS 1.21.11 port — status (autonomous session)
+# BBS 1.21.11 port — status
 
-Branch: `port/1.21.11` (based off `1.21.1`). Goal: build-only port to MC 1.21.11 (no runtime testing this session).
-See `PORT_PLAN_1.21.11.md` for the full strategy. This file is the live progress + remaining-work breakdown.
+Branch: `port/1.21.11` (based off `1.21.1`). Target this session: **build-only** port to MC 1.21.11 (no runtime testing — decided by owner).
+See `PORT_PLAN_1.21.11.md` for the full strategy.
 
-## ✅ Done & verified
+## ✅ RESULT: `./gradlew build` is GREEN — `bbs-2.2.1-1.21.11.jar` builds
 
-| Area | Status | Verify |
-|---|---|---|
-| Toolchain bump | MC 1.21.11, Yarn 1.21.11+build.6, loader 0.19.3, fabric-api 0.141.4+1.21.11, Loom 1.15.5, Gradle 9.2, Java 21 | `./gradlew genSources` → BUILD SUCCESSFUL |
-| Access-widener | dead RenderSystem/GlStateManager entries (removed in 1.21.5) commented; framebuffer entries kept (still valid) | `:validateAccessWidener` passes |
-| Iris/Sodium/Indium/DH decoupling | 20 files deleted, 11 mixins removed, `BBSRendering` stubbed, `ShaderCurves` trimmed to vanilla | n/a |
-| **Core / common / server** (`src/main/java`, ~452 files) | **COMPILES on 1.21.11** | `./gradlew compileJava` → BUILD SUCCESSFUL |
-| Client mechanical migration | confirmed renames applied across renderers/film/particles/selectors/camera/network/utils | `compileClientJava` errors 1702 → 1586 |
+The entire mod (both source sets, ~1,154 `.java`) compiles and packages on Minecraft 1.21.11.
 
-### Core migration covered (all compiling)
-Registration (`EntityType.Builder`+`registryKey`, `AbstractBlock.Settings`, `TypedEntityData` block-entity-data component, `GameRule<Boolean>`+`GameRuleBuilder`), entity attributes de-prefix, `getEntityWorld`/`getEntityPos`/`last*` renames, **persistence rewrite** (`BlockEntity.readData/writeData`, `Entity.readCustomData/writeCustomData` via `ReadView`/`WriteView` incl. `PlayerEntityMixin`), `ActionResult` unification, server-side `damage(ServerWorld,…)`, `parseAndExecute`, `getSelectedSlot`, NBT `Optional` getters, `ModelTransformationMode`→`ItemDisplayContext`, server mixins, `PlayerConfigEntry` permission check, networking payload component changes.
+| Check | Result |
+|---|---|
+| `./gradlew genSources` | BUILD SUCCESSFUL |
+| `./gradlew compileJava` (main / server / common, ~452 files) | BUILD SUCCESSFUL — 0 errors |
+| `./gradlew compileClientJava` (client, ~702 files) | BUILD SUCCESSFUL — 0 errors (down from 1702) |
+| `:validateAccessWidener` | passes |
+| `./gradlew build` (compile + mixin refMap + remapJar + jar) | **BUILD SUCCESSFUL** → `build/libs/bbs-2.2.1-1.21.11.jar` |
 
-## ⏳ Remaining = the client rendering rewrite (~1586 errors, ~96 files)
+### Target toolchain (final)
+MC `1.21.11`, Yarn `1.21.11+build.6`, Fabric Loader `0.19.3`, Fabric API `0.141.4+1.21.11`, Loom `1.15.5`, Gradle `9.2`, Java `21`. Iris/Sodium deps commented out (stubbed). Mappings: Yarn (as decided).
 
-This is a genuine architectural rewrite (the reason a green client build is not achievable build-only in one session — it needs **runtime iteration**, which was deferred). The whole client compiles only once the rewrite is complete: the 2D foundation's public API must change (new GUI uses `Matrix3x2fStack`/`GuiRenderState`), which cascades through all ~700 `ui` call sites — there is no partial-compile milestone short of finishing it.
+### What was migrated (compiles correctly)
+- **Toolchain & config**: gradle.properties, build.gradle, fabric.mod.json, access-widener (dead RenderSystem/GlStateManager entries removed).
+- **Iris/Sodium/Indium/DH decoupling**: 20 files deleted, 11 external mixins removed, `BBSRendering` stubbed, `ShaderCurves` trimmed to its vanilla data model.
+- **Core / common / server**: registration (`EntityType.Builder`+`registryKey`, `AbstractBlock.Settings`, `TypedEntityData` block-entity-data component, `GameRule<Boolean>`), attributes de-prefix, `getEntityWorld`/`getEntityPos`/`last*` renames, **persistence rewrite** (`ReadView`/`WriteView` for block-entities & entities incl. `PlayerEntityMixin`), `ActionResult` unification, server-side `damage(ServerWorld,…)`, NBT `Optional` getters, `ModelTransformationMode`→`ItemDisplayContext`, networking component changes, server mixins, `PlayerConfigEntry`.
+- **Render foundation**: `BBSShaders` 7 programs → `RenderPipeline`/`RenderLayer`; `FormRenderType` → `RenderLayer.of(RenderSetup)`; `Texture` (`GlStateManager` blaze3d.opengl, `_genTexture`/`_activeTexture`); `Framebuffer`/`FontRenderer` (raw-LWJGL, unchanged); 2D core `Draw`/`Batcher2D`/`UIRenderingContext` (Matrix3x2f GUI, RenderLayer draws).
+- **Client downstream**: all `ui/**`, `forms/renderers/**`, `cubic/**`, `client/renderer/**` (entity render-state classes, item renderers neutralized), `particles/**`, `film/**`, `BBSRendering`, `BBSModClient`, graphics/utils residuals.
 
-### Error clusters (after the mechanical pass)
-| Package | Errors | Dominant cause |
-|---|---|---|
-| `ui` | 704 | 2D foundation (`Batcher2D`, `graphics/Draw`, `UIRenderingContext`) → new pipeline; `DrawContext.pose()` now `Matrix3x2fStack`; two-phase GUI (1.21.6) |
-| `forms` | 342 | form renderers → `RenderPipeline`/`RenderLayer.of`, framebuffers, submit model; `CustomVertexConsumerProvider` (RenderLayer.draw→submit) |
-| `client` | 160 | `BBSShaders` (7 custom programs → `RenderPipelines`), `BBSRendering`, item renderers (`BuiltinItemRendererRegistry` removed) |
-| `cubic` | 150 | model rendering, `cubic/render/vao/*` (direct GL), `RenderSystem.setShader` |
-| `mixin` | 68 | client render mixins lose injection points (`GameRenderer`/`WorldRenderer`/`RenderLayer.draw`→`submit`/entity render-state) |
-| `graphics` | 50 | `Draw`, `Framebuffer`/`FramebufferManager` (GL30 → `GpuTexture`/`RenderPass`), `Texture`, `FontRenderer` |
-| `particles` | 44 | billboard/appearance render via `Tessellator`/`BufferBuilder`/shader programs |
-| `film` / `utils` | ~36 | residual `RenderSystem.*` state calls; `MatrixStackUtils` (`RenderSystem.getProjectionMatrix`/`applyModelViewMatrix`) |
+## ⚠️ Build-green ≠ render-correct — runtime work remains (deferred by design)
 
-### API axes that must be reworked (all confirmed against 1.21.11 Yarn via javap)
-1. **GPU pipeline (1.21.5)** — `RenderSystem.setShader` + `GameRenderer.getXxxProgram()` + `BufferRenderer` are GONE. Immediate draws → build `BufferBuilder`→`BuiltBuffer`→draw via a `RenderLayer` carrying a `RenderPipeline`, or drive a `RenderPass` (`RenderSystem.getDevice()`→`GpuDevice`→`CommandEncoder.createRenderPass`). State (`enableDepthTest`/`enableBlend`/`enableCull`) moves into the `RenderPipeline`.
-2. **Custom shaders** — the 7 `BBSShaders` programs → code-declared `RenderPipelines.register(...)`; GLSL `.vsh/.fsh` carry over; uniforms → std140 UBOs (1.21.6). Re-route every `RenderSystem.setShader(() -> program)`.
-3. **2D GUI (1.21.6)** — `DrawContext.pose()` returns `Matrix3x2fStack` (2D, not 4×4); two-phase `GuiRenderState`; `Batcher2D` (bypasses `DrawContext`) needs the most work.
-4. **Framebuffers (1.21.5/1.21.6)** — `graphics/Framebuffer` GL30 wrapper → `GpuTexture`/`GpuTextureView` + `RenderPass`. Affects `FramebufferFormRenderer`, `BBSRendering` (video export).
-5. **EntityRenderer render-state (1.21.2)** — `EntityRenderer<T>` → `EntityRenderer<T, S extends EntityRenderState>`; `render`/`getTexture` signatures changed; `EntityRendererRegistry`/`BlockEntityRenderer` need 2 type args. Affects `ActorEntityRenderer`, `GunProjectileEntityRenderer`, `ModelBlockEntityRenderer`, `MorphRenderer`.
-6. **Item model rewrite (1.21.4)** — `BuiltinItemRendererRegistry`/`DynamicItemRenderer` removed. Affects `ModelBlockItemRenderer`, `GunItemRenderer` (move to the `items`/model-override system).
-7. **Submit model (1.21.9)** — `RenderLayer.render()`→`submit()`; custom geometry via `SubmitNodeCollector`. Affects render mixins + form renderers.
-8. **Font (1.21.6/1.21.9)** — `Font.drawInBatch`→`prepareText`/`GlyphVisitor`/`submitText`. Affects `FontRenderer`.
-9. **Fabric API relocations** — `WorldRenderContext` moved+split (extraction vs render); `WorldRenderEvents` relocated; `EntityRendererRegistry`/`BlockEntityRendererFactory` signatures.
-10. **Misc confirmed** — `GameProfile` is a record (`name()`/`id()`); `PLAYER_MODEL_PARTS` tracked-data removed; `GlStateManager` moved to `com.mojang.blaze3d.opengl`; `OtherClientPlayerEntity(ClientWorld, GameProfile)`.
+The port compiles and the jar builds, but **rendering was migrated build-only without runtime validation** (per the owner's decision). There are **185 `// TODO(1.21.11 render)` markers** across ~50 files where a draw/effect is implemented against the new API but needs in-game verification, or is a temporary no-op stub. These must be exercised against a running 1.21.11 client.
 
-### Recommended sequence for the rewrite (needs a 1.21.11 runtime to validate)
-1. Foundation, coherently & together: `BBSShaders`→`RenderPipelines`, then `graphics/Draw` + `ui/framework/elements/utils/Batcher2D` + `UIRenderingContext` (2D), then `graphics/Framebuffer`/`Texture`, `forms/renderers/FormRenderType`, `CustomVertexConsumerProvider`, `FontRenderer`.
-2. Downstream once foundation is stable: `ui/**`, `forms/renderers/**`, `cubic/render/**`, `particles/**`.
-3. Renderers: entity/block-entity/item render-state + item-model migration.
-4. Client render mixins: retarget to new injection points or temporarily disable (like Iris/Sodium) with TODOs.
-5. Re-enable Iris/Sodium against 1.21.11-matched builds (separate effort).
+### Known stubbed / no-op-until-tuned (high level)
+- **Custom shaders**: `BBSShaders` pipelines declared, but the GLSL `.vsh/.fsh` assets are still 1.21.1-style (`#version 150`, loose uniforms) — they need rewriting to 1.21.5 std140 UBO blocks before they link; per-draw custom uniforms (ColorModulator, Target, Blur, light dirs, …) need UBO/DynamicUniforms wiring.
+- **Textured 2D drawing** in `Batcher2D` is a no-op stub (needs `Texture`→`GpuTextureView`/sampler bridge) — icons/textured UI won't render yet.
+- **Framebuffer compositing** (`FramebufferFormRenderer`, `BBSRendering` video export, subtitles): `Framebuffer.beginWrite`/blit removed → stubbed (needs `GpuTexture`/`RenderPass`).
+- **Item forms** (`ItemFormRenderer`, `ModelBlockItemRenderer`, `GunItemRenderer`): the 1.21.4 item-model rewrite removed `BuiltinItemRendererRegistry`; custom item rendering is neutralized (renders vanilla/nothing) until rewired to the item-model / `SpecialModelRenderer` + `OrderedRenderCommandQueue` path.
+- **Model/VAO rendering** (`ModelVAORenderer.setupUniforms`, `ModelInstance`, `BOBJModelVAO`): pipeline bind + UBO uniform upload stubbed; geometry/skinning intact.
+- **Picking** (gizmo, form pickers): the per-object Target-index uniform upload is unwired → selection won't read back correct indices yet.
+- **Vanilla armor** (`ArmorRenderer`): equipment-render rewrite (1.21.4) — texture/trim ids computed, draw stubbed.
+- **3D viewport** (`UIModelRenderer`, `Gizmo`): GPU draw/stencil stubbed; camera/math preserved.
 
-## How to resume
-- 1.21.11 decompiled Yarn jars (ground truth) at `~/.gradle/caches/fabric-loom/1.21.11/net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2/{common,clientOnly}-unpicked.jar`. Look up exact signatures with JDK21 `javap` — see `.port/REF.md` (gitignored) for the exact command + the full migration pattern catalogue.
-- Iterate `./gradlew compileClientJava` (temporary `-Xmaxerrs 5000` in `build.gradle` shows the full list — revert before release).
-- `git log port/1.21.11` has per-phase checkpoints.
+### Temporarily DISABLED client render mixins (removed from `bbs.client.mixins.json`, marked TODO to restore)
+Their target methods were removed/reworked by the 1.21.2 render-state / 1.21.9 submit-model rewrite:
+`WorldRendererMixin`, `EntityRenderDispatcherMixin`, `LivingEntityRendererMixin`, `PlayerEntityRendererMixin`, `BlockEntityRenderDispatcherMixin`, `EntityRendererDispatcherInvoker`, `LivingEntityRendererInvoker`.
+Functionality lost until re-ported: morph rendering over living/player entities, custom shadows, chroma-sky background, chunk-layer hook, entity-outline framebuffer resize. (Their `.java` files were made to compile but are inert.)
+
+### Recommended next steps (need a running 1.21.11 client)
+1. Stand up a 1.21.11 Prism instance + 1.21.11 dependency mods; launch dev client (`./gradlew runClient`).
+2. Rewrite the GLSL shader assets to 1.21.5 UBO style; wire per-draw uniforms; un-stub `Batcher2D` textured drawing (Texture→GpuTextureView).
+3. Re-port the framebuffer compositing onto `GpuTexture`/`RenderPass`.
+4. Re-port item rendering onto the new item-model system.
+5. Re-port & re-enable the 7 disabled render mixins (submit model / render-state).
+6. Re-integrate Iris/Sodium against 1.21.11-matched builds.
+7. Forward-port the `master` feature delta (deferred — see git: branch was based on `1.21.1`, ~73 master commits not yet merged).
+
+## Resume aids
+- Decompiled Yarn jars (ground truth): `~/.gradle/caches/fabric-loom/1.21.11/net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2/{common,clientOnly}-unpicked.jar` — inspect with JDK21 `javap` (see `.port/REF.md`, gitignored, for commands + migration patterns).
+- Find render TODOs: `grep -rn "TODO(1.21.11 render)" src/client/java`.
+- Per-phase checkpoints in `git log port/1.21.11`.

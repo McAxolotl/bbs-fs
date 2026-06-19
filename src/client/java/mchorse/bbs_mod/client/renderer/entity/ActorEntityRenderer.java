@@ -1,85 +1,121 @@
 package mchorse.bbs_mod.client.renderer.entity;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.render.entity.model.ArmorEntityModel;
+import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.EntityModelLayers;
+import net.minecraft.client.render.entity.state.LivingEntityRenderState;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EntityPose;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 
-public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
+public class ActorEntityRenderer extends EntityRenderer<ActorEntity, LivingEntityRenderState>
 {
     public static ArmorRenderer armorRenderer;
+
+    /**
+     * The form + vanilla-entity context cannot be carried on a vanilla render state, so the actual
+     * BBS form rendering still reads off the live {@link ActorEntity}. We stash it here during
+     * {@link #updateRenderState} so {@link #render} can route it through the form pipeline.
+     *
+     * TODO(1.21.11 render): the 1.21.2 render-state split assumes all per-frame data lives on the
+     * state object; carrying the live entity here is a build-only bridge until the form pipeline is
+     * adapted to the render-state model.
+     */
+    private ActorEntity renderedEntity;
+    private float renderedTickDelta;
 
     public ActorEntityRenderer(EntityRendererFactory.Context ctx)
     {
         super(ctx);
 
+        /* 1.21.4+ equipment rewrite removed ArmorEntityModel + EntityModelLayers.PLAYER_INNER/OUTER_ARMOR.
+         * ArmorRenderer now takes BipedEntityModels; its draw bodies are neutralized TODO(1.21.11 render)
+         * stubs, so the models below are only structural placeholders to keep the field non-null. */
         armorRenderer = new ArmorRenderer(
-            new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_INNER_ARMOR)),
-            new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_OUTER_ARMOR)),
-            ctx.getModelManager()
+            new BipedEntityModel(ctx.getPart(EntityModelLayers.PLAYER)),
+            new BipedEntityModel(ctx.getPart(EntityModelLayers.PLAYER)),
+            MinecraftClient.getInstance().getBakedModelManager()
         );
 
         this.shadowRadius = 0.5F;
     }
 
     @Override
-    public Identifier getTexture(ActorEntity entity)
+    public LivingEntityRenderState createRenderState()
     {
-        return Identifier.of("minecraft:textures/entity/player/wide/steve.png");
+        return new LivingEntityRenderState();
     }
 
     @Override
-    public void render(ActorEntity livingEntity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
+    public void updateRenderState(ActorEntity entity, LivingEntityRenderState state, float tickDelta)
     {
-        matrices.push();
+        super.updateRenderState(entity, state, tickDelta);
 
-        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.lastBodyYaw, livingEntity.bodyYaw);
-        int overlay = LivingEntityRenderer.getOverlay(livingEntity, 0F);
+        this.renderedEntity = entity;
+        this.renderedTickDelta = tickDelta;
 
-        this.setupTransforms(livingEntity, matrices, bodyYaw, tickDelta);
-
-        RenderSystem.enableBlend();
-        RenderSystem.enableDepthTest();
-        FormUtilsClient.render(livingEntity.getForm(), new FormRenderingContext()
-            .set(FormRenderType.ENTITY, livingEntity.getFormEntity(), matrices, light, overlay, tickDelta)
-            .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
-        RenderSystem.disableDepthTest();
-        RenderSystem.disableBlend();
-
-        matrices.pop();
-
-        super.render(livingEntity, yaw, tickDelta, matrices, vertexConsumers, light);
+        state.bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, entity.lastBodyYaw, entity.bodyYaw);
+        state.deathTime = entity.deathTime > 0 ? entity.deathTime + tickDelta : 0F;
+        state.pose = entity.getPose();
+        state.invisible = entity.isInvisible();
     }
 
-    protected boolean isVisible(ActorEntity entity)
+    @Override
+    public void render(LivingEntityRenderState state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState cameraState)
     {
-        return !entity.isInvisible();
-    }
+        super.render(state, matrices, queue, cameraState);
 
-    protected void setupTransforms(ActorEntity entity, MatrixStack matrices, float bodyYaw, float tickDelta)
-    {
-        if (!entity.isInPose(EntityPose.SLEEPING))
+        ActorEntity entity = this.renderedEntity;
+
+        if (entity == null || !this.isVisible(state))
         {
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
+            return;
         }
 
-        if (entity.deathTime > 0)
+        matrices.push();
+
+        int overlay = LivingEntityRenderer.getOverlay(state, 0F);
+
+        this.setupTransforms(state, matrices);
+
+        /* TODO(1.21.11 render): blend/depth state is now pipeline-encoded; the explicit
+         * RenderSystem.enableBlend/enableDepthTest toggles were removed. */
+        Form form = entity.getForm();
+
+        FormUtilsClient.render(form, new FormRenderingContext()
+            .set(FormRenderType.ENTITY, entity.getFormEntity(), matrices, state.light, overlay, this.renderedTickDelta)
+            .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+
+        matrices.pop();
+    }
+
+    protected boolean isVisible(LivingEntityRenderState state)
+    {
+        return !state.invisible;
+    }
+
+    protected void setupTransforms(LivingEntityRenderState state, MatrixStack matrices)
+    {
+        if (!state.isInPose(EntityPose.SLEEPING))
         {
-            float deathAngle = (entity.deathTime + tickDelta - 1F) / 20F * 1.6F;
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-state.bodyYaw));
+        }
+
+        if (state.deathTime > 0)
+        {
+            float deathAngle = (state.deathTime - 1F) / 20F * 1.6F;
 
             matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(Math.min(MathHelper.sqrt(deathAngle), 1F) * 90F));
         }
