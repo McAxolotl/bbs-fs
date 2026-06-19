@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.client.renderer;
 
+import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -14,12 +15,13 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.RotationAxis;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -30,11 +32,11 @@ import java.util.List;
  *
  * <p>1.21.2+ made entity {@code render()} a build phase that only enqueues into the
  * OrderedRenderCommandQueue, so a morph form cannot be drawn there (the BBS immediate form pipeline
- * needs the camera model-view active, which only holds once the entity queue is flushed). So
- * {@code LivingEntityRendererMorphMixin} COLLECTS each morph (snapshotting the camera-relative pose
- * vanilla computed) and cancels the vanilla render, then {@link #renderQueued()} draws the collected
- * forms from WorldRenderEvents.AFTER_ENTITIES (via {@code BBSRendering.renderCoolStuff}) — the proven
- * draw context shared with replay/film forms.
+ * needs the camera transform supplied through the WorldRenderContext MatrixStack, which only holds
+ * once the entity queue is flushed). So {@code LivingEntityRendererMorphMixin} COLLECTS each morph
+ * and cancels the vanilla render, then {@link #renderQueued(WorldRenderContext)} draws the collected
+ * forms from WorldRenderEvents.AFTER_ENTITIES (via {@code BBSRendering.renderCoolStuff}) — the same
+ * proven path as replay/film forms ({@link BaseFilmController#renderEntity}).
  */
 public class MorphRenderer
 {
@@ -45,7 +47,7 @@ public class MorphRenderer
     /**
      * Collect a player morph for deferred rendering. Returns true to suppress the vanilla render.
      */
-    public static boolean collectPlayer(AbstractClientPlayerEntity player, MatrixStack matrices, int light, int overlay, float bodyYaw, float tickDelta)
+    public static boolean collectPlayer(AbstractClientPlayerEntity player, int light, int overlay, float tickDelta)
     {
         if (hidePlayer)
         {
@@ -61,7 +63,7 @@ public class MorphRenderer
         {
             if (canRender())
             {
-                queue(morph.getForm(), morph.entity, matrices, light, overlay, bodyYaw, tickDelta);
+                queue(morph.getForm(), morph.entity, light, overlay, tickDelta);
             }
 
             return true;
@@ -74,7 +76,7 @@ public class MorphRenderer
      * Collect a selector-owner (mob) morph for deferred rendering. Returns true to suppress the
      * vanilla render.
      */
-    public static boolean collectLivingEntity(LivingEntity livingEntity, MatrixStack matrices, int light, int overlay, float bodyYaw, float tickDelta)
+    public static boolean collectLivingEntity(LivingEntity livingEntity, int light, int overlay, float tickDelta)
     {
         if (!(livingEntity instanceof ISelectorOwnerProvider))
         {
@@ -89,7 +91,7 @@ public class MorphRenderer
 
         if (form != null)
         {
-            queue(form, owner.entity, matrices, light, overlay, bodyYaw, tickDelta);
+            queue(form, owner.entity, light, overlay, tickDelta);
 
             return true;
         }
@@ -97,17 +99,14 @@ public class MorphRenderer
         return false;
     }
 
-    private static void queue(Form form, IEntity entity, MatrixStack matrices, int light, int overlay, float bodyYaw, float tickDelta)
+    private static void queue(Form form, IEntity entity, int light, int overlay, float tickDelta)
     {
         Queued queued = new Queued();
 
         queued.form = form;
         queued.entity = entity;
-        queued.pose = new Matrix4f(matrices.peek().getPositionMatrix());
-        queued.normal = new Matrix3f(matrices.peek().getNormalMatrix());
         queued.light = light;
         queued.overlay = overlay;
-        queued.bodyYaw = bodyYaw;
         queued.tickDelta = tickDelta;
 
         QUEUE.add(queued);
@@ -115,29 +114,34 @@ public class MorphRenderer
 
     /**
      * Draw all collected morph forms. Called from WorldRenderEvents.AFTER_ENTITIES, where the entity
-     * command queue has already flushed and the camera model-view is still active — the only world
-     * context where the BBS immediate form pipeline lands at the correct position.
+     * command queue has already flushed and the WorldRenderContext MatrixStack carries the camera
+     * transform — the only world context where the BBS immediate form pipeline lands correctly. This
+     * mirrors {@link BaseFilmController#renderEntity}: build the camera-relative matrix from the
+     * entity's world position and multiply it onto the context MatrixStack.
      */
-    public static void renderQueued()
+    public static void renderQueued(WorldRenderContext context)
     {
         if (QUEUE.isEmpty())
         {
             return;
         }
 
+        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        double cx = camera.getCameraPos().x;
+        double cy = camera.getCameraPos().y;
+        double cz = camera.getCameraPos().z;
+        MatrixStack stack = context.matrices();
+
         for (Queued queued : QUEUE)
         {
-            MatrixStack stack = new MatrixStack();
-
-            stack.peek().getPositionMatrix().set(queued.pose);
-            stack.peek().getNormalMatrix().set(queued.normal);
+            Matrix4f target = BaseFilmController.getMatrixForRenderWithRotation(queued.entity, cx, cy, cz, queued.tickDelta);
 
             stack.push();
-            stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-queued.bodyYaw));
+            MatrixStackUtils.multiply(stack, target);
 
             FormUtilsClient.render(queued.form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, queued.entity, stack, queued.light, queued.overlay, queued.tickDelta)
-                .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+                .camera(camera));
 
             stack.pop();
         }
@@ -166,11 +170,8 @@ public class MorphRenderer
     {
         public Form form;
         public IEntity entity;
-        public Matrix4f pose;
-        public Matrix3f normal;
         public int light;
         public int overlay;
-        public float bodyYaw;
         public float tickDelta;
     }
 }

@@ -512,7 +512,7 @@ public class BBSRendering
         /* Draw morph forms collected during the (build-phase) entity render. AFTER_ENTITIES is the only
          * world context where the BBS immediate form pipeline lands correctly (entity queue flushed +
          * camera model-view still active). See MorphRenderer / LivingEntityRendererMorphMixin. */
-        MorphRenderer.renderQueued();
+        MorphRenderer.renderQueued(worldRenderContext);
 
         if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
         {
