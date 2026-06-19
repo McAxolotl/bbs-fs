@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.utils;
 import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
@@ -367,14 +368,33 @@ public abstract class UIModelRenderer extends UIElement
          * per-element scissor/viewport rect (vx/vy/vw/vh below) is still computed for when that lands. */
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        float rx = (float) Math.round(mc.getWindow().getWidth() / (double) context.menu.width);
-        float ry = (float) Math.round(mc.getWindow().getHeight() / (double) context.menu.height);
-        float size = BBSModClient.getOriginalFramebufferScale();
+        /* Measure against the REAL window, not the film/video framebuffer. This preview renders in the
+         * world phase (BBSRendering.renderingWorld == true); if the film system also has customSize set
+         * (an open camera/replay/action editor), Window.getWidth()/getHeight() are mixin-overridden to the
+         * VIDEO resolution (canReplaceFramebuffer() == customSize && renderingWorld) — which would size this
+         * UI panel's FBO to the video resolution instead of its on-screen pixels. Clear renderingWorld for
+         * the measurement so the Window getters report the real screen size (pre-world-phase behaviour). */
+        boolean prevRenderingWorld = BBSRendering.renderingWorld;
+        BBSRendering.renderingWorld = false;
 
-        int vx = (int) (this.area.x * rx);
-        int vy = (int) (mc.getWindow().getHeight() - (this.area.y + this.area.h) * ry);
-        int vw = (int) (this.area.w * rx);
-        int vh = (int) (this.area.h * ry);
+        int vw;
+        int vh;
+
+        try
+        {
+            float rx = (float) Math.round(mc.getWindow().getWidth() / (double) context.menu.width);
+            float ry = (float) Math.round(mc.getWindow().getHeight() / (double) context.menu.height);
+
+            int vx = (int) (this.area.x * rx);
+            int vy = (int) (mc.getWindow().getHeight() - (this.area.y + this.area.h) * ry);
+
+            vw = (int) (this.area.w * rx);
+            vh = (int) (this.area.h * ry);
+        }
+        finally
+        {
+            BBSRendering.renderingWorld = prevRenderingWorld;
+        }
 
         this.viewportW = vw;
         this.viewportH = vh;
