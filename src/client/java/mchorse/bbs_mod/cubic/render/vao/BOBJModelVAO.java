@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.client.render.BufferBuilder;
@@ -183,7 +185,18 @@ public class BOBJModelVAO
 
         if (built != null)
         {
-            BBSShaders.getModelLayer().draw(built);
+            if (stencilMap != null)
+            {
+                /* Picking: each bone's index is packed into the per-vertex LIGHT.x above (updateMesh).
+                 * Route through the picker_models pipeline (Target + UV2.x sub-index -> index colour) into the
+                 * StencilFormFramebuffer target, same as the cubic immediate path. Target/Sampler0 are set by
+                 * ModelFormRenderer before the render; model-view is identity (camera baked into the vertices). */
+                BBSPickerRenderer.draw(BBSShaders.getPickerModelsProgram(), built, RenderSystem.getModelViewMatrix());
+            }
+            else
+            {
+                BBSShaders.getModelLayer().draw(built);
+            }
         }
     }
 }
