@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -16,7 +17,6 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -203,21 +203,11 @@ public abstract class FormRenderer <T extends Form>
 
     protected void setupTarget(FormRenderingContext context, ShaderProgram program)
     {
-        /* TODO(1.21.11 render): GlUniform is now an interface without set(int) — per-draw uniforms are
-         * supplied through the RenderPipeline's UniformDescription / dynamic uniform buffers rather than
-         * mutated on a ShaderProgram. The picking "Target" uniform must be wired through the picker
-         * RenderPipeline once the picking path is ported. Was: program.getUniform("Target").set(getPickingIndex()). */
-        if (program == null)
-        {
-            return;
-        }
-
-        GlUniform target = program.getUniform("Target");
-
-        if (target != null)
-        {
-            /* no-op: uniform value upload deferred to pipeline rewrite (see TODO above) */
-        }
+        /* 1.21.11 render: the loose `uniform int Target` the picker shaders used is now the BBSPicker
+         * std140 UBO, uploaded per picker draw by BBSPickerRenderer. Record the active picking index
+         * here — the faithful equivalent of the 1.21.1 program.getUniform("Target").set(getPickingIndex()).
+         * The legacy ShaderProgram param is unused (picker programs are RenderPipelines now). */
+        BBSPickerRenderer.setTarget(context.getPickingIndex());
     }
 
     protected void updateStencilMap(FormRenderingContext context)
