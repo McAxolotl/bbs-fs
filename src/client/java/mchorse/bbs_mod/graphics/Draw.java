@@ -1,23 +1,112 @@
 package mchorse.bbs_mod.graphics;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 
+/**
+ * 3D debug/gizmo drawing helpers.
+ *
+ * Ported to 1.21.11. The geometry-building API is unchanged ({@link MatrixStack} + {@link Matrix4f}
+ * + {@link BufferBuilder} still exist and behave as before), so all public method signatures are
+ * preserved. What changed is the draw-flush: 1.21.5 removed {@code RenderSystem.setShader(...)} and
+ * {@code BufferRenderer.drawWithGlobalProgram(...)}. Immediate-mode geometry is now built into a
+ * {@link BufferBuilder}, finished into a {@link BuiltBuffer}, and submitted through a
+ * {@link RenderLayer} that carries a {@link RenderPipeline}.
+ *
+ * These two BBS-owned POSITION_COLOR pipelines (one depth-tested, one not) replace the old
+ * {@code GameRenderer::getPositionColorProgram} usage. They are seeded from the vanilla
+ * {@code POSITION_COLOR_SNIPPET} (same vertex/fragment shader + transform UBO setup as the GUI/world
+ * position-color path) so the model-view/projection matrices flow through unchanged.
+ *
+ * TODO(1.21.11 render): verify at runtime that drawing through RenderLayer.draw() here picks up the
+ * current world model-view/projection. These helpers are invoked from within world/entity render
+ * passes where the global transform stack is already configured; if the transforms come out wrong,
+ * the pipeline may need the world transform snippet instead of the bare position-color snippet.
+ */
 public class Draw
 {
+    private static final BlendFunction BLEND = BlendFunction.TRANSLUCENT;
+
+    /* POSITION_COLOR / TRIANGLES, depth-tested (faithful to the old position-color program used for
+     * boxes/arcs/spheres inside the world). */
+    private static final RenderPipeline POSITION_COLOR_TRIS = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/draw_position_color"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    /* POSITION_COLOR / TRIANGLES, no depth test (coolerAxes did RenderSystem.disableDepthTest()). */
+    private static final RenderPipeline POSITION_COLOR_TRIS_NO_DEPTH = RenderPipelines.register(
+        RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(Identifier.of(BBSMod.MOD_ID, "pipeline/draw_position_color_no_depth"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLES)
+            .withBlend(BLEND)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withCull(false)
+            .build()
+    );
+
+    private static RenderLayer positionColorLayer;
+    private static RenderLayer positionColorNoDepthLayer;
+
+    private static RenderLayer getPositionColorLayer()
+    {
+        if (positionColorLayer == null)
+        {
+            positionColorLayer = RenderLayer.of(BBSMod.MOD_ID + "_draw_position_color",
+                RenderSetup.builder(POSITION_COLOR_TRIS).translucent().build());
+        }
+
+        return positionColorLayer;
+    }
+
+    private static RenderLayer getPositionColorNoDepthLayer()
+    {
+        if (positionColorNoDepthLayer == null)
+        {
+            positionColorNoDepthLayer = RenderLayer.of(BBSMod.MOD_ID + "_draw_position_color_no_depth",
+                RenderSetup.builder(POSITION_COLOR_TRIS_NO_DEPTH).translucent().build());
+        }
+
+        return positionColorNoDepthLayer;
+    }
+
+    /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
+    private static void flush(BufferBuilder builder, RenderLayer layer)
+    {
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            /* TODO(1.21.11 render): verify at runtime. RenderLayer.draw uploads + draws with the
+             * layer pipeline; previously this was BufferRenderer.drawWithGlobalProgram. */
+            layer.draw(built);
+        }
+    }
+
     public static void renderBox(MatrixStack stack, double x, double y, double z, double w, double h, double d)
     {
         renderBox(stack, x, y, z, w, h, d, 1, 1, 1);
@@ -36,8 +125,6 @@ public class Draw
         float fh = (float) h;
         float fd = (float) d;
         float t = 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000);
-
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
@@ -59,7 +146,7 @@ public class Draw
         fillBox(builder, stack, -t, -t, -t, t, t, t + fd, r, g, b, a);
         fillBox(builder, stack, -t + fw, -t, -t, t + fw, t, t + fd, r, g, b, a);
 
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        flush(builder, getPositionColorLayer());
 
         stack.pop();
     }
@@ -163,7 +250,6 @@ public class Draw
         axisSize *= scale;
         axisOffset *= scale * thickness;
 
-
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
@@ -171,10 +257,9 @@ public class Draw
         fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
         fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, Colors.WHITE);
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        RenderSystem.disableDepthTest();
-
-        { net.minecraft.client.render.BuiltBuffer __bbsBuilt = builder.endNullable(); if (__bbsBuilt != null) BufferRenderer.drawWithGlobalProgram(__bbsBuilt); }
+        /* The old code did RenderSystem.disableDepthTest() before drawing; depth state now lives in
+         * the pipeline, so this draws through the no-depth POSITION_COLOR layer instead. */
+        flush(builder, getPositionColorNoDepthLayer());
     }
 
     public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, int color)
@@ -251,9 +336,9 @@ public class Draw
     {
         float constR = 1.0F / (float) (rings - 1);
         float constS = 1.0F / (float) (sectors - 1);
-        
+
         Matrix4f mat = stack.peek().getPositionMatrix();
-        
+
         for (int i = 0; i < rings - 1; i++)
         {
             for (int j = 0; j < sectors - 1; j++)
@@ -261,23 +346,23 @@ public class Draw
                 float y0 = (float) Math.sin(-Math.PI / 2 + Math.PI * i * constR);
                 float x0 = (float) Math.cos(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * i * constR);
                 float z0 = (float) Math.sin(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * i * constR);
-                
+
                 float y1 = (float) Math.sin(-Math.PI / 2 + Math.PI * (i + 1) * constR);
                 float x1 = (float) Math.cos(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
                 float z1 = (float) Math.sin(2 * Math.PI * j * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
-                
+
                 float y2 = (float) Math.sin(-Math.PI / 2 + Math.PI * (i + 1) * constR);
                 float x2 = (float) Math.cos(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
                 float z2 = (float) Math.sin(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * (i + 1) * constR);
-                
+
                 float y3 = (float) Math.sin(-Math.PI / 2 + Math.PI * i * constR);
                 float x3 = (float) Math.cos(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * i * constR);
                 float z3 = (float) Math.sin(2 * Math.PI * (j + 1) * constS) * (float) Math.sin(Math.PI * i * constR);
-                
+
                 builder.vertex(mat, x0 * radius, y0 * radius, z0 * radius).color(r, g, b, a);
                 builder.vertex(mat, x1 * radius, y1 * radius, z1 * radius).color(r, g, b, a);
                 builder.vertex(mat, x2 * radius, y2 * radius, z2 * radius).color(r, g, b, a);
-                
+
                 builder.vertex(mat, x0 * radius, y0 * radius, z0 * radius).color(r, g, b, a);
                 builder.vertex(mat, x2 * radius, y2 * radius, z2 * radius).color(r, g, b, a);
                 builder.vertex(mat, x3 * radius, y3 * radius, z3 * radius).color(r, g, b, a);
