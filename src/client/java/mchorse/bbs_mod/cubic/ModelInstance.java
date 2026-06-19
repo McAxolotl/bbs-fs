@@ -277,13 +277,12 @@ public class ModelInstance implements IModelInstance
 
     public boolean isVAORendered()
     {
-        /* Cubic Models render through the IMMEDIATE CubicCubeRenderer path (original code, no shader): in
-         * previews via entityCutoutNoCull(adopted texture), in-world via the now-working bbs:core/model layer
-         * (the same layer BillboardFormRenderer draws through, with the model texture bound globally). The VAO
-         * path still binds getMainShader()==null + a stubbed ModelVAORenderer.setupUniforms (TODO pipeline
-         * foundation), so it draws nothing. Keep only BOBJModel — which has NO immediate path — on VAO until
-         * the new-pipeline VAO draw is ported. Was: !this.vaos.isEmpty() || BOBJModel, with a preview-only
-         * ACTIVE override forcing cubic immediate; that override is now the unconditional rule. */
+        /* Cubic Models render through the IMMEDIATE CubicCubeRenderer path (no shader): in previews via
+         * entityCutoutNoCull(adopted texture), in-world via the bbs:core/model layer (BBSShaders.getModelLayer()),
+         * with the model texture bound globally. The VAO path (CubicVAORenderer -> ModelVAORenderer) now draws
+         * through that SAME model layer (CPU-baked geometry into a BufferBuilder), which is what revives BOBJModel
+         * — it has NO immediate path. Keep cubic on the immediate path (no per-group ModelVAO build/retain needed);
+         * only BOBJModel takes VAO. Was: !this.vaos.isEmpty() || BOBJModel, with a preview-only ACTIVE override. */
         return this.model instanceof BOBJModel;
     }
 
@@ -374,14 +373,12 @@ public class ModelInstance implements IModelInstance
 
     public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
     {
-        ShaderProgram shader = program.get();
-
         if (this.model instanceof Model model)
         {
             boolean isVao = this.isVAORendered();
 
             CubicCubeRenderer renderProcessor = isVao
-                ? new CubicVAORenderer(shader, this, light, overlay, stencilMap, keys)
+                ? new CubicVAORenderer(this, light, overlay, stencilMap, keys)
                 : new CubicCubeRenderer(light, overlay, stencilMap, keys);
 
             renderProcessor.setColor(color.r, color.g, color.b, color.a);
@@ -427,7 +424,7 @@ public class ModelInstance implements IModelInstance
 
                 vao.armature.setupMatrices();
                 vao.updateMesh(stencilMap);
-                vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                vao.render(stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
 
                 stack.pop();
             }

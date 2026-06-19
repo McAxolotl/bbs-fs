@@ -1,115 +1,55 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
-import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
-import net.minecraft.client.gl.ShaderProgram;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL30;
 
 public class BOBJModelVAO
 {
     public BOBJLoader.CompiledData data;
     public BOBJArmature armature;
 
-    private int vao;
     private int count;
 
-    /* GL buffers */
-    public int vertexBuffer;
-    public int normalBuffer;
-    public int lightBuffer;
-    public int texCoordBuffer;
-    public int tangentBuffer;
-    public int midTextureBuffer;
-
+    /* CPU-skinned mesh, recomputed every frame in updateMesh and emitted in render */
     private float[] tmpVertices;
     private float[] tmpNormals;
     private int[] tmpLight;
-    private float[] tmpTangents;
 
     public BOBJModelVAO(BOBJLoader.CompiledData data)
     {
         this.data = data;
         this.armature = this.data.mesh.armature;
 
-        this.initBuffers();
-    }
-
-    /**
-     * Initiate buffers. This method is responsible for allocating 
-     * buffers for the data to be passed to VBOs and also generating the 
-     * VBOs themselves. 
-     */
-    private void initBuffers()
-    {
-        this.vao = GL30.glGenVertexArrays();
-
-        GL30.glBindVertexArray(this.vao);
-
-        this.vertexBuffer = GL30.glGenBuffers();
-        this.normalBuffer = GL30.glGenBuffers();
-        this.lightBuffer = GL30.glGenBuffers();
-        this.texCoordBuffer = GL30.glGenBuffers();
-        this.tangentBuffer = GL30.glGenBuffers();
-        this.midTextureBuffer = GL30.glGenBuffers();
-
         this.count = this.data.normData.length / 3;
         this.tmpVertices = new float[this.data.posData.length];
         this.tmpNormals = new float[this.data.normData.length];
-        this.tmpLight = new int[this.data.posData.length];
-        this.tmpTangents = new float[this.count * 4];
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.posData, GL30.GL_DYNAMIC_DRAW);
-        GL30.glVertexAttribPointer(Attributes.POSITION, 3, GL30.GL_FLOAT, false, 0, 0);
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.normalBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.normData, GL30.GL_DYNAMIC_DRAW);
-        GL30.glVertexAttribPointer(Attributes.NORMAL, 3, GL30.GL_FLOAT, false, 0, 0);
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.lightBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.tmpLight, GL30.GL_DYNAMIC_DRAW);
-        GL30.glVertexAttribIPointer(Attributes.LIGHTMAP_UV, 2, GL30.GL_INT, 0, 0);
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.texData, GL30.GL_STATIC_DRAW);
-        GL30.glVertexAttribPointer(Attributes.TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.tangentBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.tmpTangents, GL30.GL_STATIC_DRAW);
-        GL30.glVertexAttribPointer(Attributes.TANGENTS, 4, GL30.GL_FLOAT, false, 0, 0);
-
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
-        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.texData, GL30.GL_STATIC_DRAW);
-        GL30.glVertexAttribPointer(Attributes.MID_TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
+        this.tmpLight = new int[this.count * 2];
     }
 
     /**
-     * Clean up resources which were used by this  
+     * Previously this freed the raw-GL VAO/VBOs. The skinned mesh now draws through the immediate
+     * BufferBuilder path (see {@link #render}), so there is nothing GPU-side to free here anymore.
      */
     public void delete()
-    {
-        GL30.glDeleteVertexArrays(this.vao);
-
-        GL15.glDeleteBuffers(this.vertexBuffer);
-        GL15.glDeleteBuffers(this.normalBuffer);
-        GL15.glDeleteBuffers(this.lightBuffer);
-        GL15.glDeleteBuffers(this.texCoordBuffer);
-        GL15.glDeleteBuffers(this.tangentBuffer);
-        GL15.glDeleteBuffers(this.midTextureBuffer);
-    }
+    {}
 
     /**
-     * Update this mesh. This method is responsible for applying 
-     * matrix transformations to vertices and normals according to its 
-     * bone owners and these bone influences.
+     * Update this mesh. This method is responsible for applying matrix transformations to vertices
+     * and normals according to its bone owners and these bone influences. The skinned result is kept
+     * on the CPU (tmpVertices/tmpNormals/tmpLight) and emitted into a BufferBuilder in {@link #render}.
      */
     public void updateMesh(StencilMap stencilMap)
     {
@@ -186,69 +126,64 @@ public class BOBJModelVAO
         }
 
         this.processData(newVertices, newNormals);
-
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.vertexBuffer);
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newVertices, GL15.GL_DYNAMIC_DRAW);
-
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.normalBuffer);
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newNormals, GL15.GL_DYNAMIC_DRAW);
-
-        if (BBSRendering.isIrisShadersEnabled())
-        {
-            BBSRendering.calculateTangents(this.tmpTangents, newVertices, newNormals, this.data.texData);
-
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.tangentBuffer);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpTangents, GL15.GL_DYNAMIC_DRAW);
-        }
-
-        if (stencilMap != null)
-        {
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.lightBuffer);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpLight, GL15.GL_DYNAMIC_DRAW);
-        }
     }
 
     protected void processData(float[] newVertices, float[] newNormals)
     {}
 
-    public void render(ShaderProgram shader, MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
+    /**
+     * Emit the CPU-skinned mesh through the immediate model RenderLayer. The stack position/normal
+     * matrices are baked into the vertices CPU-side (exactly like {@link mchorse.bbs_mod.cubic.render.CubicCubeRenderer#writeVertex}),
+     * and the model pipeline (blend/depth/cull) + lightmap/overlay samplers are encoded by
+     * {@link BBSShaders#getModelLayer()}. Replaces the removed ShaderProgram bind + raw-GL VAO draw.
+     */
+    public void render(MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
     {
-        boolean hasShaders = BBSRendering.isIrisShadersEnabled();
+        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
 
-        GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
-        GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
-        GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
+        Matrix4f position = stack.peek().getPositionMatrix();
+        Matrix3f normalMatrix = stack.peek().getNormalMatrix();
 
-        int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
-        int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
+        float[] vertices = this.tmpVertices;
+        float[] normals = this.tmpNormals;
+        float[] texData = this.data.texData;
 
-        ModelVAORenderer.setupUniforms(stack, shader);
+        Vector4f vertex = new Vector4f();
+        Vector3f normal = new Vector3f();
 
-        /* TODO(1.21.11 render): bind the model RenderPipeline (BBSShaders.getModel()) via a RenderPass
-         * here. ShaderProgram.bind()/unbind() were removed in 1.21.5+. The skinned-mesh geometry is still
-         * computed on the CPU (updateMesh) and uploaded/drawn through the raw-GL VAO below. */
-        GL30.glBindVertexArray(this.vao);
+        int lu = light & 0xffff;
+        int lv = light >> 16 & 0xffff;
 
-        GL30.glEnableVertexAttribArray(Attributes.POSITION);
-        GL30.glEnableVertexAttribArray(Attributes.TEXTURE_UV);
-        GL30.glEnableVertexAttribArray(Attributes.NORMAL);
+        for (int i = 0; i < this.count; i++)
+        {
+            vertex.set(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2], 1F);
+            position.transform(vertex);
 
-        if (stencilMap != null) GL30.glEnableVertexAttribArray(Attributes.LIGHTMAP_UV);
-        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
-        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+            normal.set(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
+            normalMatrix.transform(normal);
 
-        GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
+            int u = lu;
+            int v = lv;
 
-        GL30.glDisableVertexAttribArray(Attributes.POSITION);
-        GL30.glDisableVertexAttribArray(Attributes.TEXTURE_UV);
-        GL30.glDisableVertexAttribArray(Attributes.NORMAL);
+            if (stencilMap != null)
+            {
+                u = this.tmpLight[i * 2];
+                v = this.tmpLight[i * 2 + 1];
+            }
 
-        if (stencilMap != null) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
-        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
-        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+            builder.vertex(vertex.x, vertex.y, vertex.z)
+                .color(r, g, b, a)
+                .texture(texData[i * 2], texData[i * 2 + 1])
+                .overlay(overlay)
+                .light(u, v)
+                .normal(normal.x, normal.y, normal.z);
+        }
 
-        /* TODO(1.21.11 render): unbind/end the RenderPass that replaced ShaderProgram.unbind(). */
-        GL30.glBindVertexArray(currentVAO);
-        GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            BBSShaders.getModelLayer().draw(built);
+        }
     }
 }

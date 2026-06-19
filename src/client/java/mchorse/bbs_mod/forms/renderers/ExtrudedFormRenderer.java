@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
+import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.resources.Link;
@@ -112,18 +113,11 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
 
             BBSModClient.getTextures().bindTexture(texture);
 
-            RenderPipeline finalShader = shader.get();
-
-            /* TODO(1.21.11 render): the extruded model draw is stubbed.
-             * Removed/changed since 1.21.5:
-             *  - RenderSystem.enableBlend/defaultBlendFunc/disableBlend (blend is per-pipeline now);
-             *  - LightmapTextureManager.enable()/disable() and OverlayTexture.setup/teardownOverlayColor()
-             *    (lightmap/overlay are bound via the RenderLayer/RenderSetup useLightmap()/useOverlay());
-             *  - ModelVAORenderer.render(...) still takes a ShaderProgram and binds it via the removed
-             *    ShaderProgram.bind()/uniform fields. It must instead bind the model RenderPipeline
-             *    ({@code finalShader}) through RenderSystem.getDevice()/RenderPass and upload the
-             *    ColorModulator/Light/IViewRotMat/NormalMat UBO entries per draw.
-             * Re-enable the draw once ModelVAORenderer is migrated to RenderPipeline. */
+            /* Blend/depth/cull and the lightmap/overlay samplers are encoded by the model RenderLayer
+             * (BBSShaders.getModelLayer()); the geometry is baked CPU-side and drawn immediately, the
+             * same proven path cubic Models/Billboards use. The picker pipeline carried by `shader`
+             * will be selected here once the picking foundation lands (see render3D TODO). */
+            ModelVAORenderer.render(data, matrices, color.r, color.g, color.b, color.a, light, overlay);
         }
     }
 }
