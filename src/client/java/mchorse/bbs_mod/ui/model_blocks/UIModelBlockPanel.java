@@ -649,16 +649,23 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return;
         }
 
-        Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
-
-        /* Highlight the hovered gizmo handle: composite the picking texture back over the viewport with the
-         * picker_preview pipeline, recolouring the pixels whose encoded index equals the hovered stencil index
-         * with BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor + texturedBox
-         * path). The custom BBSPicker UBO cannot ride the immediate RenderLayer/texturedBox path, so the overlay
-         * is drawn through BBSPickerRenderer's dedicated render pass that binds it. */
+        /* Highlight the hovered gizmo handle: recolour the pixels of the picking texture whose encoded index
+         * equals the hovered stencil index with BBSSettings.stencilHighlightColor (faithful to the 1.21.1
+         * Target/HighlightColor + texturedBox path). The recolour runs in an off-screen pass that carries the
+         * custom BBSPicker UBO (it can't ride the immediate RenderLayer/texturedBox path); the result is then
+         * blitted back over the viewport through the recorded two-phase-GUI texturedBox path (FBO-style V-flip),
+         * so it survives the deferred GUI flush. */
         int color = BBSSettings.stencilHighlightColor.get();
+        int scale = BBSModClient.getGUIScale();
 
-        BBSPickerRenderer.drawHighlight(texture, this.gizmoStencil.getIndex(), color, 0, 0, context.menu.width, context.menu.height);
+        if (BBSPickerRenderer.drawHighlight(this.gizmoStencil.getIndex(), color, context.menu.width * scale, context.menu.height * scale))
+        {
+            int vw = BBSPickerRenderer.getHighlightWidth();
+            int vh = BBSPickerRenderer.getHighlightHeight();
+
+            context.batcher.texturedBox(BBSPickerRenderer.getHighlightGlId(), Colors.WHITE,
+                0, 0, context.menu.width, context.menu.height, 0, vh, vw, 0, vw, vh);
+        }
     }
 
     @Override

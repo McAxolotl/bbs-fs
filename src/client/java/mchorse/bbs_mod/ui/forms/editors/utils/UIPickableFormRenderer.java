@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.utils;
 
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -8,7 +9,6 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.graphics.Draw;
-import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
@@ -266,17 +267,25 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         }
 
         int index = this.stencil.getIndex();
-        Texture texture = this.stencil.getFramebuffer().getMainTexture();
         Pair<Form, String> pair = this.stencil.getPicked();
 
-        /* Highlight the hovered form/bone: composite the picking texture back over the viewport with the
-         * picker_preview pipeline, recolouring the pixels whose encoded index equals the picked index with
-         * BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor + texturedBox path).
-         * The custom BBSPicker UBO cannot ride the immediate RenderLayer/texturedBox path, so the overlay is
-         * drawn through BBSPickerRenderer's dedicated render pass that binds it. */
+        /* Highlight the hovered form/bone: recolour the pixels of the picking texture whose encoded index equals
+         * the picked index with BBSSettings.stencilHighlightColor (faithful to the 1.21.1 Target/HighlightColor
+         * + texturedBox path). The recolour runs in an off-screen pass that carries the custom BBSPicker UBO (it
+         * can't ride the immediate RenderLayer/texturedBox path); the result is then blitted back over the
+         * viewport through the recorded two-phase-GUI texturedBox path (FBO-style V-flip), so it survives the
+         * deferred GUI flush. */
         int color = BBSSettings.stencilHighlightColor.get();
+        int scale = BBSModClient.getGUIScale();
 
-        BBSPickerRenderer.drawHighlight(texture, index, color, this.area.x, this.area.y, this.area.w, this.area.h);
+        if (BBSPickerRenderer.drawHighlight(index, color, this.area.w * scale, this.area.h * scale))
+        {
+            int vw = BBSPickerRenderer.getHighlightWidth();
+            int vh = BBSPickerRenderer.getHighlightHeight();
+
+            context.batcher.texturedBox(BBSPickerRenderer.getHighlightGlId(), Colors.WHITE,
+                this.area.x, this.area.y, this.area.w, this.area.h, 0, vh, vw, 0, vw, vh);
+        }
 
         if (pair != null && pair.a != null)
         {
