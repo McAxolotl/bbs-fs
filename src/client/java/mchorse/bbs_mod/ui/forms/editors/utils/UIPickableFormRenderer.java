@@ -31,6 +31,11 @@ import java.util.function.Supplier;
 
 public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewport
 {
+    /* TODO(strip): toggle to draw + log the bone-highlight alignment measurement (see render()). Default ON so
+     * the user can read the rect/scale numbers on first run; set to false (or delete the block) once confirmed. */
+    private static final boolean DEBUG_ALIGN = true;
+    private static int debugFrame;
+
     public UIFormEditor formEditor;
 
     private boolean update;
@@ -182,6 +187,19 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
          * Hover-gated so the second render only runs when the cursor is over the viewport. */
         if (this.area.isInside(context))
         {
+            /* Alignment fix (1.21.11): size the picking texture to the SAME pixel dimensions as the visible
+             * model's preview FBO (viewportW/viewportH, the rx/ry-scaled area) instead of getGUIScale(). The
+             * model FBO is sized by setupViewport's rx = round(window.W / menu.W); the stencil's resizeGUI used
+             * getGUIScale() instead, which can diverge from rx (custom BBSSettings.userIntefaceScale, or "auto"
+             * MC scale where getGuiScale().getValue() != the effective factor). When the two scales differ the
+             * picker draws into a differently-sized texture than the model FBO, and the recoloured highlight —
+             * blitted over the SAME this.area — no longer lands on the bone. Binding the stencil to the FBO's
+             * exact pixel size makes picking texture == model FBO, so the 1:1 recolour aligns. */
+            int vpw = Math.max(1, this.viewportW);
+            int vph = Math.max(1, this.viewportH);
+
+            this.stencil.resize(vpw, vph);
+
             this.stencilMap.setup();
             this.stencil.apply();
 
@@ -191,7 +209,13 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
              * handles own indices 0..STENCIL_MAX and simply won't be hit until ported; form/bone picking
              * (indices past STENCIL_MAX) is unaffected. */
 
-            this.stencil.pickGUI(context, this.area);
+            /* Pick-read with the SAME scale the stencil was sized at: map the cursor (in GUI units, relative to
+             * the area, V-flipped for the bottom-up texture) to picking-texture pixels via vpw/area.w & vph/area.h
+             * — NOT getGUIScale() — so the sampled texel matches the resized texture. */
+            float px = (context.mouseX - this.area.x) / (float) this.area.w * vpw;
+            float py = (this.area.h - context.mouseY + this.area.y) / (float) this.area.h * vph;
+
+            this.stencil.pick((int) px, (int) py);
             this.stencil.unbind(this.stencilMap);
         }
         else
@@ -276,15 +300,47 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
          * viewport through the recorded two-phase-GUI texturedBox path (FBO-style V-flip), so it survives the
          * deferred GUI flush. */
         int color = BBSSettings.stencilHighlightColor.get();
-        int scale = BBSModClient.getGUIScale();
 
-        if (BBSPickerRenderer.drawHighlight(index, color, this.area.w * scale, this.area.h * scale))
+        /* Alignment fix (1.21.11): build the highlight target at the SAME pixel size as the picking texture /
+         * visible model FBO (viewportW/viewportH), so the recolour is a 1:1 copy of the picking texture and the
+         * blit over this.area lands exactly where the model (also blitted over this.area at the same FBO size)
+         * is. The previous getGUIScale()-derived size (area.w*scale) could differ from the FBO's rx/ry scale,
+         * offsetting the highlight. */
+        int hw = Math.max(1, this.viewportW);
+        int hh = Math.max(1, this.viewportH);
+
+        if (BBSPickerRenderer.drawHighlight(index, color, hw, hh))
         {
             int vw = BBSPickerRenderer.getHighlightWidth();
             int vh = BBSPickerRenderer.getHighlightHeight();
 
             context.batcher.texturedBox(BBSPickerRenderer.getHighlightGlId(), Colors.WHITE,
                 this.area.x, this.area.y, this.area.w, this.area.h, 0, vh, vw, 0, vw, vh);
+        }
+
+        /* TODO(strip): measurement debug for the bone-highlight alignment. Draws the blit/model rect (yellow
+         * outline = this.area, where BOTH the model and highlight blit) and prints the GUI-scale factors that
+         * drive the two textures, so any residual offset can be read off a screenshot + log. The model FBO is
+         * sized by rx = viewportW/area.w; the old stencil used getGUIScale(). If these differ, that WAS the
+         * offset. Remove this block once alignment is confirmed. */
+        if (DEBUG_ALIGN)
+        {
+            int yellow = 0xFFFFFF00;
+
+            context.batcher.outline(this.area.x, this.area.y, this.area.ex(), this.area.ey(), yellow, 1);
+
+            if ((debugFrame++ % 15) == 0)
+            {
+                float rxScale = this.area.w == 0 ? 0F : this.viewportW / (float) this.area.w;
+                float ryScale = this.area.h == 0 ? 0F : this.viewportH / (float) this.area.h;
+
+                System.out.println("[bone-highlight align] area=" + this.area.x + "," + this.area.y + " " + this.area.w + "x" + this.area.h
+                    + " | viewportFBO=" + this.viewportW + "x" + this.viewportH
+                    + " | fboScale(rx,ry)=" + rxScale + "," + ryScale
+                    + " | getGUIScale()=" + BBSModClient.getGUIScale()
+                    + " | highlightTex=" + BBSPickerRenderer.getHighlightWidth() + "x" + BBSPickerRenderer.getHighlightHeight()
+                    + " | index=" + index);
+            }
         }
 
         if (pair != null && pair.a != null)
