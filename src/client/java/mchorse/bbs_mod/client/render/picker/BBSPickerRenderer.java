@@ -285,6 +285,76 @@ public class BBSPickerRenderer
     }
 
     /**
+     * Draw a plain {@code POSITION_COLOR} {@link BuiltBuffer} into the active off-screen picking colour target
+     * (set via {@link #setRenderTarget}), encoding the picking index directly in the vertex colour rather than a
+     * {@code Target} uniform. This is the gizmo-handle equivalent of {@link #draw}: the gizmo stencil pass bakes
+     * each handle's stencil id into the red channel of its geometry (the faithful 1.21.1 mechanism — the original
+     * drew the handles with {@code getPositionColorProgram} at {@code (id/255, 0, 0, 1)}), so it needs neither the
+     * {@code BBSPicker} UBO nor a {@code Sampler0} — only the engine builtins + {@code DynamicTransforms}.
+     *
+     * <p>Renders colour-only (no depth attachment) and LOADs the target (no clear), so — exactly like the
+     * original {@code RenderSystem.disableDepthTest()} stencil pass — the handles always win the pick over the
+     * form/bone ids already accumulated in the target, regardless of model depth.
+     *
+     * <p>No-op when no off-screen target is set: drawing the id colours into the main framebuffer would leak the
+     * encoded handle colours onto the visible viewport (the exact hazard that kept this pass stubbed). The gizmo
+     * stencil is only ever invoked inside a {@code StencilFormFramebuffer.apply()}/{@code unbind()} window, so the
+     * target is set whenever this is legitimately reached.
+     *
+     * @param modelView the global model-view the visual gizmo {@link net.minecraft.client.render.RenderLayer}
+     *                  would apply ({@link RenderSystem#getModelViewMatrix()}); the per-vertex stack pose is
+     *                  already baked into the geometry, matching the visible gizmo exactly.
+     */
+    public static void drawColorId(RenderPipeline pipeline, BuiltBuffer buffer, Matrix4f modelView)
+    {
+        if (targetColor == null)
+        {
+            buffer.close();
+
+            return;
+        }
+
+        GpuDevice device = RenderSystem.getDevice();
+        CommandEncoder encoder = device.createCommandEncoder();
+
+        GpuBufferSlice dynamicTransforms = RenderSystem.getDynamicUniforms()
+            .write(modelView, new Vector4f(1F, 1F, 1F, 1F), new Vector3f(), new Matrix4f());
+
+        VertexFormat format = pipeline.getVertexFormat();
+        GpuBuffer vertexBuffer = format.uploadImmediateVertexBuffer(buffer.getBuffer());
+
+        GpuBuffer indexBuffer;
+        VertexFormat.IndexType indexType;
+
+        if (buffer.getSortedBuffer() == null)
+        {
+            RenderSystem.ShapeIndexBuffer sequential = RenderSystem.getSequentialBuffer(buffer.getDrawParameters().mode());
+
+            indexBuffer = sequential.getIndexBuffer(buffer.getDrawParameters().indexCount());
+            indexType = sequential.getIndexType();
+        }
+        else
+        {
+            indexBuffer = format.uploadImmediateIndexBuffer(buffer.getSortedBuffer());
+            indexType = buffer.getDrawParameters().indexType();
+        }
+
+        try (RenderPass pass = encoder.createRenderPass(() -> "bbs:gizmo_pick", targetColor, OptionalInt.empty()))
+        {
+            pass.setPipeline(pipeline);
+            RenderSystem.bindDefaultUniforms(pass);
+            pass.setUniform("DynamicTransforms", dynamicTransforms);
+            pass.setVertexBuffer(0, vertexBuffer);
+            pass.setIndexBuffer(indexBuffer, indexType);
+            pass.drawIndexed(0, 0, buffer.getDrawParameters().indexCount(), 1);
+        }
+        finally
+        {
+            buffer.close();
+        }
+    }
+
+    /**
      * Map the projection ring's current slot, write a single-mat4 std140 {@code Projection} block holding the
      * given ortho matrix, and return its slice. Mirrors the engine's own {@code PROJECTION_MATRIX_UBO_SIZE}
      * (one mat4) so the picker_preview vertex shader's {@code Projection { mat4 ProjMat; }} binds correctly.

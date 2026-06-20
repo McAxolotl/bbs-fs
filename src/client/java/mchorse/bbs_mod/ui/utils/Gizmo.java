@@ -9,6 +9,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -161,6 +162,26 @@ public class Gizmo
         if (built != null)
         {
             getGizmoLayer().draw(built);
+        }
+    }
+
+    /**
+     * Finish a buffer and submit it into the off-screen picking target instead of the visible viewport (no-op on
+     * an empty buffer). Used only by the stencil ({@link #renderStencil}) pass: the geometry carries each handle's
+     * stencil id in its red channel, and {@link BBSPickerRenderer#drawColorId} routes it through a manual render
+     * pass into {@link StencilFormFramebuffer}'s colour texture — the faithful 1.21.5+ replacement for the
+     * original {@code getPositionColorProgram} + {@code BufferRenderer.drawWithGlobalProgram} stencil draw, which
+     * can no longer reach the hand-bound FBO. The global model-view (the visible gizmo's {@link RenderLayer}
+     * applies it; the per-vertex stack pose is already baked in) is handed through so the pick aligns 1:1 with
+     * the visible handles.
+     */
+    private static void flushPick(BufferBuilder builder)
+    {
+        BuiltBuffer built = builder.endNullable();
+
+        if (built != null)
+        {
+            BBSPickerRenderer.drawColorId(GIZMO_PIPELINE, built, RenderSystem.getModelViewMatrix());
         }
     }
 
@@ -924,6 +945,74 @@ public class Gizmo
         this.hasLastRenderMatrix = true;
     }
 
+    /**
+     * Picking-pass mirror of {@link #drawRotateHandles}: the per-axis rotation rings and the billboard view ring,
+     * with each handle's stencil id baked into the red channel instead of its display colour, submitted into the
+     * off-screen picking target via {@link #flushPick}. Geometry params (radius/thickness, billboard orientation,
+     * {@link #VIEW_RING_SCALE}) are identical to the visual pass so the pick overlaps the visible rings 1:1.
+     *
+     * <p>The trackball sphere is intentionally absent — a pixel can't be both "bone" and "sphere", so the sphere
+     * is picked by a screen-space disc test in {@link GizmoInteraction} rather than the stencil. The rotate pie is
+     * a drag visualisation, not a handle, so it is excluded too.
+     */
+    private void drawRotateHandlesStencil(MatrixStack stack)
+    {
+        float scale = BBSSettings.axesScale.get();
+        float thickness = BBSSettings.axesThickness.get();
+
+        float radius = 0.22F * scale;
+        float thicknessRing = 0.02F * scale * thickness;
+
+        if (!BBSSettings.rotateHideRings.get())
+        {
+            BufferBuilder builder = begin();
+
+            Draw.arc3D(builder, stack, Axis.Z, radius, thicknessRing, STENCIL_ROTATE_Z / 255F, 0F, 0F);
+            Draw.arc3D(builder, stack, Axis.X, radius, thicknessRing, STENCIL_ROTATE_X / 255F, 0F, 0F);
+            Draw.arc3D(builder, stack, Axis.Y, radius, thicknessRing, STENCIL_ROTATE_Y / 255F, 0F, 0F);
+
+            flushPick(builder);
+        }
+
+        /* The screen-space (billboard) view-rotation ring stays pickable even with "Hide rotation rings" on,
+         * exactly as the visual pass keeps it drawn. Orientation derived from stack.peek() as there. */
+        stack.push();
+
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        {
+            basis.invert().transform(toCamera);
+        }
+
+        if (toCamera.lengthSquared() > 1.0E-8F)
+        {
+            toCamera.normalize();
+            stack.multiply(new Quaternionf().rotationTo(0F, 1F, 0F, toCamera.x, toCamera.y, toCamera.z));
+        }
+
+        stack.scale(VIEW_RING_SCALE, VIEW_RING_SCALE, VIEW_RING_SCALE);
+
+        BufferBuilder builder = begin();
+
+        Draw.arc3D(builder, stack, Axis.Y, radius, thicknessRing, STENCIL_VIEW / 255F, 0F, 0F);
+        flushPick(builder);
+
+        stack.pop();
+    }
+
+    /**
+     * The picking (stencil) pass: re-draw the gizmo handles with each handle's stencil id encoded in the red
+     * channel, into the off-screen {@link StencilFormFramebuffer} (via {@link #flushPick}), so the read-back pixel
+     * under the cursor names the hovered handle. Mirrors the visual {@link #drawAxes(MatrixStack, float, float)}
+     * pass exactly (same show/hide logic, same geometry) — only the colours (id vs display) and the submission
+     * target (off-screen vs viewport) differ. Faithful to the 1.21.1 stencil pass; the only forced change is the
+     * submission path (a manual render pass in place of the removed {@code getPositionColorProgram} immediate
+     * draw). {@code map} is unused here (handle pairs are seeded separately by {@link StencilMap#setup}); kept for
+     * signature parity with {@link #renderStencil}.
+     */
     private void drawAxes(MatrixStack stack, StencilMap map, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
@@ -939,15 +1028,59 @@ public class Gizmo
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
 
-        /* The whole stencil (picking) pass is intentionally left non-drawing. Unlike the visual pass,
-         * it must render handle-id colours into a dedicated off-screen framebuffer (StencilFormFramebuffer),
-         * but in 1.21.5+ the immediate RenderLayer.draw path renders into RenderSystem.outputColorTextureOverride
-         * rather than the raw-GL framebuffer StencilFormFramebuffer.apply() binds — so emitting the geometry
-         * here would leak the id-coloured handles into the visible target. Gizmo-handle picking therefore
-         * stays disabled until that framebuffer bridge is ported (tracked with the picking subsystem); the
-         * geometry mirrors the visual drawAxes pass exactly, encoding each stencil id in the red channel.
-         * Locals (showMove/showScale/showRotate/axisSize/axisOffset) are computed above so re-enabling is a
-         * drop-in. */
+        if (showRotate)
+        {
+            this.drawRotateHandlesStencil(stack);
+        }
+
+        if (showMove || showScale)
+        {
+            /* The bar reads as move when move is shown (combined) and as scale only when scale stands alone; the
+             * scale handle then lives on the end cubes, so move and scale never share an id under the cursor. */
+            Handle barX = showMove ? Handle.MOVE_X : Handle.SCALE_X;
+            Handle barY = showMove ? Handle.MOVE_Y : Handle.SCALE_Y;
+            Handle barZ = showMove ? Handle.MOVE_Z : Handle.SCALE_Z;
+            Handle planeXZ = showMove ? Handle.MOVE_XZ : Handle.SCALE_XZ;
+            Handle planeXY = showMove ? Handle.MOVE_XY : Handle.SCALE_XY;
+            Handle planeZY = showMove ? Handle.MOVE_ZY : Handle.SCALE_ZY;
+
+            BufferBuilder builder = begin();
+
+            Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, barX.index / 255F, 0F, 0F);
+            Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, barY.index / 255F, 0F, 0F);
+            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, barZ.index / 255F, 0F, 0F);
+
+            /* Centre cube as id 0 (black): a dead zone, exactly like the original — the bars' shared origin must
+             * not pick as any single axis. Drawn before the planes/cubes so they overlay it where they meet. */
+            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
+
+            /* Screen-space handle hitbox: before the planes so they win where they overlap. Matches the visual cube. */
+            if (showMove)
+            {
+                float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, STENCIL_SCREEN / 255F, 0F, 0F);
+            }
+
+            float planeStart = axisSize * 0.2F;
+            float planeEnd = planeStart + axisSize * 0.4F * thickness;
+            float planeThickness = axisOffset * 0.5F;
+
+            Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ.index / 255F, 0F, 0F);
+            Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, planeXY.index / 255F, 0F, 0F);
+            Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, planeZY.index / 255F, 0F, 0F);
+
+            if (showScale)
+            {
+                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
+
+                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
+            }
+
+            flushPick(builder);
+        }
     }
 
     public static enum Mode
