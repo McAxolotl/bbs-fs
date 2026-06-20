@@ -37,37 +37,44 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        /* DrawContext.draw() was removed in the 1.21.5 UI rewrite; the engine flushes immediate draws. */
+        /* List/icon preview: submit a special GUI element so the item draws off-screen during the GUI prepare
+         * phase. A direct immediate item draw is dropped by the two-phase GUI here (so the item was invisible in
+         * form/morph/replay lists), and it also inherited whatever DiffuseLighting state happened to be set (dark
+         * in the form-properties editor until the window lost focus). The FBO render pass composites correctly AND
+         * binds the form-preview diffuse lighting in BbsFormGuiElementRenderer.lights() — fixing both symptoms.
+         * Same path as BlockForm / ModelForm. */
+        this.submitUIPreview(context, x1, y1, x2, y2);
+    }
+
+    @Override
+    public void renderUIPreview(MatrixStack stack, float angle, float transition, int x1, int y1, int x2, int y2)
+    {
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-        /* DrawContext.getMatrices() now returns a 2D Matrix3x2fStack; item rendering needs a 3D
-         * MatrixStack, so build a dedicated one and apply the UI matrix to it. */
-        MatrixStack matrices = new MatrixStack();
 
-        Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        /* The base renderer pre-translated the stack to the cell (centre, 0.85*height down) + scale(f,f,-f); apply
+         * the rest of the original getUIMatrix framing here (cell scale + 22.5 tilt + cursor yaw), then the same
+         * recolor + command-queue item draw renderInUI/render3D use. No -0.5 block centering — items render
+         * centred at the origin. */
+        Matrix4f uiMatrix = ModelFormRenderer.getUIPreviewMatrix(angle, y1, y2);
 
-        matrices.push();
-        MatrixStackUtils.multiply(matrices, uiMatrix);
-        matrices.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
+        stack.push();
+        MatrixStackUtils.multiply(stack, uiMatrix);
+        stack.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
 
-        matrices.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
-        matrices.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
+        stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
+        stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
         Color set = Color.white();
         FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
-        /* 1.21.1 called MinecraftClient.getItemRenderer().renderItem(stack, modelTransform, MAX_BLOCK_LIGHT,
-         * DEFAULT_UV, matrices, consumers, world, 0). The 1.21.4 item-model rewrite removed that high-level
-         * stack overload; the faithful replacement resolves the stack into per-layer draw commands and feeds
-         * them through the surviving VertexConsumerProvider-taking ItemRenderer.renderItem static, so the BBS
-         * recolor/picking substitution on `consumers` still intercepts the geometry. */
-        renderItem(this.form.stack.get(), this.form.modelTransform.get(), matrices, consumers, MinecraftClient.getInstance().world, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, OverlayTexture.DEFAULT_UV);
+        renderItem(this.form.stack.get(), this.form.modelTransform.get(), stack, consumers, MinecraftClient.getInstance().world, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, OverlayTexture.DEFAULT_UV);
         consumers.draw();
         consumers.setUI(false);
         consumers.setSubstitute(null);
 
-        matrices.pop();
+        stack.pop();
     }
 
     @Override
