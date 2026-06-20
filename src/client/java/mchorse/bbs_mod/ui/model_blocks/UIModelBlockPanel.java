@@ -6,7 +6,7 @@ import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -649,20 +649,23 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return;
         }
 
-        Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
-        int w = texture.width;
-        int h = texture.height;
-
-        /* TODO(1.21.11 render): the picker-preview highlight overlay depends on the new
-         * uniform-upload path. RenderPipeline.getUniform("Target"/"HighlightColor")/GlUniform.set
-         * are gone (uniforms are UBO/DynamicUniform entries now), RenderSystem.enableBlend is gone,
-         * and Batcher2D.texturedBox is a no-op stub. Re-enable once the picker-preview pipeline +
-         * uniform upload are ported. Original intent: set Target=gizmoStencil.getIndex(),
-         * HighlightColor=stencilHighlightColor, then draw the stencil texture through the
-         * picker-preview program over the viewport. */
+        /* Highlight the hovered gizmo handle: recolour the pixels of the picking texture whose encoded index
+         * equals the hovered stencil index with BBSSettings.stencilHighlightColor (faithful to the 1.21.1
+         * Target/HighlightColor + texturedBox path). The recolour runs in an off-screen pass that carries the
+         * custom BBSPicker UBO (it can't ride the immediate RenderLayer/texturedBox path); the result is then
+         * blitted back over the viewport through the recorded two-phase-GUI texturedBox path (FBO-style V-flip),
+         * so it survives the deferred GUI flush. */
         int color = BBSSettings.stencilHighlightColor.get();
+        int scale = BBSModClient.getGUIScale();
 
-        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, 0, 0, context.menu.width, context.menu.height, 0, h, w, 0, w, h);
+        if (BBSPickerRenderer.drawHighlight(this.gizmoStencil.getIndex(), color, context.menu.width * scale, context.menu.height * scale))
+        {
+            int vw = BBSPickerRenderer.getHighlightWidth();
+            int vh = BBSPickerRenderer.getHighlightHeight();
+
+            context.batcher.texturedBox(BBSPickerRenderer.getHighlightGlId(), Colors.WHITE,
+                0, 0, context.menu.width, context.menu.height, 0, vh, vw, 0, vw, vh);
+        }
     }
 
     @Override

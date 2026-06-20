@@ -28,7 +28,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
@@ -1253,21 +1253,25 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         int index = this.stencil.getIndex();
-        Texture texture = this.stencil.getFramebuffer().getMainTexture();
         Pair<Form, String> pair = this.stencil.getPicked();
-        int w = texture.width;
-        int h = texture.height;
 
-        com.mojang.blaze3d.pipeline.RenderPipeline previewProgram = BBSShaders.getPickerPreviewProgram();
-        Supplier<com.mojang.blaze3d.pipeline.RenderPipeline> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
+        /* Highlight the hovered form/bone/replay: recolour the pixels of the picking texture whose encoded index
+         * equals the picked index with BBSSettings.stencilHighlightColor (faithful to the 1.21.1
+         * Target/HighlightColor + texturedBox path). The recolour runs in an off-screen pass that carries the
+         * custom BBSPicker UBO (it can't ride the immediate RenderLayer/texturedBox path); the result is then
+         * blitted back over the viewport through the recorded two-phase-GUI texturedBox path (FBO-style V-flip),
+         * so it survives the deferred GUI flush. */
+        int highlightColor = BBSSettings.stencilHighlightColor.get();
+        int scale = BBSModClient.getGUIScale();
 
-        /* TODO(1.21.11 render): per-draw uniforms ("Target", "HighlightColor") were set via GlUniform on the
-         * old ShaderProgram; RenderPipeline has no GlUniform accessor. The picker-preview shader needs these
-         * fed through the new uniform/UBO mechanism once the render foundation exposes it.
-         * Selected stencil index = index; highlight color = BBSSettings.stencilHighlightColor. */
+        if (BBSPickerRenderer.drawHighlight(index, highlightColor, area.w * scale, area.h * scale))
+        {
+            int vw = BBSPickerRenderer.getHighlightWidth();
+            int vh = BBSPickerRenderer.getHighlightHeight();
 
-        /* TODO(1.21.11 render): blend state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.enableBlend() */
-        context.batcher.texturedBox(getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, h, w, 0, w, h);
+            context.batcher.texturedBox(BBSPickerRenderer.getHighlightGlId(), Colors.WHITE,
+                area.x, area.y, area.w, area.h, 0, vh, vw, 0, vw, vh);
+        }
 
         if (altPressed)
         {
