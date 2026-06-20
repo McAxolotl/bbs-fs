@@ -55,14 +55,16 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	
-	// Uncomment the following line to enable the deprecated Fabric API modules. 
+	// Uncomment the following line to enable the deprecated Fabric API modules.
 	// These are included in the Fabric API production distribution and allow you to update your mod to the latest modules at a later more convenient time.
 
 	// modImplementation "net.fabricmc.fabric-api:fabric-api-deprecated:${project.fabric_version}"
-	// TODO(1.21.11 port): Iris/Sodium temporarily removed — integration stubbed during port.
-	// Re-add 1.21.11-compatible builds when re-enabling shader-mod compat (Phase: shader compat).
-	// modImplementation "maven.modrinth:sodium:mc1.21.1-0.6.13-fabric"
-	// modImplementation "maven.modrinth:iris:1.8.8+1.21.1-fabric"
+	// Sodium/Iris on the dev (runClient) classpath. Code-level integration is currently
+	// decoupled (BBSRendering keeps iris/sodium = false), so these are present for runtime
+	// testing and to enable re-coupling shader-mod compat later. Pinned to the known-good
+	// 1.21.11 pairing (Iris 1.10.7 declares Sodium 0.8.7 as its required dependency).
+	modImplementation "maven.modrinth:sodium:mc1.21.11-0.8.7-fabric"
+	modImplementation "maven.modrinth:iris:1.10.7+1.21.11-fabric"
 
 	modImplementation "org.anarres:jcpp:1.4.14"
 	modImplementation "io.github.douira:glsl-transformer:2.0.0-pre13"
