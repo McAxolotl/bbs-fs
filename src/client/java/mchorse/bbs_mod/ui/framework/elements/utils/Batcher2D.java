@@ -322,9 +322,17 @@ public class Batcher2D
         }
         else
         {
-            /* TODO(1.21.11 render): horizontal / true 4-corner gradients have no native two-phase-GUI
-             * primitive. Approximate with a solid midpoint for the prototype (gradientHBox callers). */
-            this.context.fill(x1, y1, x2, y2, Colors.lerp(color1, color4, 0.5F));
+            /* Horizontal / true 4-corner gradient. The two-phase GUI has no native primitive for it
+             * (context.fillGradient only does the vertical case), so reproduce the original 1.21.1
+             * behaviour: build a single POSITION_COLOR QUAD with one colour per corner and submit it
+             * through the deferred GUI via a recorded GuiQuadMesh (same path as keyframe shapes). The
+             * corner mapping mirrors fillRect: color1 = top-left, color2 = top-right, color3 =
+             * bottom-left, color4 = bottom-right. */
+            GuiQuadMesh mesh = new GuiQuadMesh();
+            Matrix3x2fc matrix = this.matrix();
+
+            this.fillRect(mesh, matrix, x, y, w, h, color1, color2, color3, color4);
+            this.drawQuadMesh(mesh);
         }
     }
 
