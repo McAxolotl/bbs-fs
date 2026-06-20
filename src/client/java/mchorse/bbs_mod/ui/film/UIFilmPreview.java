@@ -47,6 +47,7 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Matrix4fStack;
 import org.joml.Vector2i;
 
 import java.io.File;
@@ -151,6 +152,7 @@ public class UIFilmPreview extends UIElement
             if (controller.getPovMode() == UIFilmController.CAMERA_MODE_ORBIT)
             {
                 menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
+                menu.action(Icons.LINK, UIKeys.FILM_CONTROLLER_KEYS_ATTACH_ORBIT, controller.orbit.isAttached(), controller::toggleOrbitAttachment);
             }
         });
         this.recordReplay = new UIIcon(Icons.SPHERE, (b) -> this.panel.getController().pickRecording());
@@ -446,11 +448,11 @@ public class UIFilmPreview extends UIElement
         int barShade = BBSSettings.isLightTheme() ? (Colors.A50 | 0xFFFFFF) : Colors.A50;
         context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
 
-        if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area);
-        if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area);
-        if (this.panel.getController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area);
-        if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area);
-        if (this.panel.getController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area);
+        if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area, Direction.BOTTOM);
+        if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area, Direction.BOTTOM);
+        if (this.panel.getController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area, Direction.BOTTOM);
+        if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area, Direction.BOTTOM);
+        if (this.panel.getController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
         if (this.panel.getController().isControlling())
         {
             String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();

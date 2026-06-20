@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.forms.UINestedEdit;
 import mchorse.bbs_mod.ui.forms.UIToggleEditorEvent;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
@@ -254,10 +255,19 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         return this.gizmoProjection;
     }
 
+    /**
+     * The screen region the gizmo actually renders into: the full UI viewport, NOT this panel's own
+     * area. The dashboard shrinks a panel by the 20px taskbar ({@code h(1F, -20)}), but the block
+     * gizmo is drawn straight onto Minecraft's full-screen world — so its on-screen projection,
+     * trackball sphere highlight and sphere pick must map against the whole screen. Using the shorter
+     * panel area squishes/shifts them by that 20px (a constant, camera-independent offset).
+     */
     @Override
     public Area getGizmoArea()
     {
-        return this.area;
+        UIContext context = this.getContext();
+
+        return context != null ? context.menu.viewport : this.area;
     }
 
     @Override
@@ -294,7 +304,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return null;
         }
 
-        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.gizmoCamera, this.area);
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.gizmoCamera, this.getGizmoArea());
         Transform transform = this.modelBlock.getProperties().getTransform();
 
         if (drag != null && transform != null)
@@ -332,6 +342,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         return this.modelBlock != null
             && BBSSettings.gizmos.get()
+            && !UIBaseMenu.isHideGizmoHeld()
             && this.getChildren(UIFormPalette.class).isEmpty();
     }
 
@@ -587,7 +598,9 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return true;
         }
 
-        if (this.canShowGizmo() && this.gizmo.mouseClicked(context))
+        /* Gizmo handles first; the trackball sphere is deferred to the end so
+         * its screen disc doesn't block a click on the model block under it. */
+        if (this.canShowGizmo() && this.gizmo.mouseClickedHandle(context))
         {
             return true;
         }
@@ -595,9 +608,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         if (this.hovered != null && context.mouseButton == 0 && BBSSettings.clickModelBlocks.get())
         {
             this.fill(this.hovered, true);
+
+            return false;
         }
 
-        return false;
+        return this.canShowGizmo() && this.gizmo.mouseClickedSphere(context);
     }
 
     @Override
@@ -634,6 +649,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         super.render(context);
 
         this.renderGizmoHover(context);
+
+        if (this.canShowGizmo())
+        {
+            this.gizmo.renderSphereHighlight(context);
+        }
     }
 
     /**

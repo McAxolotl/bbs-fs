@@ -25,6 +25,8 @@ public class RenderTickCounterMixin
 
     private int heldFrames;
 
+    private long lastFrameTime;
+
     @Inject(method = "beginRenderTick", at = @At("HEAD"), cancellable = true)
     public void onBeginRenderTick(long timeMillis, boolean tick, CallbackInfoReturnable<Integer> info)
     {
@@ -39,6 +41,14 @@ public class RenderTickCounterMixin
 
             if (this.heldFrames == 0)
             {
+                // TODO(1.21.11 render merge): video frame-rate LIMITING — re-port against 1.21.11 RenderTickCounter.
+                // (was: when BBSSettings.videoLimitFrameRate was on, the recording was throttled to wall-clock by
+                //  holding the frame — BBSRendering.canRender=false, info.setReturnValue(0), return — until
+                //  frameInterval = 1000/getVideoFrameRate() ms had elapsed since lastFrameTime. It advanced the OLD
+                //  RenderTickCounter fields tickDelta/lastFrameDuration/prevTimeMillis, which no longer exist; the
+                //  1.21.11 Dynamic counter uses tickProgress/dynamicDeltaTicks/lastTimeMillis instead. The hold/skip
+                //  logic must be re-expressed against those shadowed fields. BBSSettings.videoLimitFrameRate +
+                //  BBSRendering.canRender still exist, and lastFrameTime is already a field on this mixin.)
                 this.dynamicDeltaTicks = 20F / (float) BBSRendering.getVideoFrameRate();
                 this.lastTimeMillis = timeMillis;
                 this.tickProgress += this.dynamicDeltaTicks;
@@ -69,6 +79,7 @@ public class RenderTickCounterMixin
         else
         {
             this.heldFrames = 0;
+            this.lastFrameTime = 0;
         }
     }
 }

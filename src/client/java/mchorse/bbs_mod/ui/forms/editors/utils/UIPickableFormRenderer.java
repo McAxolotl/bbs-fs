@@ -205,8 +205,10 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
              * depth-test-disabled gizmo stencil). This whole block runs inside ModelPreviewRenderer.begin/end, so
              * the perspective preview projection and identity global model-view are still active here — the same
              * frame the visible gizmo (renderAxes, below) draws in, so the pick aligns 1:1 with it. Matrix stack is
-             * built exactly as renderAxes does (stripScale of the editor origin). */
-            if (UIBaseMenu.renderAxes)
+             * built exactly as renderAxes does (stripScale of the editor origin).
+             * Skip the gizmo's pick stencil while the hide-gizmo key is held (merged 1.21.1 feature), so its
+             * handles can't be clicked when hidden; form-part picking (rendered above) stays intact. */
+            if (UIBaseMenu.renderAxes && !UIBaseMenu.isHideGizmoHeld())
             {
                 Matrix4f gizmoMatrix = this.formEditor.getOrigin(context.getTransition());
                 MatrixStack gizmoStack = new MatrixStack();
@@ -254,7 +256,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         }
 
         /* Draw axes */
-        if (UIBaseMenu.renderAxes)
+        if (UIBaseMenu.shouldRenderAxes())
         {
             /* TODO(1.21.11 render): RenderSystem.disable/enableDepthTest removed; depth state
              * is now part of the RenderPipeline used by the gizmo render layer. */
@@ -297,6 +299,8 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     public void render(UIContext context)
     {
         super.render(context);
+
+        this.gizmo.renderSphereHighlight(context);
 
         if (!this.stencil.hasPicked())
         {

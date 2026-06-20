@@ -7,10 +7,12 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -179,11 +181,11 @@ public class UIKeyframeEditor extends UIElement
         return null;
     }
 
-    public Pair<String, Boolean> getBone()
+    public Pair<String, TransformSpace> getBone()
     {
         UIKeyframeFactory editor = this.editor;
         String bone = null;
-        boolean local = false;
+        TransformSpace space = TransformSpace.PARENT;
 
         if (editor instanceof UIPoseKeyframeFactory pose)
         {
@@ -204,7 +206,7 @@ public class UIKeyframeEditor extends UIElement
                         int i = sheet.id.lastIndexOf('/');
                         bone = i >= 0 ? sheet.id.substring(0, i + 1) + currentFirst : currentFirst;
                     }
-                    local = pose.poseEditor.transform.isLocal();
+                    space = pose.poseEditor.transform.getSpace();
                 }
             }
         }
@@ -221,14 +223,14 @@ public class UIKeyframeEditor extends UIElement
                 if (poseBonePath != null)
                 {
                     bone = poseBonePath.formPath().isEmpty() ? poseBonePath.bone() : poseBonePath.formPath() + "/" + poseBonePath.bone();
-                    local = transform.transform.isLocal();
+                    space = transform.transform.getSpace();
                 }
                 else if (id.startsWith("transform"))
                 {
                     int i = sheet.id.lastIndexOf('/');
 
                     bone = i >= 0 ? sheet.id.substring(0, i) : "";
-                    local = transform.transform.isLocal();
+                    space = transform.transform.getSpace();
                 }
             }
         }
@@ -243,17 +245,47 @@ public class UIKeyframeEditor extends UIElement
                 if (poseBonePath != null)
                 {
                     bone = poseBonePath.formPath().isEmpty() ? poseBonePath.bone() : poseBonePath.formPath() + "/" + poseBonePath.bone();
-                    local = poseTransform.transform.isLocal();
+                    space = poseTransform.transform.getSpace();
                 }
             }
         }
 
         if (bone != null)
         {
-            return new Pair<>(bone, local);
+            return new Pair<>(bone, space);
         }
 
         return null;
+    }
+
+    /**
+     * Whether the active editor is the form's "anchor" property track — the one
+     * that re-parents the whole form to another replay's attachment and carries
+     * a {@link mchorse.bbs_mod.utils.pose.Transform} offset the gizmo can edit.
+     * The IK/pole/physics target tracks reuse the {@code Anchor} value type but
+     * are created without a backing property, so the {@code property != null}
+     * test excludes them; the {@code "anchor"} id keeps it to the root form's
+     * track, whose placement {@link mchorse.bbs_mod.film.BaseFilmController}
+     * resolves from the entity's own {@code form.anchor}.
+     */
+    public boolean isFormAnchorTrack()
+    {
+        if (!(this.editor instanceof UIAnchorKeyframeFactory))
+        {
+            return false;
+        }
+
+        UIKeyframeSheet sheet = this.getSheet(this.editor.getKeyframe());
+
+        return sheet != null && sheet.property != null && "anchor".equals(sheet.id);
+    }
+
+    /** The shared transform space the anchor gizmo should be oriented in (mirrors {@link #getBone()}'s space). */
+    public TransformSpace getAnchorSpace()
+    {
+        return this.editor instanceof UIAnchorKeyframeFactory factory
+            ? factory.transform.getSpace()
+            : TransformSpace.PARENT;
     }
 
     @Override

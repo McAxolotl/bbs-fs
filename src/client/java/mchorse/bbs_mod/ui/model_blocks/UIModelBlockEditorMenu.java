@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.model_blocks;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
+import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitDistanceCamera;
 import mchorse.bbs_mod.camera.controller.OrbitCameraController;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -12,6 +13,7 @@ import mchorse.bbs_mod.items.GunProperties;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCamera;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.forms.UINestedEdit;
@@ -33,6 +35,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -465,15 +468,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
 
         if (icon != null)
         {
-            this.renderHighlight(context.batcher, icon.area);
+            UIDashboardPanels.renderHighlight(context.batcher, icon.area, Direction.TOP);
         }
-    }
-
-    private void renderHighlight(Batcher2D batcher, Area area)
-    {
-        int color = BBSSettings.primaryColor.get();
-
-        batcher.box(area.x, area.y, area.ex(), area.y + 2, Colors.A100 | color);
-        batcher.gradientVBox(area.x, area.y + 2, area.ex(), area.ey(), Colors.A50 | color, color);
     }
 }

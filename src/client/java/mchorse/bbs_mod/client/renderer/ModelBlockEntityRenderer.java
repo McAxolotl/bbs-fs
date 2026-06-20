@@ -172,7 +172,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
                 .set(FormRenderType.MODEL_BLOCK, entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
                 .camera(camera));
 
-            if (this.canRenderAxes(entity) && UIBaseMenu.renderAxes)
+            if (this.canRenderAxes(entity) && UIBaseMenu.shouldRenderAxes())
             {
                 matrices.push();
                 MatrixStackUtils.scaleBack(matrices);

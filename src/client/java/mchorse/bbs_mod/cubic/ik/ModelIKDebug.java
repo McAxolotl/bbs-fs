@@ -51,6 +51,7 @@ public final class ModelIKDebug
     private static final float[] WIRE = {0.90F, 0.92F, 0.95F};
     private static final float[] EFFECTOR = {0.30F, 0.64F, 1.00F};
     private static final float[] GOAL = {0.22F, 0.84F, 0.55F};
+    private static final float[] POLE = {1.00F, 0.55F, 0.15F};
 
     public static boolean enabled;
 
@@ -189,6 +190,11 @@ public final class ModelIKDebug
         {
             wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
+
+            if (chain.poleTarget() != null && !chain.poleTarget().isEmpty())
+            {
+                wanted.add(chain.poleTarget());
+            }
         }
 
         Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
@@ -221,6 +227,8 @@ public final class ModelIKDebug
         Map<String, PivotFrame> frames = collectFrames(model, compiled);
 
         /* Depth-test disabled (and blend off) is encoded in the stencil layer's pipeline. */
+        // TODO(1.21.11 render merge): IK debug GL state setup — re-port against pipeline API
+        // (was: 1.21.1 RenderSystem.disableDepthTest() + RenderSystem.setShader(GameRenderer::getPositionColorProgram)).
         stack.push();
 
         if (model instanceof BOBJModel)
@@ -232,24 +240,38 @@ public final class ModelIKDebug
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
+            float s = goalRadius(frames, chain.chainRootToEffector());
             Vector3f goal = position(frames, chain.target());
 
-            if (goal == null)
+            if (goal != null)
             {
-                continue;
+                pickMarker(builder, stack, stencilMap, form, goal, s, chain.target());
             }
 
-            int id = stencilMap.objectIndex;
-            float s = goalRadius(frames, chain.chainRootToEffector());
+            if (chain.poleTarget() != null && !chain.poleTarget().isEmpty())
+            {
+                Vector3f pole = position(frames, chain.poleTarget());
 
-            Draw.fillBox(builder, stack, goal.x - s, goal.y - s, goal.z - s, goal.x + s, goal.y + s, goal.z + s, (id & 0xFF) / 255F, (id >> 8 & 0xFF) / 255F, (id >> 16 & 0xFF) / 255F, 1F);
-
-            stencilMap.addPicking(form, chain.target());
+                if (pole != null)
+                {
+                    pickMarker(builder, stack, stencilMap, form, pole, s, chain.poleTarget());
+                }
+            }
         }
 
         flush(builder, getStencilLayer());
 
         stack.pop();
+    }
+
+    /** Draws one pickable cube encoding the next stencil id and claims it for {@code bone}, so a click selects that bone. */
+    private static void pickMarker(BufferBuilder builder, MatrixStack stack, StencilMap stencilMap, Form form, Vector3f p, float s, String bone)
+    {
+        int id = stencilMap.objectIndex;
+
+        Draw.fillBox(builder, stack, p.x - s, p.y - s, p.z - s, p.x + s, p.y + s, p.z + s, (id & 0xFF) / 255F, (id >> 8 & 0xFF) / 255F, (id >> 16 & 0xFF) / 255F, 1F);
+
+        stencilMap.addPicking(form, bone);
     }
 
     /** Clickable goal half-size, scaled to the bone span so it fits any rig. */
@@ -293,6 +315,7 @@ public final class ModelIKDebug
             return;
         }
 
+        Vector3f pole = chain.poleTarget() == null || chain.poleTarget().isEmpty() ? null : position(frames, chain.poleTarget());
         Vector3f tip = pts.get(n - 1);
 
         float total = 0F;
@@ -318,6 +341,8 @@ public final class ModelIKDebug
 
         addLine(lines, matrix, tip, target, GOAL, 0.4F * a);
 
+        // TODO(1.21.11 render merge): IK pole-target line viz — re-port against pipeline API
+        // (was: 1.21.1 drew an extra POLE-coloured line from pts.get(1) to the pole position when a pole target exists).
         flush(lines, getLinesLayer());
 
         /* Solid spheres: joints, the accented effector, and the goal. */
@@ -331,6 +356,8 @@ public final class ModelIKDebug
         orb(dots, stack, tip, unit * 0.1F, EFFECTOR, a);
         orb(dots, stack, target, unit * 0.12F, GOAL, a);
 
+        // TODO(1.21.11 render merge): IK pole-target orb viz — re-port against pipeline API
+        // (was: 1.21.1 drew an extra POLE-coloured orb at the pole position when a pole target exists).
         flush(dots, getTrisLayer());
     }
 

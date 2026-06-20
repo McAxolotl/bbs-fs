@@ -2,21 +2,29 @@ package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.graphics.Framebuffer;
 import mchorse.bbs_mod.graphics.Renderbuffer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
@@ -31,7 +39,11 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
-    private static final Link framebufferKey = Link.bbs("framebuffer_form");
+
+    /* Nested framebuffer forms must each render into their own framebuffer */
+    private static int depth;
+
+    private IEntity entity = new StubEntity();
 
     public FramebufferFormRenderer(FramebufferForm form)
     {
@@ -40,12 +52,22 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
     @Override
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
-    {}
+    {
+        if (this.form.parts.getAll().isEmpty())
+        {
+            context.batcher.icon(Icons.CAMERA, (x1 + x2) / 2, (y1 + y2) / 2, 0.5F, 0.5F);
+        }
+        /* TODO(1.21.11 render merge): in-UI framebuffer-form preview STUBBED (the port's HEAD renderInUI was
+         * already an empty stub; the 1.21.1 body auto-merged in). It drew the body parts through a 3D
+         * MatrixStack (context.batcher.getContext().getMatrices() — now a 2D Matrix3x2fStack) with
+         * RenderSystem.depthFunc (removed). Needs the port's 2D->3D GUI matrix bridge + pipeline depth
+         * state. Only the empty-state camera icon is shown for now. */
+    }
 
     @Override
     public void renderBodyParts(FormRenderingContext context)
     {
-        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(framebufferKey, (f) ->
+        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(Link.bbs("framebuffer_form_" + depth), (f) ->
         {
             Texture texture = new Texture();
 
@@ -99,11 +121,23 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         framebuffer.clear();
 
+        float scale = this.form.scale.get();
+
         context.stack.push();
         context.stack.peek().getPositionMatrix().identity();
         context.stack.peek().getNormalMatrix().identity();
+        context.stack.scale(scale, scale, scale);
 
-        super.renderBodyParts(context);
+        depth += 1;
+
+        try
+        {
+            super.renderBodyParts(context);
+        }
+        finally
+        {
+            depth -= 1;
+        }
 
         context.stack.pop();
 

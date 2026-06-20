@@ -223,6 +223,10 @@ public class BBSShaders
     {
         if (modelLayer == null)
         {
+            // TODO(1.21.11 render merge): old ShaderProgram/ProxyResourceFactory infra — re-port against pipeline API
+            // (was: 1.21.1 lazily constructed ShaderProgram model/multiLink/subtitles/selection + 5 picker* programs
+            //  from a ProxyResourceFactory over the resource manager, exposed via get*Program() accessors; this whole
+            //  ShaderProgram system is replaced by the RenderPipeline/RenderLayer infra above).
             modelLayer = layer("model", MODEL, true);
         }
 

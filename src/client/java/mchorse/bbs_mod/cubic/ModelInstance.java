@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class ModelInstance implements IModelInstance
@@ -58,6 +59,17 @@ public class ModelInstance implements IModelInstance
     public IModel model;
     public Animations animations;
     public Link texture;
+
+    /**
+     * Per-material default textures, loaded from the model's {@code textures/<material>/}
+     * folders (or synthesized as a 1x1 swatch for flat-color materials). Keyed by material
+     * name; the empty key is the model's default texture. Used as the static fallback for a
+     * material when no animation track overrides it - see {@link #getMaterialTexture}.
+     */
+    public Map<String, Link> materialTextures = new HashMap<>();
+
+    /** Ordered, distinct list of material names present on the model (for the editor and resolution). */
+    public List<String> materials = new ArrayList<>();
 
     /* Model's additional properties */
     public String poseGroup;
@@ -82,7 +94,8 @@ public class ModelInstance implements IModelInstance
     public ArmorSlot fpMain;
     public ArmorSlot fpOffhand;
 
-    private Map<ModelGroup, ModelVAO> vaos = new HashMap<>();
+    /** Per group, the geometry split into one VAO per material name (empty key = default texture). */
+    private Map<ModelGroup, Map<String, ModelVAO>> vaos = new HashMap<>();
 
     public transient Matrix4f lastBaseTransform;
     public transient Form form;
@@ -115,9 +128,22 @@ public class ModelInstance implements IModelInstance
         return this.animations;
     }
 
-    public Map<ModelGroup, ModelVAO> getVaos()
+    public Map<ModelGroup, Map<String, ModelVAO>> getVaos()
     {
         return this.vaos;
+    }
+
+    /**
+     * Resolve a material's static default texture: the per-material texture loaded
+     * from {@code textures/<material>/} if present, otherwise the supplied fallback
+     * (the form/model default texture). Animation tracks layer on top of this at
+     * render time (handled by the caller), so this only covers the non-animated default.
+     */
+    public Link getMaterialTexture(String material, Link fallback)
+    {
+        Link link = this.materialTextures.get(material);
+
+        return link != null ? link : fallback;
     }
 
     public String getAnchor()
@@ -290,9 +316,12 @@ public class ModelInstance implements IModelInstance
 
     public void delete()
     {
-        for (ModelVAO value : this.vaos.values())
+        for (Map<String, ModelVAO> groupVaos : this.vaos.values())
         {
-            value.delete();
+            for (ModelVAO value : groupVaos.values())
+            {
+                value.delete();
+            }
         }
 
         this.vaos.clear();
@@ -373,13 +402,15 @@ public class ModelInstance implements IModelInstance
         }
     }
 
-    public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
+    public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys, Function<String, Link> textureResolver)
     {
         if (this.model instanceof Model model)
         {
             boolean isVao = this.isVAORendered();
 
             CubicCubeRenderer renderProcessor = isVao
+                // TODO(1.21.11 render merge): per-mesh BOBJ material-texture resolver — re-port against pipeline API
+                // (was: 1.21.1 passed a ShaderProgram + Function<String,Link> textureResolver into CubicVAORenderer).
                 ? new CubicVAORenderer(this, light, overlay, stencilMap, keys)
                 : new CubicCubeRenderer(light, overlay, stencilMap, keys);
 
@@ -426,16 +457,25 @@ public class ModelInstance implements IModelInstance
         }
         else if (this.model instanceof BOBJModel model)
         {
-            BOBJModelVAO vao = model.getVao();
+            List<BOBJModelVAO> vaos = model.getVaos();
 
-            if (vao != null)
+            if (!vaos.isEmpty())
             {
                 stack.push();
                 stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180F));
 
-                vao.armature.setupMatrices();
-                vao.updateMesh(stencilMap);
-                vao.render(stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                model.getArmature().setupMatrices();
+
+                /* One draw per mesh (multi-VAO BOBJ from the 1.21.1 merge). */
+                // TODO(1.21.11 render merge): per-mesh BOBJ material-texture resolver — re-port against pipeline API
+                // (was: 1.21.1 resolved textureResolver.apply(vao.data.mesh.name) per mesh and bound it via
+                //  BBSModClient.getTextures().bindTexture(link) before drawing, and used the vao.render(shader, ...)
+                //  overload; HEAD draws every mesh through the pipeline RenderLayer with no per-mesh texture bind).
+                for (BOBJModelVAO vao : vaos)
+                {
+                    vao.updateMesh(stencilMap);
+                    vao.render(stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                }
 
                 stack.pop();
             }

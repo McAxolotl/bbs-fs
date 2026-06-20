@@ -12,6 +12,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
+import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -43,13 +44,23 @@ public class BBSSettings {
 	public static ValueFloat axesThickness;
 	public static ValueBoolean axesKeepScreenSize;
 	public static ValueBoolean rotate3dSphere;
-	public static ValueInt rotate3dSphereColor;
+	public static ValueInt rotate3dSphereMode;
 	public static ValueBoolean rotateHideRings;
+	public static ValueBoolean hideInactiveHandles;
+	public static ValueFloat snapTranslate;
+	public static ValueFloat snapRotate;
+	public static ValueFloat snapScale;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
-	public static ValueBoolean transformLocalDefault;
+	public static ValueInt transformSpace;
 	public static ValueBoolean transformHotkeys3dRay;
+	public static ValueBoolean poseMirrorEdit;
+	public static ValueBoolean poseAlternateInvert;
+	public static ValueBoolean poseShowDisabledBones;
+	public static ValueOrder translateHotkeyOrder;
+	public static ValueOrder scaleHotkeyOrder;
+	public static ValueOrder rotateHotkeyOrder;
 	public static ValueFloat trackballSensitivity;
 
 	public static ValueBoolean enableCursorRendering;
@@ -80,8 +91,10 @@ public class BBSSettings {
 	public static ValueInt videoWidth;
 	public static ValueInt videoHeight;
 	public static ValueInt videoFrameRate;
+	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
 	public static ValueBoolean videoExportAudio;
+	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
 	public static ValueInt videoHeldFrames;
 	public static ValueFloat videoDelay;
@@ -100,6 +113,7 @@ public class BBSSettings {
 	public static ValueBoolean editorCenterLines;
 	public static ValueBoolean editorCrosshair;
 	public static ValueBoolean editorSeconds;
+	public static ValueBoolean editorTimelineGrid;
 	public static ValueInt editorPeriodicSave;
 	public static ValueBoolean editorHorizontalFlight;
 	public static ValueBoolean editorOrbitMovementRequiresFlight;
@@ -125,7 +139,6 @@ public class BBSSettings {
 
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
-	public static ValueBoolean editorReplayTabs;
 	public static ValueBoolean recordingOverlays;
 	public static ValueInt recordingPoseTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
@@ -174,34 +187,42 @@ public class BBSSettings {
 	private static final int LIGHT_DIVIDER_COLOR = 0xffc2cbd8;
 	private static final int DARK_DIVIDER_COLOR = 0xff30353d;
 
-	public static int primaryColor() {
+	public static int primaryColor()
+	{
 		return primaryColor(Colors.A50);
 	}
 
-	public static int primaryColor(int alpha) {
+	public static int primaryColor(int alpha)
+	{
 		return withAlpha(primaryColor.get(), alpha);
 	}
 
-	public static boolean isLightTheme() {
+	public static boolean isLightTheme()
+	{
 		return theme != null && theme.get() == LIGHT_THEME;
 	}
 
-	private static int withAlpha(int color, int alpha) {
+	private static int withAlpha(int color, int alpha)
+	{
 		return (color & Colors.RGB) | alpha;
 	}
 
-	private static int getThemeColor(int lightColor, int darkColor) {
+	private static int getThemeColor(int lightColor, int darkColor)
+	{
 		return isLightTheme() ? lightColor : darkColor;
 	}
 
-	private static float getBackgroundBrightnessFactor() {
+	private static float getBackgroundBrightnessFactor()
+	{
 		return backgroundBrightness == null ? DEFAULT_BACKGROUND_BRIGHTNESS : backgroundBrightness.get();
 	}
 
-	private static int applyBackgroundBrightness(int color) {
+	private static int applyBackgroundBrightness(int color)
+	{
 		float brightness = MathUtils.clamp(getBackgroundBrightnessFactor(), MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS);
 
-		if (Math.abs(brightness - IDENTITY_BRIGHTNESS) < BRIGHTNESS_EPSILON) {
+		if (Math.abs(brightness - IDENTITY_BRIGHTNESS) < BRIGHTNESS_EPSILON)
+		{
 			return color;
 		}
 
@@ -210,12 +231,14 @@ public class BBSSettings {
 		int g = (color >> 8) & 0xff;
 		int b = color & 0xff;
 
-		if (brightness < 1F) {
+		if (brightness < 1F)
+		{
 			r = Math.round(r * brightness);
 			g = Math.round(g * brightness);
 			b = Math.round(b * brightness);
 		}
-		else {
+		else
+		{
 			float factor = brightness - 1F;
 
 			r += Math.round((255 - r) * factor);
@@ -230,67 +253,85 @@ public class BBSSettings {
 		return a | (r << 16) | (g << 8) | b;
 	}
 
-	private static int getThemeSurface(int lightColor, int darkColor) {
+	private static int getThemeSurface(int lightColor, int darkColor)
+	{
 		return applyBackgroundBrightness(getThemeColor(lightColor, darkColor));
 	}
 
-	public static int chromeSurface() {
+	public static int chromeSurface()
+	{
 		return getThemeSurface(LIGHT_CHROME_SURFACE, DARK_CHROME_SURFACE);
 	}
 
-	public static int baseSurface() {
+	public static int baseSurface()
+	{
 		return getThemeSurface(LIGHT_BASE_SURFACE, DARK_BASE_SURFACE);
 	}
 
-	public static int raisedSurface() {
+	public static int raisedSurface()
+	{
 		return getThemeSurface(LIGHT_RAISED_SURFACE, DARK_RAISED_SURFACE);
 	}
 
-	public static int deepSurface() {
+	public static int deepSurface()
+	{
 		return getThemeSurface(LIGHT_DEEP_SURFACE, DARK_DEEP_SURFACE);
 	}
 
-	public static int dividerColor() {
+	public static int dividerColor()
+	{
 		return getThemeColor(LIGHT_DIVIDER_COLOR, DARK_DIVIDER_COLOR);
 	}
 
-	public static int color(int color, int alpha) {
+	public static int color(int color, int alpha)
+	{
 		return withAlpha(color, alpha);
 	}
 
-	public static int accentOverlay(int alpha) {
+	public static int accentOverlay(int alpha)
+	{
 		return primaryColor(alpha);
 	}
 
-	/** Render-scoped: the film editor sets this so its inputs stay light on its dark panels. */
+	/**
+	 * Render-scoped: the film editor sets this so its inputs stay light on its dark panels.
+	 */
 	public static boolean lightInputs = false;
 
-	public static int inputSurface() {
+	public static int inputSurface()
+	{
 		return lightInputs ? raisedSurface() : deepSurface();
 	}
 
-	public static int panelShadowOpaqueColor() {
+	public static int panelShadowOpaqueColor()
+	{
 		return Colors.A25 | primaryColor.get();
 	}
 
-	public static int panelShadowTransparentColor() {
+	public static int panelShadowTransparentColor()
+	{
 		return Colors.setA(primaryColor.get(), 0F);
 	}
 
-	public static int getDefaultDuration() {
+	public static int getDefaultDuration()
+	{
 		return duration == null ? 30 : duration.get();
 	}
 
-	public static float getFov() {
+	public static float getFov()
+	{
 		return BBSSettings.fov == null ? MathUtils.toRad(50) : MathUtils.toRad(BBSSettings.fov.get());
 	}
 
-	public static float getAxesDistanceScale(float distance) {
+	public static float getAxesDistanceScale(float distance)
+	{
 		return getAxesDistanceScale(distance, getFov());
 	}
 
-	public static float getAxesDistanceScale(float distance, float fov) {
-		if (axesKeepScreenSize != null && axesKeepScreenSize.get()) {
+	public static float getAxesDistanceScale(float distance, float fov)
+	{
+		if (axesKeepScreenSize != null && axesKeepScreenSize.get())
+		{
 			float tanFov = (float) Math.tan(fov / 2.0);
 			// 0.4663F is roughly tan(50 degrees / 2)
 			float scale = (distance / 5F) * (tanFov / 0.4663F);
@@ -301,7 +342,8 @@ public class BBSSettings {
 		return 1F;
 	}
 
-	public static boolean isHorizontalClipEditorEffective() {
+	public static boolean isHorizontalClipEditorEffective()
+	{
 		return editorHorizontalClipEditor.get();
 	}
 
@@ -310,8 +352,10 @@ public class BBSSettings {
 	 * {@link KeyframeShape#SQUARE} before settings are registered or if the stored ordinal
 	 * is out of range (e.g. after the enum shrinks in a future version).
 	 */
-	public static KeyframeShape getDefaultKeyframeShape() {
-		if (keyframeDefaultShape == null) {
+	public static KeyframeShape getDefaultKeyframeShape()
+	{
+		if (keyframeDefaultShape == null)
+		{
 			return KeyframeShape.SQUARE;
 		}
 
@@ -321,7 +365,8 @@ public class BBSSettings {
 		return index >= 0 && index < values.length ? values[index] : KeyframeShape.SQUARE;
 	}
 
-	public static boolean migrateLegacySettings(MapType root) {
+	public static boolean migrateLegacySettings(MapType root)
+	{
 		MapType appearance = root.getMap("appearance");
 		MapType personalization = root.getMap("personalization");
 		boolean migrated = false;
@@ -331,19 +376,23 @@ public class BBSSettings {
 		migrated |= migrateLegacyValue(appearance, personalization, "track_width");
 		migrated |= migrateLegacyValue(appearance, personalization, "keyframe_default_shape");
 
-		if (migrated) {
+		if (migrated)
+		{
 			root.put("personalization", personalization);
 		}
 
 		return migrated;
 	}
 
-	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String key) {
+	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String key)
+	{
 		return migrateLegacyValue(oldCategory, newCategory, key, key);
 	}
 
-	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String oldKey, String newKey) {
-		if (newCategory.has(newKey) || !oldCategory.has(oldKey)) {
+	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String oldKey, String newKey)
+	{
+		if (newCategory.has(newKey) || !oldCategory.has(oldKey))
+		{
 			return false;
 		}
 
@@ -352,7 +401,8 @@ public class BBSSettings {
 		return true;
 	}
 
-	public static void register(SettingsBuilder builder) {
+	public static void register(SettingsBuilder builder)
+	{
 		HashSet<String> defaultFilters = new HashSet<>();
 
 		defaultFilters.add("item_off_hand");
@@ -411,10 +461,26 @@ public class BBSSettings {
 		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereColor = builder.getInt("rotate_3d_sphere_color", Colors.setA(Colors.WHITE, 0F)).colorAlpha();
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
-		transformLocalDefault = builder.getBoolean("transform_local_default", false);
+		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
+		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
+		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
+		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
+		transformSpace = builder.getInt("space", 0, 0, 2);
+		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
+		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
+		poseMirrorEdit.invisible();
+		poseAlternateInvert = builder.getBoolean("pose_alternate_invert", false);
+		poseAlternateInvert.invisible();
+		poseShowDisabledBones = builder.getBoolean("pose_show_disabled_bones", false);
+		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
+		builder.register(translateHotkeyOrder);
+		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
+		builder.register(scaleHotkeyOrder);
+		rotateHotkeyOrder = new ValueOrder("rotate_hotkey_order", "view", "sphere", "x", "y", "z");
+		builder.register(rotateHotkeyOrder);
 		trackballSensitivity = builder.getFloat("trackball_sensitivity", 1F, 0.05F, 2F);
 
 		builder.category("tutorials", Icons.HELP);
@@ -451,8 +517,10 @@ public class BBSSettings {
 		videoWidth = builder.getInt("width", 1280, 2, 8096);
 		videoHeight = builder.getInt("height", 720, 2, 8096);
 		videoFrameRate = builder.getInt("frame_rate", 60, 10, 1000);
+		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
 		videoExportAudio = builder.getBoolean("audio", false);
+		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
 		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
 		videoDelay = builder.getFloat("delay", 0.5F, 0F, 30F);
@@ -473,6 +541,7 @@ public class BBSSettings {
 		editorCenterLines = builder.getBoolean("center_lines", false);
 		editorCrosshair = builder.getBoolean("crosshair", false);
 		editorSeconds = builder.getBoolean("seconds", false);
+		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
 		editorPeriodicSave = builder.getInt("periodic_save", 60, 0, 3600);
 		editorHorizontalFlight = builder.getBoolean("horizontal_flight", false);
 		editorOrbitMovementRequiresFlight = builder.getBoolean("orbit_movement_requires_flight", true);
@@ -498,7 +567,6 @@ public class BBSSettings {
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
-		editorReplayTabs = builder.getBoolean("replay_tabs", true);
 		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 

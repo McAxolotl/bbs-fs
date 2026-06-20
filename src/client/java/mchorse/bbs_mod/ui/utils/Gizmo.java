@@ -11,6 +11,10 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.Axis;
@@ -24,6 +28,7 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
@@ -121,6 +126,13 @@ public class Gizmo
     private final Matrix4f lastRenderMatrix = new Matrix4f();
     private boolean hasLastRenderMatrix;
 
+    // TODO(1.21.11 render merge): baked-rotation drag-freeze + VBO ring caching — re-port against pipeline API
+    // (was: bakedRotationMatrix + hasBakedRotation froze ring orientation at grab time; rotateRingVbo/
+    //  rotateStencilRingVbo/rotateSphereVbo cached ring/sphere geometry in VertexBuffer to save resources).
+    // hasBakedRotation is kept as a stub flag so auto-merged call sites (clearTrackedTransform/bakeRotation)
+    // still compile; bakedRotationMatrix + the VertexBuffer fields are dropped (relied on removed APIs).
+    private boolean hasBakedRotation;
+
     /** World-space radius the sphere is drawn at, expressed in
      *  the local coordinate frame {@link #lastRenderMatrix} describes
      *  (i.e. already includes axesScale and the per-frame distanceScale).
@@ -128,10 +140,21 @@ public class Gizmo
      *  project an edge point and report the sphere's real pixel size. */
     private float lastSphereLocalRadius;
 
-    /** Driven by {@link mchorse.bbs_mod.ui.film.controller.UIFilmController}'s
-     *  per-frame hover pass. When true the sphere is repainted with
-     *  {@link BBSSettings#stencilHighlightColor} so the user can see
-     *  the cursor sits in its pick disc. */
+    /** Model-view the sphere is actually drawn with this frame (origin frame
+     *  times the per-frame distanceScale). Reused by {@link #renderSphereHighlight}
+     *  to re-draw the sphere into a mask at the exact same on-screen footprint. */
+    private final Matrix4f lastSphereMatrix = new Matrix4f();
+    private boolean hasLastSphereMatrix;
+
+    /** Sphere-only mask the hover highlight is composited from. The sphere is
+     *  kept out of the pick stencil (one pixel can't be both "bone" and "sphere",
+     *  and the deferred bone-vs-sphere pick needs both), so its highlight gets a
+     *  private buffer it can own outright. */
+    private final StencilFormFramebuffer sphereHighlight = new StencilFormFramebuffer();
+
+    /** Driven by {@link GizmoInteraction}'s per-frame hover pass. When true the
+     *  sphere highlight is composited over the viewport (the screen-space hover
+     *  overlay, the same look bones/handles get from the pick stencil). */
     private boolean sphereHovered;
 
     private Gizmo()
@@ -277,7 +300,7 @@ public class Gizmo
             return false;
         }
 
-        if (this.currentTransform != null && this.currentTransform.isEditing() && !this.currentTransform.isTrackball())
+        if (this.currentTransform != null && this.currentTransform.isEditing() && !this.currentTransform.isSphereRotate())
         {
             return false;
         }
@@ -285,9 +308,15 @@ public class Gizmo
         return true;
     }
 
-    public boolean isTrackballDragging()
+    public boolean isSphereDragging()
     {
-        return this.currentTransform != null && this.currentTransform.isEditing() && this.currentTransform.isTrackball();
+        return this.currentTransform != null && this.currentTransform.isEditing() && this.currentTransform.isSphereRotate();
+    }
+
+    /** World-space radius the rotate sphere was last drawn at ({@code 0} until rendered). */
+    public float getSphereWorldRadius()
+    {
+        return this.hasLastRenderMatrix ? this.lastSphereLocalRadius : 0F;
     }
 
     /**
@@ -382,6 +411,37 @@ public class Gizmo
     }
 
     /**
+     * Composite the trackball sphere's hover highlight over the viewport, the
+     * same screen-space overlay bones and handles get from the pick stencil.
+     *
+     * <p>The sphere can't share the pick stencil (its pixels would erase the
+     * bone ids the deferred bone-vs-sphere pick reads), so it gets a private
+     * mask: re-draw the sphere — at the exact matrix it was rendered with this
+     * frame ({@link #lastSphereMatrix}) and the viewport's projection — into
+     * {@link #sphereHighlight} carrying {@link #STENCIL_TRACKBALL} as its id,
+     * then run the picker-preview shader so only those pixels light up.
+     *
+     * <p>Called from each {@link GizmoViewport}'s GUI overlay pass via
+     * {@link GizmoInteraction#renderSphereHighlight}; {@code projection}/{@code area}
+     * are the same pair {@link #computeScreenCenter} uses, so the mask lands on
+     * the sphere's footprint regardless of mask resolution.
+     */
+    public void renderSphereHighlight(UIContext context, Matrix4f projection, Area area)
+    {
+        // TODO(1.21.11 render merge): trackball-sphere hover highlight — re-port against pipeline API.
+        // This whole method is new 1.21.1 feature code that auto-merged in but relies on removed render
+        // APIs: it re-drew the cached rotateSphereVbo (VertexBuffer) into a private FBO via
+        // GameRenderer.getPositionColorProgram, then composited it with the picker-preview shader by
+        // imperatively setting GlUniforms (Target/HighlightColor) on a ShaderProgram. In 1.21.11
+        // BBSShaders.getPickerPreviewProgram() returns a RenderPipeline (no mutable GlUniforms), the VBO
+        // cache is gone, and getPositionColorProgram was removed. Re-implement using BBSPickerRenderer's
+        // off-screen highlight pass (custom BBSPicker UBO) the same way bone/handle highlights already do,
+        // re-drawing the sphere immediate-mode at lastSphereMatrix. Stubbed no-op so the file compiles and
+        // the call sites (UIPickableFormRenderer/UIFilmController/UIModelBlockPanel via
+        // GizmoInteraction.renderSphereHighlight) stay wired.
+    }
+
+    /**
      * Set the persistent gizmo mode. Returns {@code true} iff the mode
      * actually changed — callers (notably the tool-switch hotkey
      * helper) use this to distinguish a real switch from a no-op press
@@ -464,7 +524,7 @@ public class Gizmo
                     transform.enableScreenTranslate(drag);
                     break;
                 case TRACKBALL:
-                    if (BBSSettings.rotate3dSphere.get()) transform.enableTrackball(drag);
+                    if (BBSSettings.rotate3dSphere.get()) transform.enableSphereRotate(drag);
                     break;
                 case VIEW:
                     transform.enableViewRotate(drag);
@@ -485,6 +545,7 @@ public class Gizmo
         if (this.currentTransform == transform)
         {
             this.currentTransform = null;
+            this.hasBakedRotation = false;
 
             if (this.index < STENCIL_X || this.index > STENCIL_MAX)
             {
@@ -515,6 +576,7 @@ public class Gizmo
         stack.push();
         MatrixStackUtils.scaleBack(stack);
         this.captureRenderMatrix(stack);
+        this.applyBakedRotation(stack);
 
         if (BBSSettings.gizmos.get())
         {
@@ -528,6 +590,8 @@ public class Gizmo
 
             stack.push();
             stack.scale(distanceScale, distanceScale, distanceScale);
+            this.lastSphereMatrix.set(modelView(stack));
+            this.hasLastSphereMatrix = true;
             this.drawAxes(stack, 0.25F, 0.008F);
             stack.pop();
         }
@@ -605,6 +669,10 @@ public class Gizmo
         return new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix());
     }
 
+    // TODO(1.21.11 render merge): VBO ring caching (updateVbos/drawCachedRing/drawCachedRingBillboard) —
+    // re-port against pipeline API (was: cached rotation ring/stencil-ring/sphere geometry in VertexBuffer
+    // and replayed it via vbo.draw + GameRenderer.getPositionColorProgram + RenderSystem.setShaderColor to
+    // save per-frame buffer rebuilds; rings now rebuilt immediate-mode each frame through the gizmo RenderLayer).
     private void drawRotatePie(MatrixStack stack, Axis axis)
     {
         if (this.currentTransform == null || this.currentTransform.getDrag() == null) return;
@@ -617,7 +685,7 @@ public class Gizmo
         Vector3f axisX = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(0, new Vector3f());
         Vector3f axisY = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(1, new Vector3f());
         Vector3f axisZ = this.currentTransform.getDrag().gizmoWorldAxes.getColumn(2, new Vector3f());
-        Vector3f dragAxisDir = this.currentTransform.getDrag().rotateAxes.getColumn(axis.ordinal(), new Vector3f());
+        Vector3f dragAxisDir = this.currentTransform.getDragAxisDir();
 
         float gx = initialVec.dot(axisX);
         float gy = initialVec.dot(axisY);
@@ -648,13 +716,11 @@ public class Gizmo
 
         if (sweepDir == 0) sweepDir = 1;
 
+        /* The ring is baked static for the whole drag (see applyBakedRotation),
+         * so the pie grows from the fixed grab angle in every space — no
+         * counter-rotation to cancel a live-rotating frame is needed. */
         float startDeg = MathUtils.toDeg((float) Math.atan2(pz, px));
         float sweepDeg = this.currentTransform.getAccumulatedRotateDeg() * sweepDir;
-
-        if (this.currentTransform.isLocal())
-        {
-            startDeg -= sweepDeg;
-        }
 
         stack.push();
 
@@ -737,6 +803,63 @@ public class Gizmo
     }
 
     /**
+     * The handle the live edit is grabbing, or {@code null} when nothing should
+     * be filtered out: no edit is running, or the hide-inactive-handles setting
+     * is off. Both draw passes show only this handle when it is present. A
+     * two-axis rotation has no handle of its own, so the primary ring stands in.
+     */
+    private Handle activeDragHandle()
+    {
+        UIPropTransform transform = this.currentTransform;
+
+        if (!BBSSettings.hideInactiveHandles.get() || transform == null || !transform.isEditing())
+        {
+            return null;
+        }
+
+        int op = transform.getMode();
+        Axis axis = transform.getAxis();
+
+        if (op == 2)
+        {
+            if (transform.isSphereRotate()) return Handle.TRACKBALL;
+            if (transform.isViewRotate()) return Handle.VIEW;
+            if (axis == Axis.X) return Handle.ROTATE_X;
+            if (axis == Axis.Y) return Handle.ROTATE_Y;
+            if (axis == Axis.Z) return Handle.ROTATE_Z;
+
+            return null;
+        }
+
+        if (op == 0 && transform.isScreenTranslate())
+        {
+            return Handle.SCREEN;
+        }
+
+        Op handleOp = op == 1 ? Op.SCALE : Op.MOVE;
+        Axis axis2 = transform.getAxis2();
+
+        for (Handle handle : Handle.values())
+        {
+            if (handle.op != handleOp)
+            {
+                continue;
+            }
+
+            boolean matches = axis2 == null
+                ? handle.axis == axis && handle.axis2 == null
+                : (handle.axis == axis && handle.axis2 == axis2) || (handle.axis == axis2 && handle.axis2 == axis);
+
+            if (matches)
+            {
+                return handle;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Factor the move/scale handles shrink by so they nest inside the rotation
      * rings in combined mode. With "hide rotation rings" on there is nothing to
      * nest inside, so they keep their full (larger) size.
@@ -746,7 +869,7 @@ public class Gizmo
         return this.mode == Mode.COMBINED && !BBSSettings.rotateHideRings.get() ? COMBINED_INNER_SCALE : 1F;
     }
 
-    private void drawRotateHandles(MatrixStack stack, boolean editing, int activeOp)
+    private void drawRotateHandles(MatrixStack stack, boolean editing, int activeOp, Handle active)
     {
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
@@ -759,8 +882,8 @@ public class Gizmo
 
         boolean rotating = editing && activeOp == Op.ROTATE.modeOrdinal;
         Axis activeAxis = rotating ? this.currentTransform.getAxis() : null;
-        boolean trackball = rotating && this.currentTransform.isTrackball();
-        boolean viewActive = rotating && this.currentTransform.isViewRotate();
+        /* HEAD's isTrackball() became isSphereRotate() (trackball + arcball) in the merged UIPropTransform. */
+        boolean trackball = rotating && this.currentTransform.isSphereRotate();
 
         /* The sphere is translucent and drawn before the bars/cubes, so in
          * combined it sits as a faint tint behind the move/scale handles.
@@ -769,7 +892,10 @@ public class Gizmo
         {
             int color = this.sphereHovered
                 ? BBSSettings.stencilHighlightColor.get()
-                : BBSSettings.rotate3dSphereColor.get();
+                /* TODO(1.21.11 render merge): BBSSettings.rotate3dSphereColor was removed in 1.21.1
+                 * ("убран цвет 3д сферы" — the trackball sphere is invisible there). The port still draws a
+                 * faint sphere tint, so fall back to a faint neutral colour. */
+                : 0x33FFFFFF;
 
             BufferBuilder builder = begin();
 
@@ -793,7 +919,7 @@ public class Gizmo
 
         /* The screen-space (billboard) view-rotation ring is intentionally excluded from the
          * "Hide rotation rings" option, so it is always drawn regardless of that setting. */
-        if (!rotating || viewActive)
+        if (active == null || active == Handle.VIEW)
         {
             stack.push();
 
@@ -837,10 +963,11 @@ public class Gizmo
 
         boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
         int activeOp = editing ? this.currentTransform.getMode() : -1;
+        Handle active = this.activeDragHandle();
 
-        boolean showMove = this.mode.shows(Op.MOVE) && (!editing || activeOp == Op.MOVE.modeOrdinal);
-        boolean showScale = this.mode.shows(Op.SCALE) && (!editing || activeOp == Op.SCALE.modeOrdinal);
-        boolean showRotate = this.mode.shows(Op.ROTATE) && (!editing || activeOp == Op.ROTATE.modeOrdinal);
+        boolean showMove = this.mode.shows(Op.MOVE) && (active == null || active.op == Op.MOVE || active.op == Op.SCREEN);
+        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE);
+        boolean showRotate = this.mode.shows(Op.ROTATE) && (active == null || active.op == Op.ROTATE || active.op == Op.VIEW || active.op == Op.TRACKBALL);
 
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
@@ -850,7 +977,7 @@ public class Gizmo
 
         if (showRotate)
         {
-            this.drawRotateHandles(stack, editing, activeOp);
+            this.drawRotateHandles(stack, editing, activeOp, active);
         }
 
         if (showMove || showScale)
@@ -858,14 +985,25 @@ public class Gizmo
             builder = begin();
             building = true;
 
-            Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
-            Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
+            /* The bars and planes read as move when move is on screen and as
+             * scale only when scale stands alone — the same identity the pick
+             * stencil assigns, so the hide-inactive filter matches what a grab
+             * of that element actually drives. */
+            Handle barX = showMove ? Handle.MOVE_X : Handle.SCALE_X;
+            Handle barY = showMove ? Handle.MOVE_Y : Handle.SCALE_Y;
+            Handle barZ = showMove ? Handle.MOVE_Z : Handle.SCALE_Z;
+            Handle planeXZ = showMove ? Handle.MOVE_XZ : Handle.SCALE_XZ;
+            Handle planeXY = showMove ? Handle.MOVE_XY : Handle.SCALE_XY;
+            Handle planeZY = showMove ? Handle.MOVE_ZY : Handle.SCALE_ZY;
+
+            if (active == null || active == barX) Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
+            if (active == null || active == barY) Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
+            if (active == null || active == barZ) Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
 
             /* Screen-space (view-plane) translate handle: a white cube at the centre, twice the bars'
              * thickness. Drawn before the planes so they overlay it, and after the rotation sphere (above)
              * so it stays visible in combined. */
-            if (showMove)
+            if (showMove && (active == null || active == Handle.SCREEN))
             {
                 float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
 
@@ -876,21 +1014,22 @@ public class Gizmo
             float planeEnd = planeStart + axisSize * 0.4F * thickness;
             float planeThickness = axisOffset * 0.5F;
 
-            Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, Colors.PLANE_XZ);
-            Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, Colors.PLANE_XY);
-            Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, Colors.PLANE_ZY);
+            if (active == null || active == planeXZ) Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, Colors.PLANE_XZ);
+            if (active == null || active == planeXY) Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, Colors.PLANE_XY);
+            if (active == null || active == planeZY) Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, Colors.PLANE_ZY);
 
             if (showScale)
             {
                 float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
 
-                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
-                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
-                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
+                if (active == null || active == Handle.SCALE_X) Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
+                if (active == null || active == Handle.SCALE_Y) Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
+                if (active == null || active == Handle.SCALE_Z) Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
             }
         }
 
-        if ((showMove || showScale) || (showRotate && !editing))
+        /* The centre cube is decoration, not a handle, so any filtered drag hides it. */
+        if (active == null && (showMove || showScale || showRotate))
         {
             if (!building)
             {
@@ -922,6 +1061,7 @@ public class Gizmo
         stack.push();
         MatrixStackUtils.scaleBack(stack);
         this.captureRenderMatrix(stack);
+        this.applyBakedRotation(stack);
 
         float distanceScale = this.getAxesDistanceScale(stack);
 
@@ -943,6 +1083,32 @@ public class Gizmo
          * coordinate frame the gizmo is actually drawn in. */
         this.lastRenderMatrix.set(modelView(stack));
         this.hasLastRenderMatrix = true;
+    }
+
+    // TODO(1.21.11 render merge): baked-rotation drag-freeze — re-port against pipeline API
+    // (was: applyBakedRotation/bakeRotation/isBakingRotation froze the gizmo orientation at grab time so a
+    //  dragged axis ring stayed put while only the pie swept, by rewinding the draw stack to a captured
+    //  bakedRotationMatrix via RenderSystem.getModelViewMatrix(); 1.21.11 keeps the visual/stencil passes in
+    //  different camera conventions, so the strip/re-apply math needs reworking. Stubbed no-op below so the
+    //  auto-merged call sites — clearTrackedTransform, render, renderStencil, UIPropTransform.bakeRotation — compile.)
+    private void applyBakedRotation(MatrixStack stack)
+    {
+        /* no-op: baked-rotation drag-freeze dropped in the 1.21.11 render merge (see TODO above). */
+    }
+
+    /** Snapshot the current render orientation so the ring stays put for the coming drag.
+     *  Stubbed no-op in 1.21.11 (baked-rotation drag-freeze dropped — see TODO above). */
+    public void bakeRotation()
+    {
+        if (this.hasLastRenderMatrix)
+        {
+            this.hasBakedRotation = true;
+        }
+    }
+
+    private boolean isBakingRotation()
+    {
+        return false;
     }
 
     /**
@@ -1018,12 +1184,11 @@ public class Gizmo
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
 
-        boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
-        int activeOp = editing ? this.currentTransform.getMode() : -1;
+        Handle active = this.activeDragHandle();
 
-        boolean showMove = this.mode.shows(Op.MOVE) && (!editing || activeOp == Op.MOVE.modeOrdinal);
-        boolean showScale = this.mode.shows(Op.SCALE) && (!editing || activeOp == Op.SCALE.modeOrdinal);
-        boolean showRotate = this.mode.shows(Op.ROTATE) && (!editing || activeOp == Op.ROTATE.modeOrdinal);
+        boolean showMove = this.mode.shows(Op.MOVE) && (active == null || active.op == Op.MOVE || active.op == Op.SCREEN);
+        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE);
+        boolean showRotate = this.mode.shows(Op.ROTATE) && (active == null || active.op == Op.ROTATE || active.op == Op.VIEW || active.op == Op.TRACKBALL);
 
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
@@ -1055,7 +1220,7 @@ public class Gizmo
             Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
 
             /* Screen-space handle hitbox: before the planes so they win where they overlap. Matches the visual cube. */
-            if (showMove)
+            if (showMove && (active == null || active == Handle.SCREEN))
             {
                 float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
 
@@ -1066,17 +1231,17 @@ public class Gizmo
             float planeEnd = planeStart + axisSize * 0.4F * thickness;
             float planeThickness = axisOffset * 0.5F;
 
-            Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ.index / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, planeXY.index / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, planeZY.index / 255F, 0F, 0F);
+            if (active == null || active == planeXZ) Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ.index / 255F, 0F, 0F);
+            if (active == null || active == planeXY) Draw.fillBox(builder, stack, planeStart, planeStart, -planeThickness, planeEnd, planeEnd, planeThickness, planeXY.index / 255F, 0F, 0F);
+            if (active == null || active == planeZY) Draw.fillBox(builder, stack, -planeThickness, planeStart, planeStart, planeThickness, planeEnd, planeEnd, planeZY.index / 255F, 0F, 0F);
 
             if (showScale)
             {
                 float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
 
-                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
+                if (active == null || active == Handle.SCALE_X) Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
+                if (active == null || active == Handle.SCALE_Y) Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
+                if (active == null || active == Handle.SCALE_Z) Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
             }
 
             flushPick(builder);

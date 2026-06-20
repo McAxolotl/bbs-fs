@@ -9,14 +9,14 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.function.Supplier;
 
 public class ValueEditorLayout extends BaseValue
 {
     public enum FilmEditor
     {
         CAMERA("camera"),
-        REPLAY("replay"),
-        ACTION("action");
+        REPLAY("replay");
 
         public final String id;
 
@@ -26,13 +26,15 @@ public class ValueEditorLayout extends BaseValue
         }
     }
 
-    private static class FilmLayoutState
+    private static class LayoutState
     {
         private EditorLayoutNode root;
         private final List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+        private final Supplier<EditorLayoutNode> defaultSupplier;
 
-        public FilmLayoutState(EditorLayoutNode root)
+        public LayoutState(EditorLayoutNode root, Supplier<EditorLayoutNode> defaultSupplier)
         {
+            this.defaultSupplier = defaultSupplier;
             this.setRoot(root);
         }
 
@@ -48,15 +50,16 @@ public class ValueEditorLayout extends BaseValue
 
         public void setRoot(EditorLayoutNode root)
         {
-            this.root = root == null ? EditorLayoutNode.defaultFilmLayout() : root;
+            this.root = root == null ? this.defaultSupplier.get() : root;
             this.splitters.clear();
             EditorLayoutNode.collectSplitters(this.root, this.splitters);
         }
     }
 
-    private final FilmLayoutState filmLayout = new FilmLayoutState(EditorLayoutNode.defaultFilmLayout());
-    private final EnumMap<FilmEditor, FilmLayoutState> filmEditorLayouts = new EnumMap<>(FilmEditor.class);
+    private final LayoutState filmLayout = new LayoutState(EditorLayoutNode.defaultFilmLayout(), EditorLayoutNode::defaultFilmLayout);
+    private final EnumMap<FilmEditor, LayoutState> filmEditorLayouts = new EnumMap<>(FilmEditor.class);
     private final EnumSet<FilmEditor> boundFilmEditors = EnumSet.noneOf(FilmEditor.class);
+    private final LayoutState particleLayout = new LayoutState(EditorLayoutNode.defaultParticleLayout(), EditorLayoutNode::defaultParticleLayout);
     private float stateEditorSizeH = 0.7F;
     private float stateEditorSizeV = 0.25F;
     private int keyframeLabelWidth = 120;
@@ -249,6 +252,38 @@ public class ValueEditorLayout extends BaseValue
         BaseValue.edit(this, (v) -> this.keyframeLabelWidth = MathUtils.clamp(keyframeLabelWidth, 40, 400));
     }
 
+    /* Particle editor layout (separate tree from the film editors). */
+
+    public EditorLayoutNode getParticleLayoutRoot()
+    {
+        return this.particleLayout.getRoot();
+    }
+
+    public void setParticleLayoutRoot(EditorLayoutNode root)
+    {
+        BaseValue.edit(this, (v) -> this.particleLayout.setRoot(root));
+    }
+
+    public List<EditorLayoutNode.SplitterNode> getParticleSplitters()
+    {
+        return this.particleLayout.getSplitters();
+    }
+
+    public List<EditorLayoutNode.SplitterNode> getParticleSplittersForWrite()
+    {
+        return this.particleLayout.getSplitters();
+    }
+
+    public void setParticleSplitterRatio(int index, float ratio)
+    {
+        if (index < 0 || index >= this.particleLayout.getSplitters().size())
+        {
+            return;
+        }
+        int i = index;
+        BaseValue.edit(this, (v) -> this.particleLayout.getSplitters().get(i).setRatio(MathUtils.clamp(ratio, 0.05F, 0.95F)));
+    }
+
     @Override
     public BaseType toData()
     {
@@ -257,10 +292,11 @@ public class ValueEditorLayout extends BaseValue
         MapType filmEditorBindings = new MapType();
 
         data.put("film_layout", this.filmLayout.getRoot().toData());
+        data.put("particle_layout", this.particleLayout.getRoot().toData());
 
         for (FilmEditor editor : FilmEditor.values())
         {
-            FilmLayoutState state = this.filmEditorLayouts.get(editor);
+            LayoutState state = this.filmEditorLayouts.get(editor);
 
             if (state != null)
             {
@@ -293,10 +329,16 @@ public class ValueEditorLayout extends BaseValue
     public void fromData(BaseType data)
     {
         this.resetFilmLayouts();
+        this.particleLayout.setRoot(EditorLayoutNode.defaultParticleLayout());
 
         if (data.isMap())
         {
             MapType map = data.asMap();
+
+            if (map.has("particle_layout"))
+            {
+                this.particleLayout.setRoot(EditorLayoutNode.fromData(map.get("particle_layout")));
+            }
 
             if (map.has("film_layout"))
             {
@@ -342,7 +384,7 @@ public class ValueEditorLayout extends BaseValue
 
                 if (root != null)
                 {
-                    this.filmEditorLayouts.put(editor, new FilmLayoutState(root));
+                    this.filmEditorLayouts.put(editor, new LayoutState(root, EditorLayoutNode::defaultFilmLayout));
                 }
             }
 
@@ -363,18 +405,18 @@ public class ValueEditorLayout extends BaseValue
     }
 
     /* Bound editors reuse the shared layout until the first layout write creates a local copy. */
-    private FilmLayoutState getFilmLayoutState(FilmEditor editor, boolean forWrite)
+    private LayoutState getFilmLayoutState(FilmEditor editor, boolean forWrite)
     {
         if (!this.isFilmLayoutBound(editor))
         {
             return this.filmLayout;
         }
 
-        FilmLayoutState state = this.filmEditorLayouts.get(editor);
+        LayoutState state = this.filmEditorLayouts.get(editor);
 
         if (state == null && forWrite)
         {
-            state = new FilmLayoutState(copyFilmLayoutRoot(this.filmLayout.getRoot()));
+            state = new LayoutState(copyFilmLayoutRoot(this.filmLayout.getRoot()), EditorLayoutNode::defaultFilmLayout);
             this.filmEditorLayouts.put(editor, state);
         }
 

@@ -57,6 +57,7 @@ import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -71,6 +72,7 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -157,6 +159,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_CONTROL, this::toggleControl).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ORBIT_MODE, this::toggleOrbitMode).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TELEPORT_ORBIT, this::teleportOrbitPivotToReplay).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_ATTACH_ORBIT, () ->
+        {
+            this.toggleOrbitAttachment();
+            UIUtils.playClick();
+        }).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_REPLAY_MENU, this::toggleReplayMenu).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_MOVE_REPLAY_TO_CURSOR, () ->
         {
@@ -598,7 +605,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 if (this.panel.replayEditor.getReplay() == replay)
                 {
-                    this.panel.replayEditor.setReplay(replay, false, false);
+                    this.panel.replayEditor.setReplay(replay, false, UIReplaysEditor.OrbitReaction.SWITCH);
                 }
             }
             else
@@ -632,7 +639,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return true;
         }
 
-        if (this.gizmo.mouseClicked(context))
+        boolean gizmoShown = this.canShowGizmo();
+
+        /* Gizmo handles beat everything (rendered on top). The trackball
+         * sphere is deferred to the very end so its flat screen disc doesn't
+         * override actor markers and the viewport's other picks. Both are gated
+         * on the gizmo actually being shown — otherwise the sphere grabs clicks
+         * even with no bone selected (nothing rendered). */
+        if (gizmoShown && this.gizmo.mouseClickedHandle(context))
         {
             return true;
         }
@@ -642,6 +656,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.pickReplay(this.hoveredReplayIndex);
 
+            return true;
+        }
+
+        if (gizmoShown && this.gizmo.mouseClickedSphere(context))
+        {
             return true;
         }
 
@@ -819,6 +838,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.orbit.teleportPivotToReplay();
     }
 
+    public void toggleOrbitAttachment()
+    {
+        this.orbit.toggleAttachment();
+    }
+
     public boolean zoomOrbit(double mouseWheel)
     {
         return this.orbit.zoom(mouseWheel);
@@ -868,7 +892,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 manager.action(new ReplayContextAction(replay, IKey.raw(replay.getName()), () ->
                 {
-                    this.panel.replayEditor.setReplay(replay, false, false);
+                    this.panel.replayEditor.setReplay(replay, false, UIReplaysEditor.OrbitReaction.SWITCH);
 
                     UIReplayList list = this.panel.replayEditor.replaysList.replays;
 
@@ -1245,7 +1269,12 @@ public class UIFilmController extends UIElement implements GizmoViewport
         /* TODO(1.21.11 render): depth-test state now lives in the RenderPipeline/RenderLayer; removed RenderSystem.depthFunc(GL_ALWAYS) */
 
         this.hoveredReplayIndex = -1;
-        this.gizmo.update(context);
+
+        if (this.canShowGizmo())
+        {
+            this.gizmo.update(context);
+            this.gizmo.renderSphereHighlight(context);
+        }
 
         if (!this.stencil.hasPicked())
         {
@@ -1408,11 +1437,38 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return context == null ? 0F : context.getTransition();
     }
 
-    public Pair<String, Boolean> getBone()
+    public Pair<String, TransformSpace> getBone()
     {
         UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
 
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
+    }
+
+    /** Whether the selected keyframe is the form's anchor track, so its transform gets a gizmo. */
+    public boolean isAnchorGizmo()
+    {
+        UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
+
+        return keyframeEditor != null && keyframeEditor.isFormAnchorTrack();
+    }
+
+    public TransformSpace getAnchorSpace()
+    {
+        UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
+
+        return keyframeEditor == null ? TransformSpace.PARENT : keyframeEditor.getAnchorSpace();
+    }
+
+    /**
+     * Whether the preview gizmo is actually drawn right now — the same gate the
+     * renderer uses ({@link BaseFilmController#render}): axes enabled, not
+     * recording, and a bone selected. The gizmo interaction must honour it, or
+     * its trackball sphere keeps grabbing clicks (and blocking actor markers)
+     * after a keyframe is deselected and nothing is rendered.
+     */
+    private boolean canShowGizmo()
+    {
+        return UIBaseMenu.shouldRenderAxes() && !this.isRecording() && (this.getBone() != null || this.isAnchorGizmo());
     }
 
     private void renderStencil(WorldRenderContext renderContext, UIContext context, boolean altPressed)
@@ -1445,7 +1501,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             List<Replay> replays = this.panel.getData().replays.getList();
             int selectedReplayIndex = this.getCurrentReplayIndex();
-            Pair<String, Boolean> bone = this.getBone();
+            Pair<String, TransformSpace> bone = this.getBone();
 
             for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
             {
@@ -1467,7 +1523,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
                     this.stencilMap.setIncrement(true);
 
-                    filmContext.bone(bone == null ? null : bone.a, bone != null && bone.b);
+                    filmContext
+                        .bone(bone == null ? null : bone.a, bone == null ? TransformSpace.PARENT : bone.b)
+                        .anchorGizmo(this.isAnchorGizmo(), this.getAnchorSpace());
                 }
                 else
                 {
@@ -1481,7 +1539,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         else
         {
             Replay replay = this.panel.replayEditor.getReplay();
-            Pair<String, Boolean> bone = this.getBone();
+            Pair<String, TransformSpace> bone = this.getBone();
 
             this.stencilMap.setIncrement(true);
 
@@ -1490,7 +1548,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 .transition(isPlaying ? MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false) : 0)
                 .stencil(this.stencilMap)
                 .relative(replay.relative.get())
-                .bone(bone == null ? null : bone.a, bone != null && bone.b));
+                .bone(bone == null ? null : bone.a, bone == null ? TransformSpace.PARENT : bone.b)
+                .anchorGizmo(this.isAnchorGizmo(), this.getAnchorSpace()));
         }
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);

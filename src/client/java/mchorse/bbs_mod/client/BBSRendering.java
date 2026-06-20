@@ -80,6 +80,7 @@ public class BBSRendering
     private static Framebuffer framebuffer;
     private static Framebuffer clientFramebuffer;
     private static Texture texture;
+    private static mchorse.bbs_mod.graphics.Framebuffer /* NECESSARY */ exportFramebuffer;
 
     /** Private read FBO used to snapshot our framebuffer's colour attachment into {@link #texture}. */
     private static int captureReadFramebuffer = -1;
@@ -164,12 +165,25 @@ public class BBSRendering
 
     public static void setCustomSize(boolean customSize, int w, int h)
     {
+        int newWidth = !customSize ? 0 : w;
+        int newHeight = !customSize ? 0 : h;
+
+        /* No-op when nothing actually changes. A redundant setCustomSize(false)
+         * — e.g. a film panel disappearing while custom size is already off, which
+         * happens when the dashboard is first lazily created by the teleport/record
+         * keybinds — must NOT resize the vanilla framebuffers: that stalls the GPU
+         * and freezes the screen for a frame even though the state didn't change. */
+        if (BBSRendering.customSize == customSize && width == newWidth && height == newHeight)
+        {
+            return;
+        }
+
         LOGGER.info("[BBS film] setCustomSize customSize={} w={} h={} (stored width/height will be {})",
             customSize, w, h, customSize ? w + "/" + h : "0/0");
         BBSRendering.customSize = customSize;
 
-        width = !customSize ? 0 : w;
-        height = !customSize ? 0 : h;
+        width = newWidth;
+        height = newHeight;
 
         if (!customSize)
         {
@@ -426,6 +440,10 @@ public class BBSRendering
 
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousRead);
         }
+        // TODO(1.21.11 render merge): HiDPI export-downscale supersampling — re-port against pipeline API
+        // (was: 1.21.1 created an export mchorse.bbs_mod.graphics.Framebuffer sized to getVideoWidth()/getVideoHeight()
+        //  and glBlitFramebuffer'd the native-resolution world framebuffer down into it with GL_LINEAR so the
+        //  recording matched the requested video size; that Framebuffer.fbo/.id/.attach API path is dropped here).
 
         toggleFramebuffer(false);
 

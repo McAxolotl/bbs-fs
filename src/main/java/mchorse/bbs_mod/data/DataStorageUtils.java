@@ -2,23 +2,30 @@ package mchorse.bbs_mod.data;
 
 import mchorse.bbs_mod.data.storage.DataStorage;
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.ByteArrayType;
 import mchorse.bbs_mod.data.types.ByteType;
 import mchorse.bbs_mod.data.types.DoubleType;
 import mchorse.bbs_mod.data.types.FloatType;
+import mchorse.bbs_mod.data.types.IntArrayType;
 import mchorse.bbs_mod.data.types.IntType;
 import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.data.types.LongArrayType;
 import mchorse.bbs_mod.data.types.LongType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.data.types.ShortArrayType;
 import mchorse.bbs_mod.data.types.ShortType;
 import mchorse.bbs_mod.data.types.StringType;
 import net.minecraft.nbt.NbtByte;
+import net.minecraft.nbt.NbtByteArray;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtDouble;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtFloat;
 import net.minecraft.nbt.NbtInt;
+import net.minecraft.nbt.NbtIntArray;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtLong;
+import net.minecraft.nbt.NbtLongArray;
 import net.minecraft.nbt.NbtShort;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.network.PacketByteBuf;
@@ -149,13 +156,42 @@ public class DataStorageUtils
         {
             return NbtString.of(stringType.value);
         }
+        else if (type instanceof ByteArrayType byteArrayType)
+        {
+            return new NbtByteArray(byteArrayType.value);
+        }
+        else if (type instanceof IntArrayType intArrayType)
+        {
+            return new NbtIntArray(intArrayType.value);
+        }
+        else if (type instanceof LongArrayType longArrayType)
+        {
+            return new NbtLongArray(longArrayType.value);
+        }
+        else if (type instanceof ShortArrayType shortArrayType)
+        {
+            /* NBT has no short array, so widen to an int array (lossless). */
+            int[] ints = new int[shortArrayType.value.length];
+
+            for (int i = 0; i < ints.length; i++)
+            {
+                ints[i] = shortArrayType.value[i];
+            }
+
+            return new NbtIntArray(ints);
+        }
         else if (type instanceof ListType listType)
         {
             NbtList list = new NbtList();
 
             for (BaseType baseType : listType)
             {
-                list.add(toNbt(baseType));
+                NbtElement converted = toNbt(baseType);
+
+                if (converted != null)
+                {
+                    list.add(converted);
+                }
             }
 
             return list;
@@ -166,13 +202,16 @@ public class DataStorageUtils
 
             for (String key : mapType.keys())
             {
-                compound.put(key, toNbt(mapType.get(key)));
+                NbtElement converted = toNbt(mapType.get(key));
+
+                if (converted != null)
+                {
+                    compound.put(key, converted);
+                }
             }
 
             return compound;
         }
-
-        // TODO: ArrayType
 
         return null;
     }
@@ -207,13 +246,30 @@ public class DataStorageUtils
         {
             return new StringType(nbtString.value());
         }
+        else if (element instanceof NbtByteArray nbtByteArray)
+        {
+            return new ByteArrayType(nbtByteArray.getByteArray());
+        }
+        else if (element instanceof NbtIntArray nbtIntArray)
+        {
+            return new IntArrayType(nbtIntArray.getIntArray());
+        }
+        else if (element instanceof NbtLongArray nbtLongArray)
+        {
+            return new LongArrayType(nbtLongArray.getLongArray());
+        }
         else if (element instanceof NbtList nbtList)
         {
             ListType list = new ListType();
 
             for (NbtElement nbtElement : nbtList)
             {
-                list.add(fromNbt(nbtElement));
+                BaseType converted = fromNbt(nbtElement);
+
+                if (converted != null)
+                {
+                    list.add(converted);
+                }
             }
 
             return list;
@@ -224,13 +280,16 @@ public class DataStorageUtils
 
             for (String key : nbtCompound.getKeys())
             {
-                map.put(key, fromNbt(nbtCompound.get(key)));
+                BaseType converted = fromNbt(nbtCompound.get(key));
+
+                if (converted != null)
+                {
+                    map.put(key, converted);
+                }
             }
 
             return map;
         }
-
-        // TODO: ArrayType
 
         return null;
     }

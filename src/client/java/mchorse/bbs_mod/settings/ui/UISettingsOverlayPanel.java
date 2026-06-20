@@ -9,6 +9,7 @@ import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -333,10 +335,7 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
 
             if (this.panel.isCurrent(this.category))
             {
-                int color = BBSSettings.primaryColor.get();
-
-                context.batcher.box(this.area.x, this.area.y, this.area.x + 2, this.area.ey(), Colors.A100 | color);
-                context.batcher.gradientHBox(this.area.x + 2, this.area.y, this.area.ex(), this.area.ey(), Colors.A75 | color, color);
+                UIDashboardPanels.renderHighlight(context.batcher, this.area, Direction.LEFT);
             }
             else if (this.hover)
             {
@@ -377,13 +376,18 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
                     menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_SHORTS_1080P, () -> panel.applyVideoPreset(1080, 1920));
                     menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_1440P, () -> panel.applyVideoPreset(2560, 1440));
                     menu.action(Icons.FILM, UIKeys.VIDEO_SETTINGS_PRESETS_4K, () -> panel.applyVideoPreset(3840, 2160));
-                    menu.action(Icons.REFRESH, UIKeys.VIDEO_SETTINGS_SWAP, panel::swapVideoResolution);
                 }));
+                UIIcon swap = new UIIcon(Icons.REFRESH, (b) -> panel.swapVideoResolution());
 
-                presets.tooltip(UIKeys.GENERAL_PRESETS, Direction.LEFT);
-                presets.relative(this).x(1F, -18).y(0.5F, -9).wh(18, 18);
+                swap.tooltip(UIKeys.VIDEO_SETTINGS_SWAP);
+                swap.wh(16, 16);
+                presets.tooltip(UIKeys.GENERAL_PRESETS);
+                presets.wh(16, 16);
 
-                this.add(presets);
+                UIElement row = UI.row(swap, presets);
+
+                row.relative(this).x(1F, -4).y(0.5F, -1).wh(32, 16).anchor(1F, 0.5F);
+                this.add(row);
             }
         }
 

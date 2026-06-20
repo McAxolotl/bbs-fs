@@ -41,6 +41,7 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UITrailForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIVanillaParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.states.UIAnimationStatesOverlayPanel;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.forms.editors.states.keyframes.UIAnimationStateEditor;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -54,6 +55,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
@@ -103,10 +105,14 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     public UIElement forms;
     public UIForms formsList;
     private UIIcon addFormList;
+    private UIIcon bodyPartGizmoIcon;
     private UIIcon copyFormList;
     private UIIcon pasteFormList;
     private UIIcon removeFormList;
     public UIBodyPartEditor bodyPartEditor;
+
+    /* When on, the viewport gizmo edits the selected body part's attachment transform instead of the form's own */
+    private boolean bodyPartGizmo;
 
     /* Sidebar icons */
     public UIElement icons;
@@ -216,7 +222,22 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         };
         listToolbarBg.relative(listSection).xy(0, 0).w(1F).h(20);
         this.addFormList = new UIIcon(Icons.ADD, (b) -> this.addBodyPart(new BodyPart("")));
-        this.addFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_ADD, Direction.LEFT);
+        this.addFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_ADD);
+        this.bodyPartGizmoIcon = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.bodyPartGizmo = !this.bodyPartGizmo)
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                if (UIFormEditor.this.bodyPartGizmo)
+                {
+                    UIDashboardPanels.renderHighlight(context.batcher, this.area);
+                }
+
+                super.renderSkin(context);
+            }
+        };
+        this.bodyPartGizmoIcon.tooltip(UIKeys.FORMS_EDITOR_BODY_PART_GIZMO);
+        this.bodyPartGizmoIcon.keys().register(Keys.FORMS_TOGGLE_BODY_PART_GIZMO, this.bodyPartGizmoIcon::clickItself);
         this.copyFormList = new UIIcon(Icons.COPY, (b) ->
         {
             if (this.copyPasteController.copy())
@@ -224,15 +245,15 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                 this.updateFormListButtons();
             }
         });
-        this.copyFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_COPY, Direction.LEFT);
+        this.copyFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_COPY);
         this.pasteFormList = new UIIcon(Icons.PASTE, (b) -> this.copyPasteController.paste(0, 0));
-        this.pasteFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_PASTE, Direction.LEFT);
+        this.pasteFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_PASTE);
         this.removeFormList = new UIIcon(Icons.REMOVE, (b) -> this.removeBodyPart());
-        this.removeFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_REMOVE, Direction.LEFT);
+        this.removeFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_REMOVE);
 
         UIElement listToolbar = new UIElement();
         listToolbar.relative(listSection).w(1F).h(20).row(0).padding(0).height(20);
-        for (UIIcon icon : new UIIcon[] {this.addFormList, this.copyFormList, this.pasteFormList, this.removeFormList})
+        for (UIIcon icon : new UIIcon[] {this.addFormList, this.bodyPartGizmoIcon, this.copyFormList, this.pasteFormList, this.removeFormList})
         {
             UIElement cell = new UIElement();
             icon.relative(cell).x(0.5F).y(0.5F).anchor(0.5F, 0.5F);
@@ -291,7 +312,19 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             TOGGLED = !TOGGLED;
         });
         this.toggleSidebar.tooltip(UIKeys.FORMS_EDITOR_TOGGLE_TREE, Direction.RIGHT);
-        this.openStateEditor = new UIIcon(Icons.GALLERY, (b) -> this.toggleStateEditor());
+        this.openStateEditor = new UIIcon(Icons.GALLERY, (b) -> this.toggleStateEditor())
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                if (UIFormEditor.this.statesEditor.isVisible())
+                {
+                    UIDashboardPanels.renderHighlight(context.batcher, this.area, Direction.LEFT);
+                }
+
+                super.renderSkin(context);
+            }
+        };
         this.openStateEditor.tooltip(UIKeys.FORMS_EDITOR_STATES_TOGGLE, Direction.RIGHT);
         this.icons = UI.column(this.openStateEditor, this.toggleSidebar, this.finish);
         this.icons.relative(this).y(1F).w(20).anchorY(1F);
@@ -383,10 +416,21 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             return this.statesKeyframes.startGizmo(context, stencilIndex);
         }
 
-        UIPropTransform transform = this.editor.getEditableTransform();
+        UIPropTransform transform = this.isBodyPartGizmoMode() ? this.bodyPartEditor.transform : this.editor.getEditableTransform();
         GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
 
         return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
+    }
+
+    /**
+     * Whether the viewport gizmo edits the selected body part's attachment transform. Requires the
+     * mode toggle to be on AND a body part (not the root form) to be selected.
+     */
+    public boolean isBodyPartGizmoMode()
+    {
+        UIForms.FormEntry current = this.formsList.getCurrentFirst();
+
+        return this.bodyPartGizmo && current != null && current.part != null && current.getForm() != null;
     }
 
     private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)
@@ -610,6 +654,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
         this.addFormList.setEnabled(current != null && current.getForm() != null);
+        this.bodyPartGizmoIcon.setEnabled(current != null && current.part != null && current.getForm() != null);
         this.copyFormList.setEnabled(this.copyPasteController.canCopy());
         this.pasteFormList.setEnabled(this.copyPasteController.canPaste());
         this.removeFormList.setEnabled(current != null && current.part != null);
@@ -890,6 +935,11 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             return this.statesKeyframes.getOrigin(transition);
         }
 
+        if (this.isBodyPartGizmoMode())
+        {
+            return this.editor.getBodyPartGizmoOrigin(transition, this.bodyPartEditor.transform.getSpace());
+        }
+
         return this.editor.getOrigin(transition);
     }
 
@@ -904,6 +954,11 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getOriginMatrix(transition);
+        }
+
+        if (this.isBodyPartGizmoMode())
+        {
+            return this.editor.getBodyPartGizmoOrigin(transition, TransformSpace.LOCAL);
         }
 
         return this.editor.getOriginMatrix(transition);

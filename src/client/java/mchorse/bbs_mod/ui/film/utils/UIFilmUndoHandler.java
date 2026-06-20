@@ -44,6 +44,14 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
 
         if (this.isReplayActions(value))
         {
+            /* TODO: Variant A for the lazy-channel desync — if 'value' is a keyframe
+             * inside a channel, promote it to its parent KeyframeChannel here so the
+             * sync sends the whole channel ('properties/<key>') instead of an indexed
+             * keyframe path ('properties/<key>/0'). A channel created client-side by
+             * FormProperties.getOrCreate during UI building (UIReplaysEditor
+             * .collectFormPropertySheets) is never synced, so the server lacks it and
+             * the indexed path can't be resolved. Currently handled reactively by the
+             * full-film resync request (ServerNetwork.requestFilmResync). */
             this.syncData.add(value);
             this.actionsTimer.mark();
         }

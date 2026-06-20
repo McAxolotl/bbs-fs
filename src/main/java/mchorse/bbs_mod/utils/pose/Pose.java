@@ -107,10 +107,8 @@ public class Pose implements IMapSerializable
 
             r.translate.mul(-1F, 1F, 1F);
             r.rotate.mul(1F, -1F, -1F);
-            r.rotate2.mul(1F, -1F, -1F);
             l.translate.mul(-1F, 1F, 1F);
             l.rotate.mul(1F, -1F, -1F);
-            l.rotate2.mul(1F, -1F, -1F);
 
             bones.remove(pair.a);
             bones.remove(pair.b);
@@ -122,8 +120,32 @@ public class Pose implements IMapSerializable
 
             poseTransform.translate.mul(-1F, 1F, 1F);
             poseTransform.rotate.mul(1F, -1F, -1F);
-            poseTransform.rotate2.mul(1F, -1F, -1F);
         }
+    }
+
+    /**
+     * The mirror (opposite-side) counterpart of a bone name via the same
+     * left/right patterns used for flipping, or the same name when it has no
+     * side (a centre/unpaired bone).
+     */
+    public static String getMirrorName(String name)
+    {
+        if (name == null)
+        {
+            return null;
+        }
+
+        for (Pair<Pattern, String> pair : patterns)
+        {
+            Matcher matcher = pair.a.matcher(name);
+
+            if (matcher.matches())
+            {
+                return matcher.replaceAll(pair.b);
+            }
+        }
+
+        return name;
     }
 
     public PoseTransform get(String name)
