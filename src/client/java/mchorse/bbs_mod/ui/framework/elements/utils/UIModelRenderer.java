@@ -15,9 +15,14 @@ import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.Std140Builder;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.DiffuseLighting;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
@@ -27,6 +32,9 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.lwjgl.system.MemoryStack;
+
+import java.nio.ByteBuffer;
 
 /**
  * Model renderer GUI element
@@ -70,6 +78,22 @@ public abstract class UIModelRenderer extends UIElement
     private int previewGlId = -1;
     private int previewVw;
     private int previewVh;
+
+    /* Editor-preview diffuse lighting (faithful to 1.21.1 commit 0affc6c4): the original called
+     * RenderSystem.setupLevelDiffuseLighting(new Vector3f(0, 0.85, -1).normalize(),
+     * new Vector3f(0, 0.85, 1).normalize(), this.camera.view) right before renderUserModel. That 3-arg
+     * overload was removed in 1.21.5+ (only setShaderLights(GpuBufferSlice) remains; DiffuseLighting's
+     * Lighting UBO is two std140 vec3s). So we reproduce it the same way BbsFormGuiElementRenderer.lights()
+     * does for the LIST previews: a persistent two-vec3 Lighting UBO bound via RenderSystem.setShaderLights.
+     * The buffer is allocated lazily once, but RE-WRITTEN every frame because the original transformed the
+     * two directions by the LIVE camera.view (so the light stays world-fixed as the model is orbited). */
+    private static final Vector3f LIGHT_A = new Vector3f(0F, 0.85F, -1F).normalize();
+    private static final Vector3f LIGHT_B = new Vector3f(0F, 0.85F, 1F).normalize();
+
+    private GpuBuffer lightsBuffer;
+    private GpuBufferSlice lights;
+    private final Vector3f lightDirA = new Vector3f();
+    private final Vector3f lightDirB = new Vector3f();
 
     public UIModelRenderer()
     {
@@ -237,6 +261,13 @@ public abstract class UIModelRenderer extends UIElement
             ModelPreviewRenderer.ACTIVE = true;
             this.preview.begin(vw, vh, this.camera.projection);
 
+            /* Restore the editor-preview diffuse lighting that the 1.21.11 port dropped (faithful to commit
+             * 0affc6c4). ModelPreviewRenderer.begin() just bound the vanilla ENTITY_IN_UI inventory preset
+             * (lights from below/front), so without this the in-panel model renders dark until some other
+             * path re-sets the GUI diffuse lighting (e.g. on window-focus loss). Bind the BBS editor-preview
+             * directions explicitly, AFTER begin() so it overrides that preset, BEFORE the grid/model draw. */
+            RenderSystem.setShaderLights(this.editorLights());
+
             try
             {
                 /* Ground grid first (depth-tested, so the model occludes the lines behind it), then the model
@@ -309,6 +340,47 @@ public abstract class UIModelRenderer extends UIElement
         MatrixStackUtils.multiply(stack, this.transform);
 
         return stack;
+    }
+
+    /**
+     * The editor-preview Lighting UBO, re-uploaded each frame with the two {@link #LIGHT_A}/{@link #LIGHT_B}
+     * directions transformed by the LIVE {@code camera.view} (direction-only). This reproduces the original
+     * {@code RenderSystem.setupLevelDiffuseLighting(LIGHT_A, LIGHT_B, camera.view)} of commit 0affc6c4 with the
+     * 1.21.11 API: vanilla's Lighting UBO is exactly two std140 vec3s ({@link DiffuseLighting#UBO_SIZE}) and the
+     * only public binder left is {@link RenderSystem#setShaderLights(GpuBufferSlice)} — see the in-tree LIST-preview
+     * twin {@code BbsFormGuiElementRenderer.lights()}. The {@link GpuBuffer} is allocated lazily once (no per-frame
+     * allocation); only its contents are rewritten, because the directions depend on the per-frame camera view.
+     */
+    private GpuBufferSlice editorLights()
+    {
+        /* Transform the world-space light directions into view space by the live camera.view, exactly as the
+         * original setupLevelDiffuseLighting(..., this.camera.view) did. The model is drawn with the camera
+         * baked into the per-vertex matrix and the global ModelView identity (see ModelPreviewRenderer), so
+         * lit normals are evaluated in view space — the directions must be brought into that same space. */
+        this.camera.view.transformDirection(LIGHT_A, this.lightDirA).normalize();
+        this.camera.view.transformDirection(LIGHT_B, this.lightDirB).normalize();
+
+        try (MemoryStack stack = MemoryStack.stackPush())
+        {
+            ByteBuffer data = Std140Builder.onStack(stack, DiffuseLighting.UBO_SIZE)
+                .putVec3(this.lightDirA)
+                .putVec3(this.lightDirB)
+                .get();
+
+            if (this.lightsBuffer == null)
+            {
+                /* usage 136 = UNIFORM | COPY_DST, mirroring DiffuseLighting's own Lighting UBO and the
+                 * in-tree BbsFormGuiElementRenderer.lights() buffer. */
+                this.lightsBuffer = RenderSystem.getDevice().createBuffer(() -> "BBS editor preview lights UBO", 136, data);
+                this.lights = this.lightsBuffer.slice(0, DiffuseLighting.UBO_SIZE);
+            }
+            else
+            {
+                RenderSystem.getDevice().createCommandEncoder().writeToBuffer(this.lights, data);
+            }
+        }
+
+        return this.lights;
     }
 
     protected void processInputs(UIContext context)
