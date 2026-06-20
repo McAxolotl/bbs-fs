@@ -406,17 +406,18 @@ public class BBSPickerRenderer
         GpuBufferSlice projectionUniform = writeProjection(encoder, projection);
         GpuBuffer pickerUniform = writeUniform(device, encoder);
 
-        /* Full-target quad with straight [0,1] UVs: the source picking texture and our output share the same
-         * render-pass attachment orientation, so no flip is applied here (the caller's blit-back applies the
-         * single FBO V-flip, exactly like UIModelRenderer's preview blit). WHITE vertex colour (* texel = texel). */
+        /* Full-target quad with V-INVERTED UVs. Runtime showed the highlight was vertically mirrored vs the
+         * visible model (hover head -> highlight at feet): the source picking texture is actually TOP-DOWN, so the
+         * caller's blit-back V-flip (FBO convention) was a net extra flip. We pre-flip V here so recolour-flip +
+         * blit-flip cancel to identity -> the highlight matches the model. WHITE vertex colour (* texel = texel). */
         int color = Colors.WHITE;
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
 
-        builder.vertex(0F, (float) h, 0F).texture(0F, 1F).color(color);
-        builder.vertex((float) w, (float) h, 0F).texture(1F, 1F).color(color);
-        builder.vertex((float) w, 0F, 0F).texture(1F, 0F).color(color);
-        builder.vertex(0F, 0F, 0F).texture(0F, 0F).color(color);
+        builder.vertex(0F, (float) h, 0F).texture(0F, 0F).color(color);
+        builder.vertex((float) w, (float) h, 0F).texture(1F, 0F).color(color);
+        builder.vertex((float) w, 0F, 0F).texture(1F, 1F).color(color);
+        builder.vertex(0F, 0F, 0F).texture(0F, 1F).color(color);
 
         BuiltBuffer buffer = builder.endNullable();
 
