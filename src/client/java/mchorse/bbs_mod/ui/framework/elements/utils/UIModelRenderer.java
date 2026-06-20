@@ -353,12 +353,12 @@ public abstract class UIModelRenderer extends UIElement
      */
     private GpuBufferSlice editorLights()
     {
-        /* Transform the world-space light directions into view space by the live camera.view, exactly as the
-         * original setupLevelDiffuseLighting(..., this.camera.view) did. The model is drawn with the camera
-         * baked into the per-vertex matrix and the global ModelView identity (see ModelPreviewRenderer), so
-         * lit normals are evaluated in view space — the directions must be brought into that same space. */
-        this.camera.view.transformDirection(LIGHT_A, this.lightDirA).normalize();
-        this.camera.view.transformDirection(LIGHT_B, this.lightDirB).normalize();
+        /* Bind the light directions RAW (fixed/world space), NOT transformed by camera.view: at runtime the
+         * camera.view-transformed variant lit the model from the wrong angle. The in-tree LIST-preview twin
+         * (BbsFormGuiElementRenderer.lights()) likewise binds its directions untransformed, so lit normals here
+         * are evaluated against the same fixed light the thumbnails use, independent of orbit. */
+        this.lightDirA.set(LIGHT_A);
+        this.lightDirB.set(LIGHT_B);
 
         try (MemoryStack stack = MemoryStack.stackPush())
         {
