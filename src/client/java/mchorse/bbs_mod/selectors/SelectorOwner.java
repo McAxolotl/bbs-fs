@@ -66,29 +66,29 @@ public class SelectorOwner
             this.nbtCheck = 10;
 
             Set<String> keys = createWhitelist();
-            NbtWriteView view = NbtWriteView.create(ErrorReporter.EMPTY);
+            NbtCompound compound = this.saveData();
 
-            this.mcEntity.saveData(view);
-
-            NbtCompound compound = view.getNbt();
-            NbtCompound newCompound = new NbtCompound();
-
-            for (String key : keys)
+            if (compound != null)
             {
-                NbtElement element = compound.get(key);
+                NbtCompound newCompound = new NbtCompound();
 
-                if (element != null)
+                for (String key : keys)
                 {
-                    newCompound.put(key, element);
+                    NbtElement element = compound.get(key);
+
+                    if (element != null)
+                    {
+                        newCompound.put(key, element);
+                    }
                 }
-            }
 
-            if (!Objects.equals(newCompound, this.lastNbt))
-            {
-                this.check = 0;
-            }
+                if (!Objects.equals(newCompound, this.lastNbt))
+                {
+                    this.check = 0;
+                }
 
-            this.lastNbt = newCompound;
+                this.lastNbt = newCompound;
+            }
         }
 
         if (this.check < selectors.getLastUpdate())
@@ -113,6 +113,22 @@ public class SelectorOwner
         }
 
         this.nbtCheck -= 1;
+    }
+
+    private NbtCompound saveData()
+    {
+        try
+        {
+            NbtWriteView view = NbtWriteView.create(ErrorReporter.EMPTY);
+
+            this.mcEntity.saveData(view);
+
+            return view.getNbt();
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
 
     private Set<String> createWhitelist()
