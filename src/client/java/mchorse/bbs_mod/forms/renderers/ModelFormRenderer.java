@@ -804,6 +804,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             this.animator.applyActions(entity, model, transition);
             model.model.applyPose(this.getPose());
 
+            /* Solve IK here too, so a bone anchored to an IK-driven bone (a head pinned to
+             * body_upper) rides the solved pose — these matrices feed the anchor system, the
+             * gizmo and trackers, which otherwise see the FK-only pose the render path moved
+             * past. The live-drag world-space target overrides need a base transform this
+             * local pass doesn't carry, so the config/`ik`-track solve runs (controllers
+             * keyed into the pose are already baked in and reached). */
+            model.form = this.form;
+            ModelIKRuntime.apply(model, null, null);
+
             stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
             this.captureMatrices(model);
         }
