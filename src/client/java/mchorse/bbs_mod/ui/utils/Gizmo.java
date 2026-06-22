@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.utils;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.VertexSorter;
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -553,6 +555,97 @@ public class Gizmo
         stack.push();
         MatrixStackUtils.scaleBack(stack);
         this.captureRenderMatrix(stack);
+        this.drawGizmo(stack);
+        stack.pop();
+    }
+
+    /**
+     * Capture the gizmo's model-view for the deferred interface-pass visual
+     * ({@link #renderInterface}) without drawing anything in the caller's world
+     * / 3D pass. The visual moved out of the world pass so its translucent parts
+     * (the rotation sphere, the sweep pie, the view ring) composite through the
+     * UI pipeline instead of the world shaders, which did not blend them.
+     */
+    public void captureVisual(MatrixStack stack)
+    {
+        if (BBSRendering.isIrisShadowPass())
+        {
+            return;
+        }
+
+        stack.push();
+        MatrixStackUtils.scaleBack(stack);
+        this.captureRenderMatrix(stack);
+        stack.pop();
+    }
+
+    /**
+     * Draw the gizmo's visual over a {@link GizmoViewport} in the UI pass, from
+     * the model-view captured this frame ({@link #lastRenderMatrix}, set by
+     * {@link #captureVisual} or {@link #renderStencil}).
+     *
+     * <p>It draws straight onto the main framebuffer through the UI pipeline with
+     * the GL viewport set to {@code area} — the same setup the form editor's
+     * model pass uses ({@link mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer}).
+     * This fixes the transparency the world shaders mangled (the whole point of
+     * the move) and places the gizmo correctly: the film world is itself
+     * rendered into that same {@code area}, and {@code projection} maps NDC onto
+     * the area, so the gizmo lines up with the model and stays inside the
+     * preview (the frustum clips it to the viewport rect). It is NOT rendered
+     * to an off-screen buffer and blitted, the way the pick stencil and sphere
+     * highlight are: those are opaque masks, but the rotation pie is translucent,
+     * and an intermediate buffer applies its alpha twice (once on draw, once on
+     * blit), leaving it nearly invisible.
+     *
+     * <p>The projection is applied before drawing because
+     * {@link #getAxesDistanceScale} reads it back from {@link RenderSystem} to
+     * keep the gizmo a constant on-screen size.
+     */
+    public void renderInterface(UIContext context, Matrix4f projection, Area area)
+    {
+        if (BBSRendering.isIrisShadowPass() || !this.hasLastRenderMatrix
+            || context == null || projection == null || area == null)
+        {
+            return;
+        }
+
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        context.batcher.flush();
+
+        MatrixStackUtils.cacheMatrices();
+        RenderSystem.setProjectionMatrix(projection, VertexSorter.BY_Z);
+
+        /* Map the UI area to a framebuffer-pixel viewport, exactly as the form
+         * editor's model pass does, so the gizmo renders into the preview and is
+         * clipped to it by the view frustum. */
+        float rx = (float) Math.round(mc.getWindow().getWidth() / (double) context.menu.width);
+        float ry = (float) Math.round(mc.getWindow().getHeight() / (double) context.menu.height);
+        float size = BBSModClient.getOriginalFramebufferScale();
+        int vx = (int) (area.x * rx);
+        int vy = (int) (mc.getWindow().getHeight() - (area.y + area.h) * ry);
+        int vw = (int) (area.w * rx);
+        int vh = (int) (area.h * ry);
+
+        RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
+
+        MatrixStack stack = new MatrixStack();
+        MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
+
+        RenderSystem.disableDepthTest();
+        this.drawGizmo(stack);
+        RenderSystem.enableDepthTest();
+
+        RenderSystem.viewport(0, 0, mc.getWindow().getFramebufferWidth(), mc.getWindow().getFramebufferHeight());
+        MatrixStackUtils.restoreMatrices();
+
+        /* Leave the depth state the UI expects after a 3D interlude (always-pass),
+         * the same exit state as the form editor's model pass. */
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+    }
+
+    private void drawGizmo(MatrixStack stack)
+    {
         this.applyBakedRotation(stack);
 
         if (BBSSettings.gizmos.get())
@@ -583,7 +676,6 @@ public class Gizmo
         }
 
         this.drawInfiniteLine(stack);
-        stack.pop();
     }
 
     private float getAxesDistanceScale(MatrixStack stack)

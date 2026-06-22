@@ -274,7 +274,9 @@ public abstract class BaseFilmController
 
             if (stencilMap == null)
             {
-                Gizmo.INSTANCE.render(stack);
+                /* The visual is drawn later, in the panel's UI pass (see
+                 * Gizmo#renderInterface) — here we only snapshot its placement. */
+                Gizmo.INSTANCE.captureVisual(stack);
             }
             else
             {
@@ -371,7 +373,9 @@ public abstract class BaseFilmController
 
         if (stencilMap == null)
         {
-            Gizmo.INSTANCE.render(stack);
+            /* The visual is drawn later, in the panel's UI pass (see
+             * Gizmo#renderInterface) — here we only snapshot its placement. */
+            Gizmo.INSTANCE.captureVisual(stack);
         }
         else
         {
