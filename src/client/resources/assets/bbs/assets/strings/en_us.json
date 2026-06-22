@@ -168,6 +168,8 @@
 	"bbs.config.editor.preview_resolution_scale-comment": "Multiplier for automatic preview mode (1 = same as block size, 1.5 = sharper, higher = less pixelation, more GPU load)",
 	"bbs.config.editor.periodic_save": "Pereodic save",
 	"bbs.config.editor.periodic_save-comment": "Number of seconds that triggers automatic save repeatedly. To disable periodic saving, set the option to 0",
+	"bbs.config.editor.resizable_panels": "Resizable panels",
+	"bbs.config.editor.resizable_panels-comment": "When enabled, you can resize panels in the film and particle editors by dragging their borders. Disable it to prevent accidental resizing",
 	"bbs.config.editor.rewind": "Rewind",
 	"bbs.config.editor.rewind-comment": "Whether the playback should be rewound to beginning upon finishing playing the film",
 	"bbs.config.editor.rule_of_thirds": "Rule of thirds",
