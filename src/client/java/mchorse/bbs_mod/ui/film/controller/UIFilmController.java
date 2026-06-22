@@ -1230,6 +1230,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
             }
         }
 
+        /* The visual gizmo draws here, before the picking preview, so the bone /
+         * sphere hover highlights composite on top of it. It moved out of the
+         * world pass into the UI pipeline so its translucent parts blend
+         * correctly (see Gizmo#renderInterface). */
+        if (this.canShowGizmo())
+        {
+            this.gizmo.renderGizmo(context);
+        }
+
         this.renderPickingPreview(context, area);
 
         this.orbit.handleOrbiting(context);

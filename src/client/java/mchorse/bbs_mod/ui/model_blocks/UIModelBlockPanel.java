@@ -376,42 +376,6 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     }
 
     /**
-     * Draw the visual gizmo for {@code entity} from the block entity renderer,
-     * right after the model itself. The panel's own {@link #renderInWorld} runs
-     * on {@code AFTER_ENTITIES}, before the model block flushes, so a gizmo drawn
-     * there ends up behind the model — the model's renderer is the only place
-     * that reliably paints on top of it (the same spot the plain axes used).
-     * Picking still happens in {@link #renderGizmoStencil} at the same origin,
-     * so the handles stay aligned with the cursor.
-     *
-     * <p>The matrices must sit at the block's centred origin
-     * ({@code block + (0.5, 0, 0.5)}, camera-relative).
-     */
-    public void renderWorldGizmo(MatrixStack matrices, ModelBlockEntity entity)
-    {
-        if (!this.isShowingGizmo(entity))
-        {
-            return;
-        }
-
-        Transform transform = entity.getProperties().getTransform();
-
-        matrices.push();
-        matrices.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-
-        if (this.transform.isLocal())
-        {
-            MatrixStackUtils.multiply(matrices, new Matrix4f().set(transform.createRotationMatrix()));
-        }
-
-        RenderSystem.disableDepthTest();
-        Gizmo.INSTANCE.render(matrices);
-        RenderSystem.enableDepthTest();
-
-        matrices.pop();
-    }
-
-    /**
      * Move the stack to where the gizmo handles are drawn: the block's
      * transformed origin (camera-relative). In global mode the handles stay
      * world-aligned (position only); in local mode they follow the block's
@@ -633,6 +597,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         if (this.canShowGizmo())
         {
+            this.gizmo.renderGizmo(context);
             this.gizmo.update(context);
         }
 
