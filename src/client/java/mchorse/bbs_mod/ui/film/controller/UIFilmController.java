@@ -1380,6 +1380,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         this.renderOrbitCenterMarker(context);
 
+        if (BBSSettings.editorMotionPath.get() && !this.isRecording())
+        {
+            MotionPath.render(context, this.panel.replayEditor.getReplay());
+        }
+
         Mouse mouse = MinecraftClient.getInstance().mouse;
         int x = (int) mouse.getX();
         int y = (int) mouse.getY();
