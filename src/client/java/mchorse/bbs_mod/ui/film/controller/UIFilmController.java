@@ -1392,7 +1392,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             Replay replay = this.panel.replayEditor.getReplay();
 
-            MotionPath.render(context, motionPath, replay, replay == null ? 0F : replay.getTick(this.getTick()));
+            MotionPath.render(context, motionPath, this, replay, replay == null ? 0F : replay.getTick(this.getTick()));
         }
 
         Mouse mouse = MinecraftClient.getInstance().mouse;
