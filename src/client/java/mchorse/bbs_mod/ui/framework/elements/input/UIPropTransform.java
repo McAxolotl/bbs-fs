@@ -1332,7 +1332,7 @@ public class UIPropTransform extends UITransform
      * it only keeps the Euler channels continuous frame to frame, which stops
      * keyframes from landing on alternating branches and tearing on playback.
      */
-    private Vector3f continuousEulerZYXDeg(Matrix3f matrix, Vector3f reference)
+    private Vector3f continuousEulerZYXDeg(String site, Matrix3f matrix, Vector3f reference)
     {
         float refX = MathUtils.toDeg(reference.x);
         float refY = MathUtils.toDeg(reference.y);
@@ -1353,8 +1353,86 @@ public class UIPropTransform extends UITransform
 
         float primary = Math.abs(px - refX) + Math.abs(py - refY) + Math.abs(pz - refZ);
         float dual = Math.abs(dx - refX) + Math.abs(dy - refY) + Math.abs(dz - refZ);
+        boolean useDual = dual < primary;
 
-        return dual < primary ? new Vector3f(dx, dy, dz) : new Vector3f(px, py, pz);
+        this.logRotateDrag(site, refX, refY, refZ, ax, ay, az, px, py, pz, primary, dx, dy, dz, dual, useDual);
+
+        return useDual ? new Vector3f(dx, dy, dz) : new Vector3f(px, py, pz);
+    }
+
+    /* Gizmo-rotation drag diagnostics, kept as a permanent debug switch. Flip
+     * LOG_ROTATE_DRAG to true to print one throttled line per drag (first frame,
+     * branch flips, every ~15°). Only the rotation-drag handlers feed
+     * continuousEulerZYXDeg, so it never fires outside an active drag. */
+    private static final boolean LOG_ROTATE_DRAG = true;
+    private boolean rotateLogHasLast;
+    private boolean rotateLogLastDual;
+    private float rotateLogLastAccum;
+
+    private void logRotateDrag(String site, float refX, float refY, float refZ,
+        float ax, float ay, float az, float px, float py, float pz, float primary,
+        float dx, float dy, float dz, float dual, boolean useDual)
+    {
+        if (!LOG_ROTATE_DRAG)
+        {
+            return;
+        }
+
+        boolean firstFrame = !this.rotateLogHasLast;
+        boolean flip = this.rotateLogHasLast && useDual != this.rotateLogLastDual;
+
+        this.rotateLogLastDual = useDual;
+        this.rotateLogHasLast = true;
+
+        if (!firstFrame && !flip && Math.abs(this.accumulatedRotateDeg - this.rotateLogLastAccum) < 15F)
+        {
+            return;
+        }
+
+        this.rotateLogLastAccum = this.accumulatedRotateDeg;
+
+        /* tilt = angle the numeric spin axis is off the canonical basis vector of
+         * the grabbed ring (exact in PARENT; rough reference in LOCAL/WORLD). */
+        String canonStr = "n/a";
+        String tiltStr = "n/a";
+
+        if (this.axis != null)
+        {
+            Vector3f canon = new Vector3f(this.axis == Axis.X ? 1F : 0F, this.axis == Axis.Y ? 1F : 0F, this.axis == Axis.Z ? 1F : 0F);
+            Vector3f pa = new Vector3f(this.rotateParentAxis);
+
+            if (pa.lengthSquared() > 1.0E-8F)
+            {
+                pa.normalize();
+
+                canonStr = f(canon.x) + "," + f(canon.y) + "," + f(canon.z);
+                tiltStr = f((float) Math.toDegrees(Math.acos(Math.min(1F, Math.abs(pa.dot(canon))))));
+            }
+        }
+
+        System.out.println("[gizmo-rot] " + site
+            + " sp=" + this.getSpace() + " kind=" + this.rotateKind
+            + " axis=" + this.axis + (this.axis2 != null ? "+" + this.axis2 : "")
+            + " accum=" + f(this.accumulatedRotateDeg)
+            + " | raw=(" + f(ax) + "," + f(ay) + "," + f(az) + ")"
+            + " ref=(" + f(refX) + "," + f(refY) + "," + f(refZ) + ")"
+            + " cache=(" + fmtDeg(this.cache.rotate) + ")"
+            + " live=(" + fmtDeg(this.transform.rotate) + ")"
+            + " pAxis=(" + f(this.rotateParentAxis.x) + "," + f(this.rotateParentAxis.y) + "," + f(this.rotateParentAxis.z) + ")"
+            + " canon=(" + canonStr + ") tilt=" + tiltStr + "deg"
+            + " | pri=(" + f(px) + "," + f(py) + "," + f(pz) + ")c=" + f(primary)
+            + " dual=(" + f(dx) + "," + f(dy) + "," + f(dz) + ")c=" + f(dual)
+            + " -> " + (useDual ? "DUAL" : "PRIMARY") + (flip ? " <<FLIP>>" : ""));
+    }
+
+    private static String f(float value)
+    {
+        return String.format("%.2f", value);
+    }
+
+    private static String fmtDeg(Vector3f radians)
+    {
+        return f(MathUtils.toDeg(radians.x)) + "," + f(MathUtils.toDeg(radians.y)) + "," + f(MathUtils.toDeg(radians.z));
     }
 
     /**
@@ -1716,7 +1794,7 @@ public class UIPropTransform extends UITransform
             .mul(startRotation);
 
         Vector3f live = this.transform.rotate;
-        Vector3f euler = this.continuousEulerZYXDeg(rotation, live);
+        Vector3f euler = this.continuousEulerZYXDeg("trackball", rotation, live);
 
         this.setR(null, euler.x, euler.y, euler.z);
     }
@@ -1894,7 +1972,7 @@ public class UIPropTransform extends UITransform
             .mul(startRotation);
 
         Vector3f live = this.transform.rotate;
-        Vector3f euler = this.continuousEulerZYXDeg(rotation, live);
+        Vector3f euler = this.continuousEulerZYXDeg("arcball", rotation, live);
 
         this.setR(null, euler.x, euler.y, euler.z);
     }
@@ -2027,7 +2105,7 @@ public class UIPropTransform extends UITransform
             .rotation(angle, this.rotateParentAxis)
             .mul(new Matrix3f().rotationZ(source.z).rotateY(source.y).rotateX(source.x));
 
-        Vector3f euler = this.continuousEulerZYXDeg(rotation, source);
+        Vector3f euler = this.continuousEulerZYXDeg("viewRing", rotation, source);
 
         this.setR(null, euler.x, euler.y, euler.z);
     }
@@ -2643,7 +2721,7 @@ public class UIPropTransform extends UITransform
             .rotation(MathUtils.toRad((float) degrees), parentAxis)
             .mul(new Matrix3f().rotationZ(source.z).rotateY(source.y).rotateX(source.x));
 
-        Vector3f euler = this.continuousEulerZYXDeg(rotation, live);
+        Vector3f euler = this.continuousEulerZYXDeg("axisRing", rotation, live);
 
         this.setR(null, euler.x, euler.y, euler.z);
     }
@@ -2672,7 +2750,7 @@ public class UIPropTransform extends UITransform
         }
 
         Vector3f live = this.transform.rotate;
-        Vector3f euler = this.continuousEulerZYXDeg(rotation, live);
+        Vector3f euler = this.continuousEulerZYXDeg("localBody", rotation, live);
 
         this.setR(null, euler.x, euler.y, euler.z);
     }
