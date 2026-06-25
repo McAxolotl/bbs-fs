@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.ui.utils.pose;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -14,10 +17,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
@@ -41,6 +46,11 @@ public class UIPoseEditor extends UIElement
     public UIColor color;
     public UIToggle lighting;
     public UIPropTransform transform;
+
+    /* Pose-edit toggles sitting above the bone list: mirror-edit applies the edit to each bone's
+     * left/right counterpart; alternate-invert flips the rotation of every second selected bone. */
+    private UIIcon mirror;
+    private UIIcon invert;
 
     private String group = "";
     private Pose pose;
@@ -93,10 +103,48 @@ public class UIPoseEditor extends UIElement
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
+        this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
+        this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
+        this.invert = new UIIcon(Icons.REVERSE, (b) -> this.toggleAlternateInvert());
+        this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
+
+        UIElement toggles = new UIElement();
+        toggles.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
+        /* Width-less spacer eats the row so the toggles sit at the far right, above the bone list. */
+        toggles.add(new UIElement(), this.mirror, this.invert);
+
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        this.add(toggles, this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+    }
+
+    private void toggleMirrorEdit()
+    {
+        BBSSettings.poseMirrorEdit.set(!BBSSettings.poseMirrorEdit.get());
+        UIUtils.playClick();
+    }
+
+    private void toggleAlternateInvert()
+    {
+        BBSSettings.poseAlternateInvert.set(!BBSSettings.poseAlternateInvert.get());
+        UIUtils.playClick();
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        if (BBSSettings.poseMirrorEdit.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area, Direction.BOTTOM);
+        }
+
+        if (BBSSettings.poseAlternateInvert.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area, Direction.BOTTOM);
+        }
+
+        super.render(context);
     }
 
     private void applyChildren(Consumer<PoseTransform> consumer)
