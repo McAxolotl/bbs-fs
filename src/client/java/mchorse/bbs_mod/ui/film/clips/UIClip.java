@@ -200,8 +200,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
 
     protected void registerPanels()
     {
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TITLE), this.title);
-        this.panels.add(this.enabled);
+        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TITLE), UI.row(this.title, this.enabled.label(IKey.EMPTY).w(26)));
 
         this.addEnvelopes();
     }
