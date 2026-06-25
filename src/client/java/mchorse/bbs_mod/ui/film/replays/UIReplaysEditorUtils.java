@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
-import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.cubic.ModelInstance;
@@ -701,7 +700,7 @@ public class UIReplaysEditorUtils
             return drag;
         }
 
-        Pair<String, TransformSpace> bone = keyframeEditor.getBone();
+        Pair<String, Boolean> bone = keyframeEditor.getBone();
         Replay replay = panel.replayEditor.getReplay();
         IEntity entity = panel.getController().getCurrentEntity();
 

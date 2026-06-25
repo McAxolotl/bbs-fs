@@ -71,7 +71,6 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
-import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -1449,7 +1448,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return context == null ? 0F : context.getTransition();
     }
 
-    public Pair<String, TransformSpace> getBone()
+    public Pair<String, Boolean> getBone()
     {
         UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
 
@@ -1464,11 +1463,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return keyframeEditor != null && keyframeEditor.isFormAnchorTrack();
     }
 
-    public TransformSpace getAnchorSpace()
+    public boolean getAnchorLocal()
     {
         UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
 
-        return keyframeEditor == null ? TransformSpace.PARENT : keyframeEditor.getAnchorSpace();
+        return keyframeEditor != null && keyframeEditor.getAnchorLocal();
     }
 
     /**
@@ -1517,7 +1516,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             List<Replay> replays = this.panel.getData().replays.getList();
             int selectedReplayIndex = this.getCurrentReplayIndex();
-            Pair<String, TransformSpace> bone = this.getBone();
+            Pair<String, Boolean> bone = this.getBone();
 
             for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
             {
@@ -1540,8 +1539,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     this.stencilMap.setIncrement(true);
 
                     filmContext
-                        .bone(bone == null ? null : bone.a, bone == null ? TransformSpace.PARENT : bone.b)
-                        .anchorGizmo(this.isAnchorGizmo(), this.getAnchorSpace());
+                        .bone(bone == null ? null : bone.a, bone != null && bone.b)
+                        .anchorGizmo(this.isAnchorGizmo(), this.getAnchorLocal());
                 }
                 else
                 {
@@ -1555,7 +1554,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         else
         {
             Replay replay = this.panel.replayEditor.getReplay();
-            Pair<String, TransformSpace> bone = this.getBone();
+            Pair<String, Boolean> bone = this.getBone();
 
             this.stencilMap.setIncrement(true);
 
@@ -1564,8 +1563,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 .transition(isPlaying ? renderContext.tickDelta() : 0)
                 .stencil(this.stencilMap)
                 .relative(replay.relative.get())
-                .bone(bone == null ? null : bone.a, bone == null ? TransformSpace.PARENT : bone.b)
-                .anchorGizmo(this.isAnchorGizmo(), this.getAnchorSpace()));
+                .bone(bone == null ? null : bone.a, bone != null && bone.b)
+                .anchorGizmo(this.isAnchorGizmo(), this.getAnchorLocal()));
         }
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);

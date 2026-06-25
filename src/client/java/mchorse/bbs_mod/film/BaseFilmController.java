@@ -35,7 +35,6 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
-import mchorse.bbs_mod.ui.utils.TransformSpace;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
@@ -189,8 +188,8 @@ public abstract class BaseFilmController
 
         if (UIBaseMenu.shouldRenderAxes())
         {
-            if (context.bone != null) renderAxes(context.bone, context.space, context.map, form, entity, transition, stack);
-            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.space2, form, entity, transition, stack);
+            if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, entity, transition, stack);
+            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, entity, transition, stack);
         }
 
         stack.pop();
@@ -259,22 +258,19 @@ public abstract class BaseFilmController
         RenderSystem.enableDepthTest();
     }
 
-    private static void renderAxes(String bone, TransformSpace space, StencilMap stencilMap, Form form, IEntity entity, float transition, MatrixStack stack)
+    private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, IEntity entity, float transition, MatrixStack stack)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
-        Matrix4f matrix = space == TransformSpace.LOCAL ? map.get(mapKey).matrix() : map.get(mapKey).origin();
+        Matrix4f matrix = local ? map.get(mapKey).matrix() : map.get(mapKey).origin();
 
         if (matrix != null)
         {
-            /* LOCAL strips the bone's scale (the gizmo must not inherit it, the
-             * form editor does the same); WORLD keeps only the position. */
-            if (space == TransformSpace.LOCAL) matrix = MatrixStackUtils.stripScale(matrix);
-            else if (space == TransformSpace.WORLD) matrix = new Matrix4f().translation(matrix.getTranslation(new Vector3f()));
-
             stack.push();
-            MatrixStackUtils.multiply(stack, matrix);
+            /* The full bone matrix carries the bone's scale, which the gizmo must
+             * not inherit — the form editor strips it the same way. */
+            MatrixStackUtils.multiply(stack, local ? MatrixStackUtils.stripScale(matrix) : matrix);
 
             if (stencilMap == null)
             {
