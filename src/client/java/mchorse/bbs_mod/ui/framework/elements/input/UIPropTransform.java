@@ -240,6 +240,12 @@ public class UIPropTransform extends UITransform
         return this.local;
     }
 
+    @Override
+    protected Transform getEditedTransform()
+    {
+        return this.transform;
+    }
+
     public Axis getAxis2()
     {
         return this.axis2;
