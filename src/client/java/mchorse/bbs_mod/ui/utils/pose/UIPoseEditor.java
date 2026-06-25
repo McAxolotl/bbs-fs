@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
@@ -51,6 +52,12 @@ public class UIPoseEditor extends UIElement
      * left/right counterpart; alternate-invert flips the rotation of every second selected bone. */
     private UIIcon mirror;
     private UIIcon invert;
+
+    /* Bone search next to the toggles. allGroups keeps the unfiltered source so the list can be
+     * re-filtered as the query changes; sortGroups remembers whether the source was sorted. */
+    private UITextbox search;
+    private final List<String> allGroups = new ArrayList<>();
+    private boolean sortGroups;
 
     private String group = "";
     private Pose pose;
@@ -103,21 +110,26 @@ public class UIPoseEditor extends UIElement
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
+        this.search = new UITextbox(100, (str) -> this.applyGroupsFilter(false)).placeholder(UIKeys.GENERAL_SEARCH);
+        this.search.h(20);
+
         this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
         this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
+        this.mirror.wh(20, 20);
         this.invert = new UIIcon(Icons.REVERSE, (b) -> this.toggleAlternateInvert());
         this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
+        this.invert.wh(20, 20);
 
         UIElement toggles = new UIElement();
-        toggles.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
-        /* Width-less spacer eats the row so the toggles sit at the far right, above the bone list. */
-        toggles.add(new UIElement(), this.mirror, this.invert);
+        toggles.h(20).row(0).height(20);
+        /* The bone search fills the row; the two pose toggles sit fixed-width at the right (all 20px tall). */
+        toggles.add(this.search, this.mirror, this.invert);
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
         this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(toggles, this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        this.add(toggles, this.groups.marginTop(-UIConstants.MARGIN), UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
     }
 
     private void toggleMirrorEdit()
@@ -236,16 +248,41 @@ public class UIPoseEditor extends UIElement
 
     private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)
     {
+        this.allGroups.clear();
+        this.allGroups.addAll(groups);
+        this.sortGroups = sort;
+
+        this.applyGroupsFilter(reset);
+    }
+
+    /**
+     * Repopulate the visible bone list from {@link #allGroups}, keeping only the bones whose name
+     * contains the search query. Runs both on a fresh fill and on every keystroke in the search box.
+     */
+    private void applyGroupsFilter(boolean reset)
+    {
+        String query = this.search == null ? "" : this.search.getText().trim().toLowerCase();
+        List<String> visible = new ArrayList<>();
+
+        for (String bone : this.allGroups)
+        {
+            if (query.isEmpty() || bone.toLowerCase().contains(query))
+            {
+                visible.add(bone);
+            }
+        }
+
         this.groups.clear();
-        this.groups.add(groups);
-        if (sort)
+        this.groups.add(visible);
+        if (this.sortGroups)
         {
             this.groups.sort();
         }
 
-        this.fix.setVisible(!groups.isEmpty());
-        this.color.setVisible(!groups.isEmpty());
-        this.transform.setVisible(!groups.isEmpty());
+        boolean hasBones = !this.allGroups.isEmpty();
+        this.fix.setVisible(hasBones);
+        this.color.setVisible(hasBones);
+        this.transform.setVisible(hasBones);
 
         List<String> list = this.groups.getList();
         int i = Math.max(reset ? 0 : list.indexOf(lastLimb), 0);
