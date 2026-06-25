@@ -176,7 +176,7 @@ public class UIPropTransform extends UITransform
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.local = BBSSettings.transformLocalDefault.get();
+        this.local = BBSSettings.transformSpace.get() == 1;
 
         this.context((menu) ->
         {
@@ -240,6 +240,37 @@ public class UIPropTransform extends UITransform
         return this.local;
     }
 
+    public Axis getAxis2()
+    {
+        return this.axis2;
+    }
+
+    public boolean isScreenTranslate()
+    {
+        return this.translateScreen;
+    }
+
+    /** Old-logic no-op: kept so hosts that gave the spaces bar a backdrop still compile. */
+    public UIPropTransform barBackground()
+    {
+        return this;
+    }
+
+    protected boolean supportsMirror()
+    {
+        return false;
+    }
+
+    public boolean isMirrorEdit()
+    {
+        return BBSSettings.poseMirrorEdit.get();
+    }
+
+    public boolean isAlternateInvert()
+    {
+        return BBSSettings.poseAlternateInvert.get();
+    }
+
     private void toggleLocal()
     {
         this.local = !this.local;
@@ -287,13 +318,18 @@ public class UIPropTransform extends UITransform
 
     public UIPropTransform enableHotkeys()
     {
-        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
-        Supplier<Boolean> active = () -> this.editing;
+        return this.enableHotkeys(() -> true);
+    }
 
-        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().category(category);
+    public UIPropTransform enableHotkeys(Supplier<Boolean> enabled)
+    {
+        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
+        Supplier<Boolean> active = () -> enabled.get() && this.editing;
+
+        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
@@ -301,7 +337,7 @@ public class UIPropTransform extends UITransform
         {
             this.toggleLocal();
             UIUtils.playClick();
-        }).category(category);
+        }).active(enabled).category(category);
 
         return this;
     }

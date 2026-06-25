@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
@@ -265,7 +266,7 @@ public class UIPoseEditor extends UIElement
         public void setR2(Axis axis, double x, double y, double z)
         {
             super.setR2(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.syncTargetTransform();
         }
     }
 

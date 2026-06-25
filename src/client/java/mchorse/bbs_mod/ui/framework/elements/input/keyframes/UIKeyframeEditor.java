@@ -279,12 +279,10 @@ public class UIKeyframeEditor extends UIElement
         return sheet != null && sheet.property != null && "anchor".equals(sheet.id);
     }
 
-    /** The shared transform space the anchor gizmo should be oriented in (mirrors {@link #getBone()}'s space). */
-    public TransformSpace getAnchorSpace()
+    /** Whether the anchor gizmo should be oriented in the bone's local space (mirrors {@link #getBone()}'s flag). */
+    public boolean getAnchorLocal()
     {
-        return this.editor instanceof UIAnchorKeyframeFactory factory
-            ? factory.transform.getSpace()
-            : TransformSpace.PARENT;
+        return this.editor instanceof UIAnchorKeyframeFactory factory && factory.transform.isLocal();
     }
 
     @Override

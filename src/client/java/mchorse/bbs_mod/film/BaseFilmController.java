@@ -196,7 +196,7 @@ public abstract class BaseFilmController
 
         if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)
         {
-            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorSpace, context.map, stack);
+            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorLocal, context.map, stack);
         }
 
         if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
@@ -293,7 +293,7 @@ public abstract class BaseFilmController
      * distance scaling the gizmo uses, so the preview keeps a constant on-screen
      * size and matches the gizmo's axes.
      */
-    private static void renderPreviewAxes(String bone, TransformSpace space, Form form, IEntity entity, float transition, MatrixStack stack)
+    private static void renderPreviewAxes(String bone, boolean local, Form form, IEntity entity, float transition, MatrixStack stack)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
@@ -305,15 +305,14 @@ public abstract class BaseFilmController
             return;
         }
 
-        Matrix4f matrix = space == TransformSpace.LOCAL ? entry.matrix() : entry.origin();
+        Matrix4f matrix = local ? entry.matrix() : entry.origin();
 
         if (matrix == null)
         {
             return;
         }
 
-        if (space == TransformSpace.LOCAL) matrix = MatrixStackUtils.stripScale(matrix);
-        else if (space == TransformSpace.WORLD) matrix = new Matrix4f().translation(matrix.getTranslation(new Vector3f()));
+        if (local) matrix = MatrixStackUtils.stripScale(matrix);
 
         stack.push();
         MatrixStackUtils.multiply(stack, matrix);
@@ -335,11 +334,10 @@ public abstract class BaseFilmController
      * as {@code parent.mul(transform)} in {@link #getTotalMatrix}, so the gizmo
      * sits at that resolved matrix {@code full} (already computed as the entity's
      * render target) and edits {@code form.anchor.transform}. The space toggle
-     * mirrors {@link #renderAxes}: LOCAL keeps the anchor's own orientation,
-     * WORLD axis-aligns it, PARENT uses the attachment's orientation at the
-     * anchor's position.
+     * mirrors {@link #renderAxes}: local keeps the anchor's own orientation,
+     * otherwise the attachment's orientation at the anchor's position is used.
      */
-    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, TransformSpace space, StencilMap stencilMap, MatrixStack stack)
+    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, StencilMap stencilMap, MatrixStack stack)
     {
         Form form = entity.getForm();
 
@@ -350,20 +348,16 @@ public abstract class BaseFilmController
 
         Matrix4f matrix;
 
-        if (space == TransformSpace.WORLD)
+        if (local)
         {
-            matrix = new Matrix4f().translation(full.getTranslation(new Vector3f()));
+            matrix = MatrixStackUtils.stripScale(full);
         }
-        else if (space == TransformSpace.PARENT)
+        else
         {
             Matrix4f parent = getEntityMatrix(entities, cx, cy, cz, form.anchor.get(), defaultMatrix, transition, 0, true);
 
             matrix = MatrixStackUtils.stripScale(parent);
             matrix.setTranslation(full.getTranslation(new Vector3f()));
-        }
-        else
-        {
-            matrix = MatrixStackUtils.stripScale(full);
         }
 
         stack.push();
