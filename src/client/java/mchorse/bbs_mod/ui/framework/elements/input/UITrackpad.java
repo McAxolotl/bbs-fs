@@ -63,6 +63,7 @@ public class UITrackpad extends UIBaseTextbox
     public boolean delayedInput;
     public boolean onlyNumbers;
 
+    public boolean relative;
     public boolean allowCanceling = true;
     public IKey forcedLabel;
 
@@ -204,6 +205,13 @@ public class UITrackpad extends UIBaseTextbox
         return this;
     }
 
+    public UITrackpad relative(boolean relative)
+    {
+        this.relative = relative;
+
+        return this;
+    }
+
     public UITrackpad forcedLabel(IKey label)
     {
         this.forcedLabel = label;
@@ -296,15 +304,17 @@ public class UITrackpad extends UIBaseTextbox
      */
     public void setValueAndNotify(double value)
     {
+        double oldValue = this.value;
+
         this.setValue(value);
-        this.accept();
+        this.accept(value, oldValue);
     }
 
-    private void accept()
+    private void accept(double value, double oldValue)
     {
         if (this.callback != null)
         {
-            this.callback.accept(this.value);
+            this.callback.accept(this.relative ? value - oldValue : this.value);
         }
     }
 
@@ -557,11 +567,13 @@ public class UITrackpad extends UIBaseTextbox
         {
             try
             {
+                double oldValue = this.value;
+
                 this.setValueInternal(text.isEmpty() ? 0 : Double.parseDouble(text));
 
                 if (!this.delayedInput)
                 {
-                    this.accept();
+                    this.accept(this.value, oldValue);
                 }
             }
             catch (Exception e)
@@ -615,11 +627,13 @@ public class UITrackpad extends UIBaseTextbox
         {
             try
             {
+                double oldValue = this.value;
+
                 this.setValueInternal(text.isEmpty() ? 0 : Double.parseDouble(text));
 
                 if (!this.delayedInput)
                 {
-                    this.accept();
+                    this.accept(this.value, oldValue);
                 }
             }
             catch (Exception e)

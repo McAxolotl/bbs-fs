@@ -90,6 +90,7 @@ public class UIPoseEditor extends UIElement
             });
         });
         this.transform = this.createTransformEditor();
+        this.transform.setModel();
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
