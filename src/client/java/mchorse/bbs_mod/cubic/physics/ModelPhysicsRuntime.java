@@ -42,14 +42,25 @@ public final class ModelPhysicsRuntime
     private static final float COLLISION_MAX_ANCHOR_STEP = 0.25F;
 
     /**
-     * Fixed simulation sub-step, in game ticks. The solver is integrated at this constant step off a
-     * real-time accumulator (see {@link #step}) instead of once per 20 Hz game tick, so the physics
-     * produces a fresh chain shape several times per tick. That is what keeps fast anchor motion (e.g.
-     * sharp head turns) smooth: the in-between shapes are actually simulated rather than interpolated
-     * from two coarse 20 Hz snapshots. 1/3 tick ≈ 60 Hz output. Smaller = smoother but more solver work.
+     * Sub-steps the solver runs per film tick. The sim advances a fixed number of sub-steps per integer
+     * tick (not off a real-time accumulator), so the chain shape at a tick is a function of the tick alone
+     * — identical on every playback and in export — while the in-between shapes are still actually
+     * simulated rather than interpolated from coarse 20 Hz snapshots. More = smoother but more solver work.
      */
-    private static final float PHYSICS_STEP = 1F / 3F;
+    private static final int SUBSTEPS_PER_TICK = 3;
+
+    /** Sub-step length in ticks, derived from {@link #SUBSTEPS_PER_TICK}. */
+    private static final float PHYSICS_STEP = 1F / SUBSTEPS_PER_TICK;
+
+    /** Hard cap on sub-steps simulated in one {@link #apply} call, so a long catch-up can't stall a frame. */
     private static final int PHYSICS_MAX_STEPS = 30;
+
+    /**
+     * Largest forward tick gap still simulated by stepping in place from the current pose. A bigger jump
+     * (a real scrub) can't be replayed without the intermediate poses, so the chain is re-seeded at the
+     * pose instead; deterministic re-simulation from a checkpoint comes in the second part of this work.
+     */
+    private static final int MAX_TICK_CATCHUP = 4;
 
 
     private static final class ChainState
@@ -57,8 +68,6 @@ public final class ModelPhysicsRuntime
         public int lastAge = Integer.MIN_VALUE;
         public Vector3f anchor = new Vector3f();
         public Quaternionf anchorRotation = new Quaternionf();
-        public float simTime;
-        public float accumulator;
         public float renderAlpha;
         public Vector3f[] pos;
         public Vector3f[] prev;
@@ -447,51 +456,32 @@ public final class ModelPhysicsRuntime
             return;
         }
 
-        Vector3f V1 = new Vector3f();
-
         if (state.lastAge == Integer.MIN_VALUE)
         {
-            state.anchor.set(newAnchor);
-            state.anchorRotation.set(newAnchorRotation);
-
-            state.pos[0].set(newAnchor);
-            state.prev[0].set(newAnchor);
-
-            for (int i = 1; i < chainFrames.size(); i++)
-            {
-                Vector3f p = chainFrames.get(i).position();
-                state.pos[i].set(p);
-                state.prev[i].set(p);
-            }
-
-            if (chainFrames.size() >= 2)
-            {
-                V1.set(state.pos[chainFrames.size() - 1]).sub(state.pos[chainFrames.size() - 2]); // tipDir
-
-                if (V1.lengthSquared() < EPS * EPS)
-                {
-                    V1.set(0F, -1F, 0F);
-                }
-                else
-                {
-                    V1.normalize();
-                }
-            }
-            else
-            {
-                V1.set(0F, -1F, 0F);
-            }
-
-            state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(V1.mul(lengths[lengths.length - 1]));
-            state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
-
-            copyPositions(state.pos, state.settled);
-            copyPositions(state.pos, state.settledPrev);
-
+            seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
             state.lastAge = age;
-            state.simTime = age + transition;
-            state.accumulator = 0F;
             state.renderAlpha = 0F;
+            return;
+        }
+
+        int delta = age - state.lastAge;
+
+        if (delta == 0)
+        {
+            /* Same film tick, a later render within it — no new simulation; the render just interpolates
+             * the two latest tick states by the sub-tick transition (and re-roots them to the live anchor). */
+            state.renderAlpha = clamp01(transition);
+            return;
+        }
+
+        if (delta < 0 || delta > MAX_TICK_CATCHUP)
+        {
+            /* Scrubbed backwards or jumped a long way: without the intermediate poses the sim can't be
+             * replayed here, so re-seed at the current animated pose. Deterministic re-simulation from a
+             * checkpoint is the second part of this work. */
+            seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
+            state.lastAge = age;
+            state.renderAlpha = clamp01(transition);
             return;
         }
 
@@ -503,41 +493,19 @@ public final class ModelPhysicsRuntime
         boolean hardTarget = targetPosition != null;
         int last = state.pos.length - 1;
 
-        /* Real-time fixed-step accumulator: integrate the solver at PHYSICS_STEP regardless of the
-         * render frame rate or the 20 Hz game tick, so a fresh chain shape is produced several times
-         * per tick. age + transition is a continuous tick-clock; the leftover fraction (renderAlpha)
-         * interpolates the last two sub-steps in renderInterpolate. */
-        float now = age + transition;
-        float frameDt = now - state.simTime;
-
-        if (frameDt <= 0F)
-        {
-            return; // paused or scrubbed backwards — keep the last settled shape, render re-roots it
-        }
-
-        if (frameDt > 10F)
-        {
-            frameDt = 10F;
-        }
-
-        state.simTime = now;
-        state.accumulator += frameDt;
-
-        int steps = (int) (state.accumulator / PHYSICS_STEP);
+        /* Deterministic fixed step: exactly SUBSTEPS_PER_TICK sub-steps per film tick advanced, no
+         * real-time accumulator — so the chain shape at a tick depends on the tick alone (identical on
+         * every playback and in export), not on the render frame rate. A skipped tick (frame hitch)
+         * advances several ticks at once, capped. The sub-tick transition interpolates the two latest
+         * tick states in renderInterpolate. */
+        int steps = delta * SUBSTEPS_PER_TICK;
 
         if (steps > PHYSICS_MAX_STEPS)
         {
             steps = PHYSICS_MAX_STEPS;
-            state.accumulator = steps * PHYSICS_STEP;
         }
 
-        state.accumulator -= steps * PHYSICS_STEP;
-        state.renderAlpha = clamp01(state.accumulator / PHYSICS_STEP);
-
-        if (steps <= 0)
-        {
-            return; // not enough time accrued for a sub-step yet; render interpolates the leftover
-        }
+        state.renderAlpha = clamp01(transition);
 
         float h = PHYSICS_STEP;
         float dampMul = (float) Math.pow(1F - damping, h);
@@ -568,10 +536,12 @@ public final class ModelPhysicsRuntime
 
         BlockPos.Mutable mutable = collisions ? new BlockPos.Mutable() : null;
 
+        /* Snapshot the previous tick's settled shape once; the new tick's shape is snapshot after the
+         * sub-steps. renderInterpolate blends these two by the sub-tick transition. */
+        copyPositions(state.settled, state.settledPrev);
+
         for (int s = 0; s < steps; s++)
         {
-            copyPositions(state.settled, state.settledPrev);
-
             /* Slide the anchor from where the simulation left it toward the live anchor across the
              * sub-steps of this frame, so the chain sees a smooth anchor trajectory. */
             float progress = (s + 1) / (float) steps;
@@ -646,9 +616,57 @@ public final class ModelPhysicsRuntime
                 lengthForward(state.pos, lengths);
                 pinEnds(state.pos, state.anchor, targetPosition, last);
             }
-
-            copyPositions(state.pos, state.settled);
         }
+
+        copyPositions(state.pos, state.settled);
+        state.lastAge = age;
+    }
+
+    /**
+     * Seeds the chain at the current animated pose with zero velocity: every joint on its posed position
+     * plus the virtual tip one rest-length past the last bone. Used on first sight of a chain and when a
+     * scrub or long jump leaves no history to replay.
+     */
+    private static void seedFromPose(ChainState state, List<PivotFrame> chainFrames, float[] lengths, Vector3f anchor, Quaternionf anchorRotation)
+    {
+        state.anchor.set(anchor);
+        state.anchorRotation.set(anchorRotation);
+
+        state.pos[0].set(anchor);
+        state.prev[0].set(anchor);
+
+        for (int i = 1; i < chainFrames.size(); i++)
+        {
+            Vector3f p = chainFrames.get(i).position();
+            state.pos[i].set(p);
+            state.prev[i].set(p);
+        }
+
+        Vector3f tipDir = new Vector3f();
+
+        if (chainFrames.size() >= 2)
+        {
+            tipDir.set(state.pos[chainFrames.size() - 1]).sub(state.pos[chainFrames.size() - 2]);
+
+            if (tipDir.lengthSquared() < EPS * EPS)
+            {
+                tipDir.set(0F, -1F, 0F);
+            }
+            else
+            {
+                tipDir.normalize();
+            }
+        }
+        else
+        {
+            tipDir.set(0F, -1F, 0F);
+        }
+
+        state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(tipDir.mul(lengths[lengths.length - 1]));
+        state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
+
+        copyPositions(state.pos, state.settled);
+        copyPositions(state.pos, state.settledPrev);
     }
 
     /** Re-fixes the chain endpoints after a constraint pass: the root onto the anchor and, when the tip is hard-pinned, onto its target. */
