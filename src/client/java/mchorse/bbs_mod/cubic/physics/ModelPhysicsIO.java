@@ -27,6 +27,9 @@ public final class ModelPhysicsIO
     private static final String KEY_WIND_X = "x";
     private static final String KEY_WIND_Y = "y";
     private static final String KEY_WIND_Z = "z";
+    private static final String KEY_WIND_TURBULENCE = "turbulence";
+    private static final String KEY_WIND_TURBULENCE_SPEED = "turbulence_speed";
+    private static final String KEY_WIND_TURBULENCE_SCALE = "turbulence_scale";
 
     private static final float DEFAULT_GRAVITY = 1F;
     private static final float DEFAULT_DAMPING = 0.15F;
@@ -43,6 +46,9 @@ public final class ModelPhysicsIO
     private static final float DEFAULT_WIND_X = ModelPhysicsConfig.Wind.NONE.x();
     private static final float DEFAULT_WIND_Y = ModelPhysicsConfig.Wind.NONE.y();
     private static final float DEFAULT_WIND_Z = ModelPhysicsConfig.Wind.NONE.z();
+    private static final float DEFAULT_WIND_TURBULENCE = ModelPhysicsConfig.Wind.NONE.turbulence();
+    private static final float DEFAULT_WIND_TURBULENCE_SPEED = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
+    private static final float DEFAULT_WIND_TURBULENCE_SCALE = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
 
     private ModelPhysicsIO()
     {
@@ -111,8 +117,11 @@ public final class ModelPhysicsIO
         float x = wind.getFloat(KEY_WIND_X, DEFAULT_WIND_X);
         float y = wind.getFloat(KEY_WIND_Y, DEFAULT_WIND_Y);
         float z = wind.getFloat(KEY_WIND_Z, DEFAULT_WIND_Z);
+        float turbulence = wind.getFloat(KEY_WIND_TURBULENCE, DEFAULT_WIND_TURBULENCE);
+        float turbulenceSpeed = wind.getFloat(KEY_WIND_TURBULENCE_SPEED, DEFAULT_WIND_TURBULENCE_SPEED);
+        float turbulenceScale = wind.getFloat(KEY_WIND_TURBULENCE_SCALE, DEFAULT_WIND_TURBULENCE_SCALE);
 
-        return new ModelPhysicsConfig.Wind(strength, x, y, z);
+        return new ModelPhysicsConfig.Wind(strength, x, y, z, turbulence, turbulenceSpeed, turbulenceScale);
     }
 
     public static MapType toData(ModelPhysicsConfig config)
@@ -222,6 +231,21 @@ public final class ModelPhysicsIO
         if (wind.z() != DEFAULT_WIND_Z)
         {
             windMap.putFloat(KEY_WIND_Z, wind.z());
+        }
+
+        if (wind.turbulence() != DEFAULT_WIND_TURBULENCE)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE, wind.turbulence());
+        }
+
+        if (wind.turbulenceSpeed() != DEFAULT_WIND_TURBULENCE_SPEED)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE_SPEED, wind.turbulenceSpeed());
+        }
+
+        if (wind.turbulenceScale() != DEFAULT_WIND_TURBULENCE_SCALE)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE_SCALE, wind.turbulenceScale());
         }
 
         if (!windMap.isEmpty())

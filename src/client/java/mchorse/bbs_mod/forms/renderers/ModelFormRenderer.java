@@ -397,7 +397,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (stencilMap == null && !this.renderingArm && ModelPhysicsDebug.enabled && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
         {
-            ModelPhysicsDebug.render(newStack, model.model, physicsMap, "");
+            ModelPhysicsDebug.render(newStack, model.model, physicsMap, target.getAge(), "");
         }
 
         gameRenderer.getLightmapTextureManager().disable();

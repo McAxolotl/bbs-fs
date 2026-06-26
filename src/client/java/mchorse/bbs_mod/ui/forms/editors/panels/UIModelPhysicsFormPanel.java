@@ -57,6 +57,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad windX;
     public UITrackpad windY;
     public UITrackpad windZ;
+    public UITrackpad windTurbulence;
+    public UITrackpad windTurbulenceSpeed;
+    public UITrackpad windTurbulenceScale;
 
     private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
@@ -88,10 +91,13 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         public float x = ModelPhysicsConfig.Wind.NONE.x();
         public float y = ModelPhysicsConfig.Wind.NONE.y();
         public float z = ModelPhysicsConfig.Wind.NONE.z();
+        public float turbulence = ModelPhysicsConfig.Wind.NONE.turbulence();
+        public float turbulenceSpeed = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
+        public float turbulenceScale = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
 
         public ModelPhysicsConfig.Wind toWind()
         {
-            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z);
+            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z, this.turbulence, this.turbulenceSpeed, this.turbulenceScale);
         }
 
         public void set(ModelPhysicsConfig.Wind wind)
@@ -100,6 +106,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.x = wind.x();
             this.y = wind.y();
             this.z = wind.z();
+            this.turbulence = wind.turbulence();
+            this.turbulenceSpeed = wind.turbulenceSpeed();
+            this.turbulenceScale = wind.turbulenceScale();
         }
     }
 
@@ -363,6 +372,45 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         }, Colors.BLUE);
 
+        this.windTurbulence = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulence = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulence.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.05D).limit(0D, 1D);
+        this.windTurbulence.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE);
+
+        this.windTurbulenceSpeed = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceSpeed = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceSpeed.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceSpeed.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED);
+
+        this.windTurbulenceScale = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceScale = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceScale.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceScale.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE);
+
         this.end = new UIButton(IKey.EMPTY, (b) ->
         {
             BoneData d = this.getSelectedData();
@@ -446,7 +494,13 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH),
             this.windStrength,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION),
-            UI.row(this.windX, this.windY, this.windZ)
+            UI.row(this.windX, this.windY, this.windZ),
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE),
+            this.windTurbulence,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED),
+            this.windTurbulenceSpeed,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE),
+            this.windTurbulenceScale
         );
 
         this.options.add(
@@ -518,6 +572,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.windX.setEnabled(enabled);
         this.windY.setEnabled(enabled);
         this.windZ.setEnabled(enabled);
+        this.windTurbulence.setEnabled(enabled);
+        this.windTurbulenceSpeed.setEnabled(enabled);
+        this.windTurbulenceScale.setEnabled(enabled);
     }
 
     private BoneData getSelectedData()
@@ -619,6 +676,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.windX.setValue(this.wind.x);
             this.windY.setValue(this.wind.y);
             this.windZ.setValue(this.wind.z);
+            this.windTurbulence.setValue(this.wind.turbulence);
+            this.windTurbulenceSpeed.setValue(this.wind.turbulenceSpeed);
+            this.windTurbulenceScale.setValue(this.wind.turbulenceScale);
         }
         finally
         {

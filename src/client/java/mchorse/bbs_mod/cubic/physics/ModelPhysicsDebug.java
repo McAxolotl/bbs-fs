@@ -42,6 +42,12 @@ import java.util.Set;
  * <p>{@link #renderStencil} mirrors the attach markers into the picking pass so
  * a click on a green marker selects its bone, exactly as if its (often
  * mesh-less) bone had been clicked directly.
+ *
+ * <p>When wind is configured, a cyan arrow is drawn at each free point showing
+ * the force it currently feels — sampled from the same noise the solver uses, so
+ * the arrows pulse with the gusts and vary along a chain exactly as the ripple
+ * does. The arrows point in the displayed-world wind direction (the world vector
+ * is carried into the overlay's drawing space).
  */
 public final class ModelPhysicsDebug
 {
@@ -49,6 +55,10 @@ public final class ModelPhysicsDebug
     private static final float[] TIP = {0.30F, 0.64F, 1.00F};
     private static final float[] TARGET = {0.22F, 0.84F, 0.55F};
     private static final float[] ANCHOR = {1.00F, 0.55F, 0.15F};
+    private static final float[] WIND = {0.55F, 0.95F, 1.00F};
+
+    /** Arrow length per unit of wind force, in chain-segment lengths, so the arrows scale with the chain. */
+    private static final float WIND_ARROW_GAIN = 1.5F;
 
     private static final float EPS = 1.0e-6f;
 
@@ -58,7 +68,7 @@ public final class ModelPhysicsDebug
     {
     }
 
-    public static void render(MatrixStack stack, IModel model, MapType physicsData, String selectedRoot)
+    public static void render(MatrixStack stack, IModel model, MapType physicsData, int age, String selectedRoot)
     {
         if (!enabled || model == null || physicsData == null)
         {
@@ -86,9 +96,22 @@ public final class ModelPhysicsDebug
             stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
         }
 
+        /* The wind is one field for the whole model: resolve its world direction and base magnitude once,
+         * plus the inverse of the current draw matrix so the world-space force can be carried back into the
+         * overlay's local drawing space for each arrow. */
+        Vector3f windDir = new Vector3f();
+        float windMagnitude = PhysicsForces.prepareWind(compiled.wind(), 1F, windDir);
+        Matrix4f matrix = new Matrix4f(stack.peek().getPositionMatrix());
+        Matrix4f inverse = windMagnitude > 0F ? new Matrix4f(matrix).invert() : null;
+
         for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
             drawChain(stack, model, frames, chain, selectedRoot);
+
+            if (inverse != null)
+            {
+                drawWind(stack, model, frames, chain, selectedRoot, compiled.wind(), windDir, windMagnitude, age, matrix, inverse);
+            }
         }
 
         stack.pop();
@@ -204,14 +227,15 @@ public final class ModelPhysicsDebug
         return Math.max(total / lengths.length, EPS);
     }
 
-    private static void drawChain(MatrixStack stack, IModel model, Map<String, PivotFrame> frames, ModelPhysicsCache.CompiledChain chain, String selectedRoot)
+    /** The chain's drawn points: each bone's pivot, then the reconstructed virtual tip. Null if any is missing. */
+    private static List<Vector3f> chainPoints(IModel model, Map<String, PivotFrame> frames, ModelPhysicsCache.CompiledChain chain)
     {
         List<String> ids = chain.chainRootToEnd();
         int n = ids.size();
 
         if (n < 1)
         {
-            return;
+            return null;
         }
 
         List<Vector3f> pts = new ArrayList<>(n + 1);
@@ -222,7 +246,7 @@ public final class ModelPhysicsDebug
 
             if (p == null)
             {
-                return;
+                return null;
             }
 
             pts.add(p);
@@ -232,10 +256,24 @@ public final class ModelPhysicsDebug
 
         if (tip == null)
         {
-            return;
+            return null;
         }
 
         pts.add(tip);
+
+        return pts;
+    }
+
+    private static void drawChain(MatrixStack stack, IModel model, Map<String, PivotFrame> frames, ModelPhysicsCache.CompiledChain chain, String selectedRoot)
+    {
+        List<Vector3f> pts = chainPoints(model, frames, chain);
+
+        if (pts == null)
+        {
+            return;
+        }
+
+        Vector3f tip = pts.get(pts.size() - 1);
 
         Vector3f target = chain.targetBone() == null || chain.targetBone().isEmpty() ? null : position(frames, chain.targetBone());
 
@@ -277,6 +315,61 @@ public final class ModelPhysicsDebug
         if (target != null)
         {
             orb(dots, stack, target, unit * 0.12F, TARGET, a);
+        }
+
+        BufferRenderer.drawWithGlobalProgram(dots.end());
+    }
+
+    /**
+     * Draws the wind arrow at each free point of a chain: the force it currently feels, sampled from the same
+     * noise the solver uses, so the arrows pulse with the gusts and vary along the chain just like the ripple.
+     * Each arrow points in the displayed-world wind direction. The pinned anchor (point 0) feels no wind, so
+     * it is skipped. Length is proportional to the force, scaled to the chain's segment length.
+     */
+    private static void drawWind(MatrixStack stack, IModel model, Map<String, PivotFrame> frames, ModelPhysicsCache.CompiledChain chain, String selectedRoot, ModelPhysicsConfig.Wind wind, Vector3f windDir, float windMagnitude, int age, Matrix4f matrix, Matrix4f inverse)
+    {
+        List<Vector3f> pts = chainPoints(model, frames, chain);
+
+        if (pts == null || pts.size() < 2)
+        {
+            return;
+        }
+
+        boolean sel = selectedRoot == null || selectedRoot.isEmpty() || chain.attach().equals(selectedRoot);
+        float a = sel ? 1F : 0.4F;
+        float unit = segmentUnit(chain.restLengths());
+
+        Vector3f world = new Vector3f();
+        Vector3f force = new Vector3f();
+        List<Vector3f> tips = new ArrayList<>(pts.size());
+
+        BufferBuilder lines = Tessellator.getInstance().getBuffer();
+        lines.begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
+
+        for (int i = 1; i < pts.size(); i++)
+        {
+            Vector3f p = pts.get(i);
+
+            /* Sample in the solver's world space (carry the local point out through the draw matrix), then
+             * carry the world-space force back into local space so the arrow points the right way on screen. */
+            matrix.transformPosition(world.set(p));
+            PhysicsForces.windForceAt(windDir, windMagnitude, wind, age, world, force);
+            inverse.transformDirection(force).mul(unit * WIND_ARROW_GAIN);
+
+            Vector3f end = new Vector3f(p).add(force);
+
+            addLine(lines, matrix, p, end, WIND, 0.85F * a);
+            tips.add(end);
+        }
+
+        BufferRenderer.drawWithGlobalProgram(lines.end());
+
+        BufferBuilder dots = Tessellator.getInstance().getBuffer();
+        dots.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        for (Vector3f end : tips)
+        {
+            orb(dots, stack, end, unit * 0.05F, WIND, a);
         }
 
         BufferRenderer.drawWithGlobalProgram(dots.end());
