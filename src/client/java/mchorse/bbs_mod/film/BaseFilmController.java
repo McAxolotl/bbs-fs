@@ -7,10 +7,8 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
-import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.entity.ActorEntity;
-import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -81,9 +79,6 @@ public abstract class BaseFilmController
 
     public boolean paused;
     public int exception = -1;
-
-    /** This controller's off-render pose source for bone-physics re-simulation; installed while it renders. */
-    private final ModelPhysicsRuntime.PoseSampler poseSampler = this::sampleAt;
 
     private static final Matrix4f IDENTITY = new Matrix4f();
     private static final Vector3f TEMP_VECTOR = new Vector3f();
@@ -927,11 +922,6 @@ public abstract class BaseFilmController
             float delta = this.getTransition(entity, transition);
             int tick = replay.getTick(this.getTick());
 
-            /* Drive the entity's age from the film cursor (not a monotonic counter), so anything keyed on
-             * it — bone physics, molang, procedural animation — follows the timeline and scrubs correctly.
-             * startRenderFrame runs every render frame including when paused, so the age tracks the cursor. */
-            entity.setAge(tick);
-
             /* Apply property */
             Form form1 = entity.getForm();
             replay.properties.applyProperties(form1, tick + delta);
@@ -1280,10 +1270,6 @@ public abstract class BaseFilmController
     {
         RenderSystem.enableDepthTest();
 
-        /* Make this controller the active pose source for bone-physics re-simulation while it renders, so a
-         * scrub/jump replays the solver against the real animated pose at each tick (see ModelPhysicsRuntime). */
-        ModelPhysicsRuntime.setSampler(this.poseSampler);
-
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
             int i = entry.getKey();
@@ -1296,71 +1282,6 @@ public abstract class BaseFilmController
             }
 
             this.renderEntity(context, replay, entity);
-        }
-    }
-
-    /**
-     * Poses a replay's root model at integer tick {@code tick} (keyframes, properties, IK/physics overrides
-     * and the pose pipeline) without drawing, and returns its world baseTransform — the off-render pose
-     * source the physics re-simulation needs. The live entity transform is snapshotted and restored so a
-     * past-tick sample doesn't disturb the current frame. v1 handles only the entity's root model form;
-     * nested model forms return null and fall back to re-seeding on a jump.
-     */
-    private Matrix4f sampleAt(IEntity entity, ModelInstance instance, int tick)
-    {
-        if (entity == null || instance == null || this.film == null)
-        {
-            return null;
-        }
-
-        Form form = entity.getForm();
-
-        if (form == null || instance.form != form)
-        {
-            return null;
-        }
-
-        Replay replay = null;
-
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            if (entry.getValue() == entity)
-            {
-                replay = CollectionUtils.getSafe(this.film.replays.getList(), entry.getKey());
-                break;
-            }
-        }
-
-        if (replay == null || !(FormUtilsClient.getRenderer(form) instanceof ModelFormRenderer renderer))
-        {
-            return null;
-        }
-
-        double x = entity.getX(), y = entity.getY(), z = entity.getZ();
-        double px = entity.getPrevX(), py = entity.getPrevY(), pz = entity.getPrevZ();
-        float yaw = entity.getYaw(), headYaw = entity.getHeadYaw(), bodyYaw = entity.getBodyYaw(), pitch = entity.getPitch();
-        float pyaw = entity.getPrevYaw(), phead = entity.getPrevHeadYaw(), pbody = entity.getPrevBodyYaw(), ppitch = entity.getPrevPitch();
-
-        try
-        {
-            replay.keyframes.apply(tick, entity);
-            replay.properties.applyProperties(form, tick);
-            this.applyTargetOverrides(replay, form, tick, 0F);
-
-            Matrix4f defaultWorld = getMatrixForRenderWithRotation(entity, 0D, 0D, 0D, 0F);
-            Pair<Matrix4f, Float> pair = getTotalMatrix(this.entities, form.anchor.get(), defaultWorld, 0D, 0D, 0D, 0F, 0);
-            Matrix4f baseTransform = new Matrix4f(pair.a != null ? pair.a : defaultWorld).rotateY((float) Math.PI);
-
-            renderer.poseAt(entity, instance, baseTransform);
-
-            return baseTransform;
-        }
-        finally
-        {
-            entity.setPosition(x, y, z);
-            entity.setPrevX(px); entity.setPrevY(py); entity.setPrevZ(pz);
-            entity.setYaw(yaw); entity.setHeadYaw(headYaw); entity.setBodyYaw(bodyYaw); entity.setPitch(pitch);
-            entity.setPrevYaw(pyaw); entity.setPrevHeadYaw(phead); entity.setPrevBodyYaw(pbody); entity.setPrevPitch(ppitch);
         }
     }
 
@@ -1386,9 +1307,7 @@ public abstract class BaseFilmController
     }
 
     public void shutdown()
-    {
-        ModelPhysicsRuntime.setSampler(null);
-    }
+    {}
 
     public static enum UpdateMode
     {

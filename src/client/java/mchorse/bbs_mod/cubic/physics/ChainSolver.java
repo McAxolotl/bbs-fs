@@ -53,7 +53,7 @@ final class ChainSolver
      * (a real scrub) can't be replayed without the intermediate poses, so the chain is re-seeded at the
      * pose instead; deterministic re-simulation from a checkpoint is handled by the runtime.
      */
-    static final int MAX_TICK_CATCHUP = 4;
+    private static final int MAX_TICK_CATCHUP = 4;
 
     private ChainSolver()
     {

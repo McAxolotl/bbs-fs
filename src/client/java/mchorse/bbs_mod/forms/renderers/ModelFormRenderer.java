@@ -456,28 +456,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         ModelIKRuntime.apply(model, local.isEmpty() ? null : local, poleLocal.isEmpty() ? null : poleLocal);
     }
 
-    /**
-     * Poses the model from the animation state the caller has already set (form.pose / IK overrides for some
-     * tick) and solves IK against {@code baseTransform}, without drawing — the pose half of {@link #render3D}.
-     * Used by the deterministic physics re-simulation to sample the model's pose at an arbitrary tick.
-     */
-    public void poseAt(IEntity entity, ModelInstance model, Matrix4f baseTransform)
-    {
-        this.ensureAnimator(0F);
-
-        if (this.animator == null || model == null || model.model == null)
-        {
-            return;
-        }
-
-        model.model.resetPose();
-        this.animator.applyActions(entity, model, 0F);
-        model.model.applyPose(this.getPose());
-
-        this.ikAppliedThisRender = false;
-        this.applyIKOnce(model, baseTransform);
-    }
-
     /** World-space target overrides into the model's local space (the space the solver and pivot frames use). */
     private static Map<String, Vector3f> toModelSpace(Map<String, Vector3f> world, Matrix4f inv)
     {
