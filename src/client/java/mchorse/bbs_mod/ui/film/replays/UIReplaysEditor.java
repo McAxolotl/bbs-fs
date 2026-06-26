@@ -32,6 +32,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
@@ -91,6 +92,8 @@ public class UIReplaysEditor extends UIElement
     public UIReplaysListPanel replaysList;
     public UIReplayPropertiesPanel replayProperties;
 
+    private static final int CATEGORY_BAR_WIDTH = 20;
+
     public UIElement iconBar;
     public Map<ReplayCategory, UIIcon> tabButtons = new HashMap<>();
     private ReplayCategory category = ReplayCategory.PLAYER;
@@ -98,7 +101,7 @@ public class UIReplaysEditor extends UIElement
     /* Keyframes */
     public UIKeyframeEditor keyframeEditor;
 
-    /* Action clips share the timeline area; the toggle beside the categories switches to them. */
+    /* Action clips share the timeline area; the toggle below the categories switches to them. */
     private UIClipsPanel actionTimeline;
     private UIIcon actionsToggle;
     private boolean actionsMode;
@@ -369,26 +372,20 @@ public class UIReplaysEditor extends UIElement
         this.replayProperties.attachReplayList(this.replaysList.replays);
 
         this.iconBar = new UIElement();
-        this.iconBar.relative(this).x(0).y(0).h(20).row(0).resize();
+        this.iconBar.relative(this).x(0).y(0).w(CATEGORY_BAR_WIDTH).h(1F).column(0).stretch();
 
         this.iconBar.add(new UIRenderable((context) ->
         {
-            /* Render background matching track names container */
-            int labelWidth = this.getLabelWidth();
             Area area = this.iconBar.area;
 
-            context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), BBSSettings.chromeSurface());
+            context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
 
-            /* Render active tab indicator (under the actions toggle when in actions mode) */
+            /* Highlight the active category on the left edge (the actions toggle when in actions mode). */
             UIIcon activeIcon = this.actionsMode ? this.actionsToggle : this.tabButtons.get(this.category);
 
-            if (activeIcon != null)
+            if (activeIcon != null && activeIcon.getParent() != null)
             {
-                int color = BBSSettings.primaryColor.get();
-                Area iconArea = activeIcon.area;
-
-                context.batcher.box(iconArea.x, iconArea.ey() - 2, iconArea.ex(), iconArea.ey(), Colors.A100 | color);
-                context.batcher.gradientVBox(iconArea.x, iconArea.y, iconArea.ex(), iconArea.ey() - 2, color, Colors.A75 | color);
+                UIDashboardPanels.renderHighlight(context.batcher, activeIcon.area, Direction.LEFT);
             }
         }));
 
@@ -401,9 +398,9 @@ public class UIReplaysEditor extends UIElement
             this.tabButtons.put(category, button);
         }
 
-        /* Actions toggle: pinned to the right edge of the track-names column, not a keyframe category. */
+        /* Actions toggle: pinned to the bottom of the category bar, not a keyframe category. */
         this.actionsToggle = new UIIcon(Icons.ACTION, b -> this.toggleActionsMode());
-        this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.LEFT);
+        this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.RIGHT);
         this.layoutActionsToggle();
 
         this.setCategory(ReplayCategory.PLAYER);
@@ -433,7 +430,7 @@ public class UIReplaysEditor extends UIElement
     /**
      * Select the category sitting at the given visual position in the tab bar. The IK and physics tabs are only
      * present when the record has IK / physics, so a fixed key-to-category mapping would point past the gap; the
-     * number keys instead follow the tabs as the user sees them, left to right.
+     * number keys instead follow the tabs as the user sees them, top to bottom.
      */
     private void setCategoryByPosition(int index)
     {
@@ -449,7 +446,7 @@ public class UIReplaysEditor extends UIElement
             }
         }
 
-        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.x));
+        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.y));
 
         if (index >= 0 && index < present.size())
         {
@@ -468,11 +465,6 @@ public class UIReplaysEditor extends UIElement
         {
             this.setCategory(ReplayCategory.PLAYER);
         }
-    }
-
-    private int getLabelWidth()
-    {
-        return this.keyframeEditor != null ? this.keyframeEditor.view.getLabelWidth() : UIKeyframes.LABEL_WIDTH_DEFAULT;
     }
 
     public void setFilm(Film film)
@@ -651,12 +643,9 @@ public class UIReplaysEditor extends UIElement
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute())
                 .target(this.filmPanel.editArea)
                 .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
-            this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
+            this.keyframeEditor.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
 
-            /* Update iconBar width to match label width */
-            int labelWidth = this.keyframeEditor.view.getLabelWidth();
-            this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
             this.layoutActionsToggle();
 
             /* Reset */
@@ -1107,7 +1096,7 @@ public class UIReplaysEditor extends UIElement
     public void attachActionTimeline(UIClipsPanel actionTimeline)
     {
         this.actionTimeline = actionTimeline;
-        actionTimeline.relative(this).x(0).y(0).w(1F).h(1F);
+        actionTimeline.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
         this.add(actionTimeline);
         this.bringBarToFront();
         this.updateTimelineModeVisibility();
@@ -1178,7 +1167,7 @@ public class UIReplaysEditor extends UIElement
      */
     private void layoutActionsToggle()
     {
-        this.actionsToggle.relative(this).x(0, this.getLabelWidth() - 20).y(0).wh(20, 20);
+        this.actionsToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
 
     public void pickForm(Form form, String bone)
@@ -1381,13 +1370,6 @@ public class UIReplaysEditor extends UIElement
     public void resize()
     {
         super.resize();
-
-        /* Update iconBar width when resizing */
-        if (this.keyframeEditor != null)
-        {
-            int labelWidth = this.keyframeEditor.view.getLabelWidth();
-            this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
-        }
 
         this.layoutActionsToggle();
     }
