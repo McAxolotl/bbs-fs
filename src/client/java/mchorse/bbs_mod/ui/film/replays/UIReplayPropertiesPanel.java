@@ -143,6 +143,9 @@ public class UIReplayPropertiesPanel extends UIElement
             this.axesPreview, this.pickAxesPreviewBone
         );
 
+        shadowSection.setExpanded(false);
+        other.setExpanded(false);
+
         this.properties = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.pickEdit, this.enabled, this.label, this.nameTag,
             shadowSection,
