@@ -105,6 +105,9 @@ public class UIReplaysEditor extends UIElement
     private UIClipsPanel actionTimeline;
     private UIIcon actionsToggle;
     private boolean actionsMode;
+    /* «All tracks» view: shows every category's tracks at once, bypassing the category filter. */
+    private UIIcon allToggle;
+    private boolean allMode;
 
     /* Clips */
     private UIFilmPanel filmPanel;
@@ -381,7 +384,7 @@ public class UIReplaysEditor extends UIElement
             context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
 
             /* Highlight the active category on the left edge (the actions toggle when in actions mode). */
-            UIIcon activeIcon = this.actionsMode ? this.actionsToggle : this.tabButtons.get(this.category);
+            UIIcon activeIcon = this.actionsMode ? this.actionsToggle : (this.allMode ? this.allToggle : this.tabButtons.get(this.category));
 
             if (activeIcon != null && activeIcon.getParent() != null)
             {
@@ -398,10 +401,13 @@ public class UIReplaysEditor extends UIElement
             this.tabButtons.put(category, button);
         }
 
-        /* Actions toggle: pinned to the bottom of the category bar, not a keyframe category. */
+        /* «All tracks» + actions toggles, pinned to the bottom of the category bar. */
+        this.allToggle = new UIIcon(Icons.LIST, b -> this.setAllTracks());
+        this.allToggle.tooltip(UIKeys.FILM_REPLAY_ALL_TRACKS, Direction.RIGHT);
+
         this.actionsToggle = new UIIcon(Icons.ACTION, b -> this.toggleActionsMode());
         this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.RIGHT);
-        this.layoutActionsToggle();
+        this.layoutBottomToggles();
 
         this.setCategory(ReplayCategory.PLAYER);
 
@@ -416,14 +422,23 @@ public class UIReplaysEditor extends UIElement
         this.keys().register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
             .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar, this.actionsToggle);
+        this.add(this.iconBar, this.allToggle, this.actionsToggle);
         this.markContainer();
     }
 
     private void setCategory(ReplayCategory c)
     {
         this.actionsMode = false;
+        this.allMode = false;
         this.category = c;
+        this.updateChannelsList();
+    }
+
+    /** Show every category's tracks at once, bypassing the category filter. */
+    private void setAllTracks()
+    {
+        this.actionsMode = false;
+        this.allMode = true;
         this.updateChannelsList();
     }
 
@@ -592,7 +607,7 @@ public class UIReplaysEditor extends UIElement
 
         sheets.removeIf((v) ->
         {
-            if (categoryOf(v) != this.category)
+            if (!this.allMode && categoryOf(v) != this.category)
             {
                 return true;
             }
@@ -646,7 +661,7 @@ public class UIReplaysEditor extends UIElement
             this.keyframeEditor.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
 
-            this.layoutActionsToggle();
+            this.layoutBottomToggles();
 
             /* Reset */
             if (lastEditor != null)
@@ -1153,20 +1168,26 @@ public class UIReplaysEditor extends UIElement
             this.iconBar.removeFromParent();
         }
 
+        if (this.allToggle.getParent() != null)
+        {
+            this.allToggle.removeFromParent();
+        }
+
         if (this.actionsToggle.getParent() != null)
         {
             this.actionsToggle.removeFromParent();
         }
 
-        this.add(this.iconBar, this.actionsToggle);
+        this.add(this.iconBar, this.allToggle, this.actionsToggle);
     }
 
     /**
      * Pin the actions toggle to the right edge of the track-names column. The iconBar
      * shrink-wraps to its category icons, so anchor to the editor by label width instead.
      */
-    private void layoutActionsToggle()
+    private void layoutBottomToggles()
     {
+        this.allToggle.relative(this).x(0).y(1F, -40).wh(CATEGORY_BAR_WIDTH, 20);
         this.actionsToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
 
@@ -1184,9 +1205,16 @@ public class UIReplaysEditor extends UIElement
      */
     private void pickFormBone(Form form, String bone, boolean insert)
     {
-        if (form instanceof ModelForm && bone != null && !bone.isEmpty() && (this.category != ReplayCategory.POSE || this.actionsMode))
+        if (form instanceof ModelForm && bone != null && !bone.isEmpty())
         {
-            this.setCategory(ReplayCategory.POSE);
+            if (this.allMode)
+            {
+                this.setActionsMode(false);
+            }
+            else if (this.category != ReplayCategory.POSE || this.actionsMode)
+            {
+                this.setCategory(ReplayCategory.POSE);
+            }
         }
 
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert);
@@ -1371,7 +1399,7 @@ public class UIReplaysEditor extends UIElement
     {
         super.resize();
 
-        this.layoutActionsToggle();
+        this.layoutBottomToggles();
     }
 
     @Override

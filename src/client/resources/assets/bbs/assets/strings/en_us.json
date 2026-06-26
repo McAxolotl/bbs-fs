@@ -1511,6 +1511,7 @@
 	"bbs.ui.film.replays.category.physics": "Physics",
 	"bbs.ui.film.replays.category.physics.tooltip": "Physics tracks (chain controls, targets)",
 	"bbs.ui.film.replays.actions_timeline": "Action clips timeline",
+	"bbs.ui.film.replays.all_tracks": "All tracks",
 	"keybinds.config.title": "UI keybinds",
 	"keybinds.config.transformations.title": "Transformations",
 	"keybinds.config.transformations.tooltip": "Keybinds that are available when editing pose in film editor's form keyframe panel",
