@@ -99,10 +99,6 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         this.maxZ = axisTrackpad((v) -> this.onFieldChanged(), Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Z));
         this.applyToChildren = new UIButton(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY_TO_CHILDREN, (b) -> this.applySelectedToChildren());
 
-        UISection bonesSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_BONES);
-
-        bonesSection.fields.add(this.bones);
-
         UISection params = new UISection(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS);
 
         params.fields.add(
@@ -118,7 +114,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         );
 
         this.options.add(
-            bonesSection,
+            this.bones,
             params
         );
     }

@@ -201,9 +201,20 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     }
 
     @Override
+    public void render(UIContext context)
+    {
+        if (this.view != null)
+        {
+            this.view.options.area.render(context.batcher, BBSSettings.deepSurface());
+        }
+
+        super.render(context);
+    }
+
+    @Override
     protected void renderBackground(UIContext context, int x, int y, int w, int h)
     {
-        context.batcher.box(x, y, x + w, y + h, BBSSettings.baseSurface());
+        context.batcher.box(x, y, x + w, y + h, BBSSettings.deepSurface());
     }
 
     @Override

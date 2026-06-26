@@ -82,7 +82,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 {
     private static Map<Class, Supplier<UIForm>> panels = new HashMap<>();
 
-    private static float treeWidth = 0.2F;
+    private static float treeWidth = 0.1F;
     private static boolean TOGGLED = true;
 
     /* Palette for picking a form for body parts */
@@ -332,13 +332,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         {
             if (this.forms.isVisible())
             {
-                this.forms.area.render(context.batcher, Colors.A50);
+                this.forms.area.render(context.batcher, BBSSettings.deepSurface());
             }
         });
 
         UIRenderable backgroundStates = new UIRenderable((context) ->
         {
-            context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), Colors.A100);
+            context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), BBSSettings.chromeSurface());
         });
 
         UIDraggable draggable = new UIDraggable((context) ->

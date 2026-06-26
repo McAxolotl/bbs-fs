@@ -169,6 +169,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
+        protected boolean stretchesBoneList()
+        {
+            return true;
+        }
+
+        @Override
         protected UIPropTransform createTransformEditor()
         {
             return new UIPoseTransforms().enableHotkeys();

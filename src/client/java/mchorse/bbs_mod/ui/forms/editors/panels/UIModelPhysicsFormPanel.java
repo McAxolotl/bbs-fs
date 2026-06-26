@@ -368,13 +368,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.radius
         );
 
-        UISection chains = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CHAINS);
-
-        chains.fields.add(this.bones);
-
         this.options.add(
             this.debug,
-            chains,
+            this.bones,
             settings,
             collisionsSection
         );

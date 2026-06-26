@@ -220,13 +220,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.tipRotation
         );
 
-        UISection bonesSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_IK_BONES);
-
-        bonesSection.fields.add(this.bones);
-
         this.options.add(
             this.debug,
-            bonesSection,
+            this.bones,
             settings
         );
     }

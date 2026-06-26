@@ -11,6 +11,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIModelPoseEditor;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
@@ -30,6 +31,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
     public UIColor color;
     public UIModelPoseEditor poseEditor;
     public UIShapeKeys shapeKeys;
+    public UISection shapeKeysSection;
 
     public UIButton pickModel;
     public UIButton pick;
@@ -68,6 +70,10 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         this.poseEditor = new UIModelPoseEditor();
         this.poseEditor.transform.barBackground();
         this.shapeKeys = new UIShapeKeys();
+        this.shapeKeys.title.removeFromParent();
+        this.shapeKeysSection = new UISection(UIKeys.SHAPE_KEYS_TITLE);
+        this.shapeKeysSection.fields.add(this.shapeKeys);
+        this.shapeKeysSection.setExpanded(false);
         this.pick = new UIButton(UIKeys.FORMS_EDITOR_MODEL_PICK_TEXTURE, (b) ->
         {
             ModelInstance model = ModelFormRenderer.getModel(this.form);
@@ -156,18 +162,11 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         this.poseEditor.fillGroups(model == null ? null : model.model, model == null ? null : model.flippedParts, true, model == null ? null : model.disabledBones);
         this.color.setColor(form.color.get().getARGBColor());
 
-        this.shapeKeys.removeFromParent();
+        Set<String> modelShapeKeys = model == null ? Collections.emptySet() : model.model.getShapeKeys();
 
-        if (model != null)
-        {
-            Set<String> modelShapeKeys = model.model.getShapeKeys();
-
-            if (!modelShapeKeys.isEmpty())
-            {
-                this.options.add(this.shapeKeys);
-                this.shapeKeys.setShapeKeys(model.poseGroup, modelShapeKeys, this.form.shapeKeys.get());
-            }
-        }
+        this.shapeKeysSection.removeFromParent();
+        this.options.add(this.shapeKeysSection);
+        this.shapeKeys.setShapeKeys(model == null ? "" : model.poseGroup, modelShapeKeys, this.form.shapeKeys.get());
 
         this.options.resize();
     }

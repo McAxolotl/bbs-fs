@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
@@ -42,11 +44,17 @@ public class UIPoseEditor extends UIElement
 {
     private static String lastLimb = "";
 
+    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
+    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
+
     public UIPoseBoneStringList groups;
     public UITrackpad fix;
     public UIColor color;
     public UIToggle lighting;
     public UIPropTransform transform;
+
+    /** The search + pose-toggle row above the bone list; a field so subclasses can re-lay-out. */
+    public UIElement toggles;
 
     /* Pose-edit toggles sitting above the bone list: mirror-edit applies the edit to each bone's
      * left/right counterpart; alternate-invert flips the rotation of every second selected bone. */
@@ -120,16 +128,81 @@ public class UIPoseEditor extends UIElement
         this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
         this.invert.wh(20, 20);
 
-        UIElement toggles = new UIElement();
-        toggles.h(20).row(0).height(20);
+        this.toggles = new UIElement();
+        this.toggles.h(20).row(0).height(20);
         /* The bone search fills the row; the two pose toggles sit fixed-width at the right (all 20px tall). */
-        toggles.add(this.search, this.mirror, this.invert);
+        this.toggles.add(this.search, this.mirror, this.invert);
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
         this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(toggles, this.groups.marginTop(-UIConstants.MARGIN), UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        this.add(this.toggles, this.groups.marginTop(-UIConstants.MARGIN), UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+    }
+
+    @Override
+    public void resize()
+    {
+        if (this.stretchesBoneList())
+        {
+            this.stretchBoneList();
+        }
+
+        super.resize();
+    }
+
+    /**
+     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
+     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
+     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
+     */
+    protected boolean stretchesBoneList()
+    {
+        return false;
+    }
+
+    private void stretchBoneList()
+    {
+        UIScrollView viewport = this.getViewport();
+
+        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
+        {
+            return;
+        }
+
+        int target = viewport.area.ey() - this.getViewportPadding(viewport);
+        int height = this.groups.getFlex().getH() + (target - this.area.ey());
+
+        this.groups.h(Math.max(height, MIN_LIST_HEIGHT));
+    }
+
+    private UIScrollView getViewport()
+    {
+        UIElement element = this.getParent();
+
+        while (element != null)
+        {
+            if (element instanceof UIScrollView)
+            {
+                return (UIScrollView) element;
+            }
+
+            element = element.getParent();
+        }
+
+        return null;
+    }
+
+    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
+     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
+    private int getViewportPadding(UIScrollView viewport)
+    {
+        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
+        {
+            return resizer.padding;
+        }
+
+        return UIConstants.SCROLL_PADDING;
     }
 
     private void toggleMirrorEdit()
