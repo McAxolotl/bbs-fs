@@ -1916,7 +1916,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
             }
         });
 
-        palette.immersive();
         palette.updatable();
     }
 
