@@ -28,9 +28,9 @@ public interface ICubicRenderer
 
     public static void rotateGroup(MatrixStack stack, ModelGroup group)
     {
-        if (group.ikOrient != null)
+        if (group.orient != null)
         {
-            stack.multiply(group.ikOrient);
+            stack.multiply(group.orient);
 
             return;
         }

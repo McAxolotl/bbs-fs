@@ -10,9 +10,11 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelSimpleVAO;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -115,6 +117,10 @@ public class BOBJModel implements IModel
             if (transform.fix > 0F)
             {
                 bone.transform.lerp(Transform.DEFAULT, transform.fix);
+
+                /* fix blends toward rest, so a composed orientation from earlier layers no longer applies —
+                 * drop it and let composeOrient below re-seed from the fix-lerped euler. */
+                bone.orient = null;
             }
 
             // TODO: bone.lighting = transform.lighting;
@@ -123,6 +129,16 @@ public class BOBJModel implements IModel
             bone.transform.scale.add(transform.scale).sub(1, 1, 1);
             bone.transform.rotate.add(transform.rotate);
             bone.transform.rotate2.add(transform.rotate2);
+
+            /* Compose the pose rotation into the orientation quaternion (radians, rotate then rotate2). */
+            Quaternionf delta = Matrices.toQuaternionZYXRadians(transform.rotate.x, transform.rotate.y, transform.rotate.z);
+
+            if (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F)
+            {
+                delta.mul(Matrices.toQuaternionZYXRadians(transform.rotate2.x, transform.rotate2.y, transform.rotate2.z));
+            }
+
+            bone.composeOrient(delta);
         }
     }
 
