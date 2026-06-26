@@ -196,7 +196,7 @@ final class ChainSolver
         }
     }
 
-    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -262,11 +262,18 @@ final class ChainSolver
         float dampMul = (float) Math.pow(1F - damping, h);
         float gravityScale = h * h;
 
+        /* Gravity (per chain) plus the global wind, summed once into the per-sub-step acceleration. Both
+         * scale by gravityScale (the squared sub-step length, the Verlet dt²) and live in the same world
+         * frame, so wind is just gravity pointed another way. */
         Vector3f gravityVec = new Vector3f();
         PhysicsForces.computeGravityDirection(chain, parentRotation, gravity, gravityVec);
-        float gravityX = gravityVec.x * gravityScale;
-        float gravityY = gravityVec.y * gravityScale;
-        float gravityZ = gravityVec.z * gravityScale;
+
+        Vector3f windVec = new Vector3f();
+        PhysicsForces.computeWind(wind, BASE_GRAVITY, windVec);
+
+        float forceX = (gravityVec.x + windVec.x) * gravityScale;
+        float forceY = (gravityVec.y + windVec.y) * gravityScale;
+        float forceZ = (gravityVec.z + windVec.z) * gravityScale;
 
         /* Per-point spring-back fraction toward the animated pose for one sub-step, falling off toward the
          * floppier tip. Applied as an angular pull in solveSpring, not a positional one. */
@@ -315,9 +322,9 @@ final class ChainSolver
                 vel.set(p).sub(prev).mul(dampMul);
                 prev.set(p);
                 p.add(vel);
-                p.x += gravityX;
-                p.y += gravityY;
-                p.z += gravityZ;
+                p.x += forceX;
+                p.y += forceY;
+                p.z += forceZ;
 
                 if (collisions)
                 {

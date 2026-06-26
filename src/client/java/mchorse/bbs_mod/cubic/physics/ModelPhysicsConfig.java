@@ -2,10 +2,43 @@ package mchorse.bbs_mod.cubic.physics;
 
 import java.util.Map;
 
-public record ModelPhysicsConfig(Map<String, Bone> bones)
+public record ModelPhysicsConfig(Map<String, Bone> bones, Wind wind)
 {
     public static final float DEFAULT_WEIGHT = 1F;
     public static final float DEFAULT_STIFFNESS = 0F;
+
+    public ModelPhysicsConfig
+    {
+        if (wind == null)
+        {
+            wind = Wind.NONE;
+        }
+    }
+
+    /**
+     * Global wind for the whole model's physics: a single world-space directional force ({@code x}/{@code y}/
+     * {@code z} direction scaled by {@code strength}) added to every chain on top of its gravity. It is one
+     * field for the whole model, not bound to any bone. Strength 0 — or a zero direction — means no wind.
+     */
+    public record Wind(float strength, float x, float y, float z)
+    {
+        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F);
+
+        public Wind
+        {
+            strength = Math.max(0F, strength);
+        }
+
+        public boolean active()
+        {
+            return this.strength > 0F && (this.x != 0F || this.y != 0F || this.z != 0F);
+        }
+
+        public boolean isDefault()
+        {
+            return this.equals(NONE);
+        }
+    }
 
     public record Bone(String end, String targetBone, float gravity, float damping, float stiffness, int iterations, boolean relativeGravity, float relativeGravityRotateX, float relativeGravityRotateY, float relativeGravityRotateZ, boolean collisions, float radius, float weight)
     {

@@ -4,8 +4,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Force fields acting on the chains. Currently just gravity (with the per-chain relative-gravity rotation);
- * the home for wind and other fields later.
+ * Force fields acting on the chains: the per-chain gravity (with its relative-gravity rotation) and the
+ * global wind. Both produce a per-step acceleration the solver adds during Verlet integration.
  */
 final class PhysicsForces
 {
@@ -47,5 +47,30 @@ final class PhysicsForces
         }
 
         out.normalize().mul(gravity);
+    }
+
+    /**
+     * Global wind acceleration in world space: the configured direction normalised and scaled by the base
+     * gravity magnitude and the wind strength. It is one field for the whole model, so the solver computes it
+     * once per step. Leaves {@code out} at zero when there is no wind.
+     */
+    static void computeWind(ModelPhysicsConfig.Wind wind, float base, Vector3f out)
+    {
+        out.set(0F, 0F, 0F);
+
+        if (wind == null || !wind.active())
+        {
+            return;
+        }
+
+        out.set(wind.x(), wind.y(), wind.z());
+
+        if (out.lengthSquared() < EPS * EPS)
+        {
+            out.set(0F, 0F, 0F);
+            return;
+        }
+
+        out.normalize().mul(base * wind.strength());
     }
 }

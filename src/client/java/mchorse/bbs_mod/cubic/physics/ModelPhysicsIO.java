@@ -22,6 +22,11 @@ public final class ModelPhysicsIO
     private static final String KEY_COLLISIONS = "collisions";
     private static final String KEY_RADIUS = "radius";
     private static final String KEY_WEIGHT = "weight";
+    private static final String KEY_WIND = "wind";
+    private static final String KEY_WIND_STRENGTH = "strength";
+    private static final String KEY_WIND_X = "x";
+    private static final String KEY_WIND_Y = "y";
+    private static final String KEY_WIND_Z = "z";
 
     private static final float DEFAULT_GRAVITY = 1F;
     private static final float DEFAULT_DAMPING = 0.15F;
@@ -34,6 +39,10 @@ public final class ModelPhysicsIO
     private static final boolean DEFAULT_COLLISIONS = false;
     private static final float DEFAULT_RADIUS = 0.1F;
     private static final float DEFAULT_WEIGHT = ModelPhysicsConfig.DEFAULT_WEIGHT;
+    private static final float DEFAULT_WIND_STRENGTH = ModelPhysicsConfig.Wind.NONE.strength();
+    private static final float DEFAULT_WIND_X = ModelPhysicsConfig.Wind.NONE.x();
+    private static final float DEFAULT_WIND_Y = ModelPhysicsConfig.Wind.NONE.y();
+    private static final float DEFAULT_WIND_Z = ModelPhysicsConfig.Wind.NONE.z();
 
     private ModelPhysicsIO()
     {
@@ -80,7 +89,30 @@ public final class ModelPhysicsIO
             out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, stiffness, iterations, relativeGravity, relativeGravityRotateX, relativeGravityRotateY, relativeGravityRotateZ, collisions, radius, weight));
         }
 
-        return out.isEmpty() ? null : new ModelPhysicsConfig(out);
+        ModelPhysicsConfig.Wind wind = readWind(map);
+
+        if (out.isEmpty() && wind.isDefault())
+        {
+            return null;
+        }
+
+        return new ModelPhysicsConfig(out, wind);
+    }
+
+    private static ModelPhysicsConfig.Wind readWind(MapType map)
+    {
+        if (!map.has(KEY_WIND, BaseType.TYPE_MAP))
+        {
+            return ModelPhysicsConfig.Wind.NONE;
+        }
+
+        MapType wind = map.getMap(KEY_WIND);
+        float strength = wind.getFloat(KEY_WIND_STRENGTH, DEFAULT_WIND_STRENGTH);
+        float x = wind.getFloat(KEY_WIND_X, DEFAULT_WIND_X);
+        float y = wind.getFloat(KEY_WIND_Y, DEFAULT_WIND_Y);
+        float z = wind.getFloat(KEY_WIND_Z, DEFAULT_WIND_Z);
+
+        return new ModelPhysicsConfig.Wind(strength, x, y, z);
     }
 
     public static MapType toData(ModelPhysicsConfig config)
@@ -158,6 +190,43 @@ public final class ModelPhysicsIO
         }
 
         root.put(KEY_BONES, bones);
+        writeWind(root, config == null ? null : config.wind());
+
         return root;
+    }
+
+    private static void writeWind(MapType root, ModelPhysicsConfig.Wind wind)
+    {
+        if (wind == null || wind.isDefault())
+        {
+            return;
+        }
+
+        MapType windMap = new MapType();
+
+        if (wind.strength() != DEFAULT_WIND_STRENGTH)
+        {
+            windMap.putFloat(KEY_WIND_STRENGTH, wind.strength());
+        }
+
+        if (wind.x() != DEFAULT_WIND_X)
+        {
+            windMap.putFloat(KEY_WIND_X, wind.x());
+        }
+
+        if (wind.y() != DEFAULT_WIND_Y)
+        {
+            windMap.putFloat(KEY_WIND_Y, wind.y());
+        }
+
+        if (wind.z() != DEFAULT_WIND_Z)
+        {
+            windMap.putFloat(KEY_WIND_Z, wind.z());
+        }
+
+        if (!windMap.isEmpty())
+        {
+            root.put(KEY_WIND, windMap);
+        }
     }
 }
