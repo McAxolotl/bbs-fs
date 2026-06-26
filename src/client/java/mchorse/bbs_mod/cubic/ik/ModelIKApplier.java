@@ -179,7 +179,7 @@ final class ModelIKApplier
         List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation, restHinge);
 
         /* A chain of two or more bones gets the Blender treatment: the pole owns the full
-         * orientation (swing and roll), written raw to ikOrient so it bypasses euler
+         * orientation (swing and roll), written raw to orient so it bypasses euler
          * entirely — no gimbal, no 180-degree flip, no FK-twist mismatch. A single bone
          * (size 2) keeps the euler reconstruction. */
         if (model instanceof Model cubic && workIds.size() >= 3)
@@ -246,7 +246,7 @@ final class ModelIKApplier
 
     /**
      * Gives each cubic IK bone the full local orientation of the solved chain, written
-     * raw to {@link ModelGroup#ikOrient} — the renderer applies it in place of the
+     * raw to {@link ModelGroup#orient} — the renderer applies it in place of the
      * bone's euler rotate, so the pole owns the whole orientation. Never touches
      * {@code bone.current.rotate}: IK lives entirely in the transient field, so the FK
      * pose (read by the gizmo, saved, and blended below) stays intact.
@@ -304,7 +304,7 @@ final class ModelIKApplier
             Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormal[i], segLocal, normalLocal);
             Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : fkLocal(bone).slerp(localRot, weight);
 
-            bone.ikOrient = oriented;
+            bone.orient = oriented;
 
             /* Advance by the orientation the renderer will actually apply (the blended
              * one), so a child bone decomposes its segment against the SAME parent frame
@@ -322,7 +322,7 @@ final class ModelIKApplier
             {
                 Quaternionf tipLocal = new Quaternionf(parentWorld).conjugate().mul(tipTarget);
 
-                tip.ikOrient = weight >= 1F - EPS ? tipLocal : fkLocal(tip).slerp(tipLocal, weight);
+                tip.orient = weight >= 1F - EPS ? tipLocal : fkLocal(tip).slerp(tipLocal, weight);
             }
         }
     }
@@ -363,7 +363,7 @@ final class ModelIKApplier
 
     /**
      * The BOBJ analogue of {@link #buildChainOrientations}: gives each BOBJ IK bone a
-     * full local orientation written to {@link BOBJBone#ikOrient}, which the armature
+     * full local orientation written to {@link BOBJBone#orient}, which the armature
      * applies in place of the euler rotate. Unlike the cubic chain, BOBJ bones carry a
      * per-bone REST rotation (their {@code relBoneMat}), so the rest and solved frames
      * are walked separately: the rest frame advances by {@code relBoneMat} alone, the
@@ -433,7 +433,7 @@ final class ModelIKApplier
             Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormalLocal, segLocal, normalLocal);
             Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : bobjFkLocal(chainBones[i]).slerp(localRot, weight);
 
-            chainBones[i].ikOrient = oriented;
+            chainBones[i].orient = oriented;
 
             if (i + 1 < bones)
             {
@@ -451,10 +451,10 @@ final class ModelIKApplier
             if (tip != null)
             {
                 Quaternionf tipRelRot = tip.relBoneMat.getNormalizedRotation(new Quaternionf());
-                Quaternionf tipParent = new Quaternionf(originRot).mul(chainBones[bones - 1].ikOrient).mul(tipRelRot);
+                Quaternionf tipParent = new Quaternionf(originRot).mul(chainBones[bones - 1].orient).mul(tipRelRot);
                 Quaternionf tipLocal = tipParent.conjugate().mul(tipTarget);
 
-                tip.ikOrient = weight >= 1F - EPS ? new Quaternionf(tipLocal) : bobjFkLocal(tip).slerp(tipLocal, weight);
+                tip.orient = weight >= 1F - EPS ? new Quaternionf(tipLocal) : bobjFkLocal(tip).slerp(tipLocal, weight);
             }
         }
     }

@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Quaternionf;
 
@@ -28,11 +29,11 @@ public class ModelGroup implements IMapSerializable
     public Transform initial = new Transform();
     public Transform current = new Transform();
 
-    /* Transient full local orientation an IK solve gives this bone, applied raw in
-     * the render matrix IN PLACE OF the euler rotate triple — so the pole owns the
-     * whole orientation (swing and roll) without round-tripping through euler. Null
-     * when the bone is not IK-driven this frame. */
-    public Quaternionf ikOrient;
+    /* Transient full local orientation for this bone, applied raw in the render matrix IN PLACE OF the
+     * euler rotate triple — so layered rotation (IK, plus animation/pose composition) owns the whole
+     * orientation without round-tripping through euler and hitting the pole. Null when the bone has no
+     * overlay this frame, in which case the renderer falls back to the euler rotate/rotate2 triples. */
+    public Quaternionf orient;
 
     public ModelGroup(String id)
     {
@@ -44,7 +45,31 @@ public class ModelGroup implements IMapSerializable
         this.lighting = 0F;
         this.color.set(1F, 1F, 1F);
         this.current.copy(this.initial);
-        this.ikOrient = null;
+        this.orient = null;
+    }
+
+    /**
+     * Composes one rotation layer into {@link #orient}, the quaternion the renderer applies in place of the
+     * euler triples. The FIRST layer on a bone seeds orient from the euler accumulated so far (this layer's
+     * own {@code +=} included), so a single layer renders byte-identically to the euler path; every later
+     * layer multiplies its delta as a quaternion, so stacked layers compose without the euler-pole flip.
+     * Call this AFTER the layer has applied its additive euler readback to {@code current.rotate}.
+     */
+    public void composeOrient(Quaternionf delta)
+    {
+        if (this.orient == null)
+        {
+            this.orient = Matrices.toQuaternionZYXDegrees(this.current.rotate.x, this.current.rotate.y, this.current.rotate.z);
+
+            if (this.current.rotate2.x != 0F || this.current.rotate2.y != 0F || this.current.rotate2.z != 0F)
+            {
+                this.orient.mul(Matrices.toQuaternionZYXDegrees(this.current.rotate2.x, this.current.rotate2.y, this.current.rotate2.z));
+            }
+        }
+        else
+        {
+            this.orient.mul(delta);
+        }
     }
 
     @Override

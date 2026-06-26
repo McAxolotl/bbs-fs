@@ -133,6 +133,11 @@ public class Matrices
         return new Quaternionf().rotationZYX(z, y, x);
     }
 
+    public static Quaternionf toQuaternionZYXRadians(float x, float y, float z)
+    {
+        return new Quaternionf().rotationZYX(z, y, x);
+    }
+
     public static Vector3f toEulerZYXDegrees(Quaternionf q)
     {
         Vector3f radZYX = new Vector3f();
