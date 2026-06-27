@@ -18,7 +18,7 @@ public class WindControl implements IMapSerializable
     public static final float DEFAULT_X = 1F;
     public static final float DEFAULT_Y = 0F;
     public static final float DEFAULT_Z = 0F;
-    public static final float DEFAULT_TURBULENCE = 0F;
+    public static final float DEFAULT_TURBULENCE = 0.5F;
     public static final float DEFAULT_TURBULENCE_SPEED = 1F;
     public static final float DEFAULT_TURBULENCE_SCALE = 1F;
 

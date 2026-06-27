@@ -6,6 +6,7 @@ public record ModelPhysicsConfig(Map<String, Bone> bones, Wind wind)
 {
     public static final float DEFAULT_WEIGHT = 1F;
     public static final float DEFAULT_STIFFNESS = 0F;
+    public static final float DEFAULT_TURBULENCE = 0.5F;
     public static final float DEFAULT_TURBULENCE_SPEED = 1F;
     public static final float DEFAULT_TURBULENCE_SCALE = 1F;
 
@@ -29,7 +30,7 @@ public record ModelPhysicsConfig(Map<String, Bone> bones, Wind wind)
      */
     public record Wind(float strength, float x, float y, float z, float turbulence, float turbulenceSpeed, float turbulenceScale)
     {
-        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F, 0F, DEFAULT_TURBULENCE_SPEED, DEFAULT_TURBULENCE_SCALE);
+        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F, DEFAULT_TURBULENCE, DEFAULT_TURBULENCE_SPEED, DEFAULT_TURBULENCE_SCALE);
 
         public Wind
         {
