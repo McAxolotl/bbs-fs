@@ -9,6 +9,7 @@ import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.entity.ActorEntity;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -1006,21 +1007,21 @@ public abstract class BaseFilmController
                 continue;
             }
 
-            if (PerLimbService.isIKControlChannel(id))
+            if (FormControlKeys.isIKControlChannel(id))
             {
-                this.applyIKControls(root, PerLimbService.parseIKControlFormPath(id), channel, tick);
+                this.applyIKControls(root, FormControlKeys.parseIKControlFormPath(id), channel, tick);
                 continue;
             }
 
-            if (PerLimbService.isPhysicsControlChannel(id))
+            if (FormControlKeys.isPhysicsControlChannel(id))
             {
-                this.applyPhysicsControls(root, PerLimbService.parsePhysicsControlFormPath(id), channel, tick);
+                this.applyPhysicsControls(root, FormControlKeys.parsePhysicsControlFormPath(id), channel, tick);
                 continue;
             }
 
-            if (PerLimbService.isWindControlChannel(id))
+            if (FormControlKeys.isWindControlChannel(id))
             {
-                this.applyWindControls(root, PerLimbService.parseWindControlFormPath(id), channel, tick);
+                this.applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
                 continue;
             }
 

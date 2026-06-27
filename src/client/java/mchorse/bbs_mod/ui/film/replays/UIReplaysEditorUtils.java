@@ -24,6 +24,7 @@ import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -314,7 +315,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toIKControlKey(path);
+        String id = FormControlKeys.toIKControlKey(path);
         String title = path.isEmpty() ? "ik" : path + "/ik";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
@@ -404,7 +405,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toPhysicsControlKey(path);
+        String id = FormControlKeys.toPhysicsControlKey(path);
         String title = path.isEmpty() ? "physics" : path + "/physics";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
@@ -466,7 +467,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toWindControlKey(path);
+        String id = FormControlKeys.toWindControlKey(path);
         String title = path.isEmpty() ? "wind" : path + "/wind";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.WIND);
