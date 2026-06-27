@@ -244,7 +244,7 @@ public class UIReplaysEditor extends UIElement
             return ReplayCategory.IK;
         }
 
-        if (PerLimbService.isPhysicsControlChannel(id) || PerLimbService.isPhysicsTargetChannel(id))
+        if (PerLimbService.isPhysicsControlChannel(id) || PerLimbService.isPhysicsTargetChannel(id) || PerLimbService.isWindControlChannel(id))
         {
             return ReplayCategory.PHYSICS;
         }
@@ -875,6 +875,7 @@ public class UIReplaysEditor extends UIElement
         if (form instanceof ModelForm modelForm)
         {
             UIReplaysEditorUtils.addPhysicsControlSheet(modelForm, this.replay.properties, sheets);
+            UIReplaysEditorUtils.addWindControlSheet(modelForm, this.replay.properties, sheets);
             UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, sheets);
         }
 

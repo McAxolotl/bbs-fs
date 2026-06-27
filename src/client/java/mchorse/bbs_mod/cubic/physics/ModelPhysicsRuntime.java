@@ -84,7 +84,18 @@ public final class ModelPhysicsRuntime
         Map<String, InstanceState> byModel = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
         InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
 
-        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), compiled.wind(), constraints, state, baseTransform);
+        /* The wind track (if keyframed) replaces the configured wind wholesale at playback, mirroring how the
+         * physics track layers over the per-chain config. */
+        ModelPhysicsConfig.Wind wind = compiled.wind();
+
+        if (instance.form instanceof ModelForm modelForm && modelForm.windControlOverride != null)
+        {
+            WindControl override = modelForm.windControlOverride;
+
+            wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale);
+        }
+
+        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), wind, constraints, state, baseTransform);
     }
 
     private static void applyCompiled(World world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)

@@ -11,6 +11,7 @@ public class PerLimbService
     public static final String POLE_TARGETS = "pole_targets";
     public static final String PHYSICS_TARGETS = "physics_targets";
     public static final String PHYSICS_CONTROLS = "physics_controls";
+    public static final String WIND_CONTROLS = "wind_controls";
 
     public static record PoseBonePath(String formPath, String bone)
     {}
@@ -320,5 +321,45 @@ public class PerLimbService
         }
 
         return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_CONTROLS;
+    }
+
+    public static boolean isWindControlChannel(String id)
+    {
+        return id != null && id.contains(WIND_CONTROLS);
+    }
+
+    /** The wind-controls channel is one per form (the wind is global, not per chain); this returns its owning form path. */
+    public static String parseWindControlFormPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(WIND_CONTROLS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return formPath;
+    }
+
+    public static String toWindControlKey(String formPath)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return WIND_CONTROLS;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + WIND_CONTROLS;
     }
 }
