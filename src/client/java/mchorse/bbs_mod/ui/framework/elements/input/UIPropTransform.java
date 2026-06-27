@@ -176,7 +176,7 @@ public class UIPropTransform extends UITransform
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.local = BBSSettings.transformSpace.get() == 1;
+        this.local = BBSSettings.defaultLocalTransform.get();
 
         this.context((menu) ->
         {
