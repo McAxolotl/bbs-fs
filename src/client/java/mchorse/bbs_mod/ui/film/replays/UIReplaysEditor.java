@@ -15,6 +15,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
@@ -239,12 +240,12 @@ public class UIReplaysEditor extends UIElement
     {
         String id = sheet.id;
 
-        if (PerLimbService.isIKControlChannel(id) || PerLimbService.isIKTargetChannel(id) || PerLimbService.isPoleTargetChannel(id))
+        if (FormControlKeys.isIKControlChannel(id) || PerLimbService.isIKTargetChannel(id) || PerLimbService.isPoleTargetChannel(id))
         {
             return ReplayCategory.IK;
         }
 
-        if (PerLimbService.isPhysicsControlChannel(id) || PerLimbService.isPhysicsTargetChannel(id))
+        if (FormControlKeys.isPhysicsControlChannel(id) || PerLimbService.isPhysicsTargetChannel(id) || FormControlKeys.isWindControlChannel(id))
         {
             return ReplayCategory.PHYSICS;
         }
@@ -875,6 +876,7 @@ public class UIReplaysEditor extends UIElement
         if (form instanceof ModelForm modelForm)
         {
             UIReplaysEditorUtils.addPhysicsControlSheet(modelForm, this.replay.properties, sheets);
+            UIReplaysEditorUtils.addWindControlSheet(modelForm, this.replay.properties, sheets);
             UIReplaysEditorUtils.addPhysicsTargetSheets(modelForm, this.replay.properties, sheets);
         }
 

@@ -131,13 +131,13 @@ final class ModelPhysicsCache
         }
     }
 
-    public record Compiled(List<CompiledChain> chains)
+    public record Compiled(List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
     {
     }
 
     private static final WeakHashMap<MapType, EmbeddedCompiled> EMBEDDED = new WeakHashMap<>();
 
-    private record EmbeddedCompiled(IModel model, List<CompiledChain> chains)
+    private record EmbeddedCompiled(IModel model, List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
     {
     }
 
@@ -161,16 +161,17 @@ final class ModelPhysicsCache
 
         if (cached != null && cached.model == model)
         {
-            return new Compiled(cached.chains);
+            return new Compiled(cached.chains, cached.wind);
         }
 
         ModelPhysicsConfig config = ModelPhysicsIO.fromData(data);
         List<CompiledChain> compiled = compile(model, config);
+        ModelPhysicsConfig.Wind wind = config != null ? config.wind() : ModelPhysicsConfig.Wind.NONE;
 
-        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled);
+        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled, wind);
         EMBEDDED.put(data, next);
 
-        return new Compiled(compiled);
+        return new Compiled(compiled, wind);
     }
 
     private static List<CompiledChain> compile(IModel model, ModelPhysicsConfig config)

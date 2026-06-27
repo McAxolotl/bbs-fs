@@ -2,10 +2,54 @@ package mchorse.bbs_mod.cubic.physics;
 
 import java.util.Map;
 
-public record ModelPhysicsConfig(Map<String, Bone> bones)
+public record ModelPhysicsConfig(Map<String, Bone> bones, Wind wind)
 {
     public static final float DEFAULT_WEIGHT = 1F;
     public static final float DEFAULT_STIFFNESS = 0F;
+    public static final float DEFAULT_TURBULENCE = 0.5F;
+    public static final float DEFAULT_TURBULENCE_SPEED = 1F;
+    public static final float DEFAULT_TURBULENCE_SCALE = 1F;
+
+    public ModelPhysicsConfig
+    {
+        if (wind == null)
+        {
+            wind = Wind.NONE;
+        }
+    }
+
+    /**
+     * Global wind for the whole model's physics: a single world-space directional force ({@code x}/{@code y}/
+     * {@code z} direction scaled by {@code strength}) added to every chain on top of its gravity. It is one
+     * field for the whole model, not bound to any bone. Strength 0 — or a zero direction — means no wind.
+     *
+     * <p>{@code turbulence} (0..1) makes the wind gust instead of blowing steadily: the magnitude is
+     * modulated by a noise field that drifts downwind over time ({@code turbulenceSpeed}) and varies across
+     * space ({@code turbulenceScale}), so points along a chain ripple rather than move rigidly. Turbulence 0
+     * leaves a steady force.
+     */
+    public record Wind(float strength, float x, float y, float z, float turbulence, float turbulenceSpeed, float turbulenceScale)
+    {
+        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F, DEFAULT_TURBULENCE, DEFAULT_TURBULENCE_SPEED, DEFAULT_TURBULENCE_SCALE);
+
+        public Wind
+        {
+            strength = Math.max(0F, strength);
+            turbulence = turbulence < 0F ? 0F : Math.min(turbulence, 1F);
+            turbulenceSpeed = Math.max(0F, turbulenceSpeed);
+            turbulenceScale = Math.max(0F, turbulenceScale);
+        }
+
+        public boolean active()
+        {
+            return this.strength > 0F && (this.x != 0F || this.y != 0F || this.z != 0F);
+        }
+
+        public boolean isDefault()
+        {
+            return this.equals(NONE);
+        }
+    }
 
     public record Bone(String end, String targetBone, float gravity, float damping, float stiffness, int iterations, boolean relativeGravity, float relativeGravityRotateX, float relativeGravityRotateY, float relativeGravityRotateZ, boolean collisions, float radius, float weight)
     {

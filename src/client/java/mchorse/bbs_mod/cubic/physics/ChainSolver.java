@@ -196,7 +196,7 @@ final class ChainSolver
         }
     }
 
-    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -262,11 +262,22 @@ final class ChainSolver
         float dampMul = (float) Math.pow(1F - damping, h);
         float gravityScale = h * h;
 
+        /* Gravity (per chain), folded once into the per-sub-step acceleration: it scales by gravityScale
+         * (the squared sub-step length, the Verlet dt²). */
         Vector3f gravityVec = new Vector3f();
         PhysicsForces.computeGravityDirection(chain, parentRotation, gravity, gravityVec);
         float gravityX = gravityVec.x * gravityScale;
         float gravityY = gravityVec.y * gravityScale;
         float gravityZ = gravityVec.z * gravityScale;
+
+        /* Wind: its steady direction and base magnitude are resolved once here, but the actual force is
+         * asked for per point inside the sub-step loop, because turbulence varies it across space and time
+         * (so the chain ripples and gusts drift downwind). Lives in the same world frame as gravity. */
+        Vector3f windDir = new Vector3f();
+        float windMagnitude = PhysicsForces.prepareWind(wind, BASE_GRAVITY, windDir);
+        boolean hasWind = windMagnitude > 0F;
+        Vector3f windVec = hasWind ? new Vector3f() : null;
+        int startAge = state.lastAge;
 
         /* Per-point spring-back fraction toward the animated pose for one sub-step, falling off toward the
          * floppier tip. Applied as an angular pull in solveSpring, not a positional one. */
@@ -296,6 +307,7 @@ final class ChainSolver
             /* Slide the anchor from where the simulation left it toward the live anchor across the
              * sub-steps of this frame, so the chain sees a smooth anchor trajectory. */
             float progress = (s + 1) / (float) steps;
+            float filmTime = startAge + (s + 1) * h;
             stepAnchor.set(startAnchor).lerp(newAnchor, progress);
             stepAnchorRotation.set(startAnchorRotation).slerp(newAnchorRotation, progress);
 
@@ -318,6 +330,14 @@ final class ChainSolver
                 p.x += gravityX;
                 p.y += gravityY;
                 p.z += gravityZ;
+
+                if (hasWind)
+                {
+                    PhysicsForces.windForceAt(windDir, windMagnitude, wind, filmTime, p, windVec);
+                    p.x += windVec.x * gravityScale;
+                    p.y += windVec.y * gravityScale;
+                    p.z += windVec.z * gravityScale;
+                }
 
                 if (collisions)
                 {

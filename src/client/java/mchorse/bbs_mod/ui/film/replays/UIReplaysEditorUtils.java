@@ -22,7 +22,9 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
+import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -313,7 +315,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toIKControlKey(path);
+        String id = FormControlKeys.toIKControlKey(path);
         String title = path.isEmpty() ? "ik" : path + "/ik";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
@@ -403,7 +405,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toPhysicsControlKey(path);
+        String id = FormControlKeys.toPhysicsControlKey(path);
         String title = path.isEmpty() ? "physics" : path + "/physics";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
@@ -443,6 +445,61 @@ public class UIReplaysEditorUtils
         }
 
         return controls;
+    }
+
+    /**
+     * One wind track per form that has physics chains: a single keyframe sheet whose value holds the
+     * global wind scalars (strength, direction, turbulence), layered over the form's physics wind config
+     * at playback. The wind is global, so — unlike the physics-controls track — it is not keyed by a chain.
+     */
+    public static void addWindControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = FormControlKeys.toWindControlKey(path);
+        String title = path.isEmpty() ? "wind" : path + "/wind";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.WIND);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.CYAN, false, channel, null)
+            .icon(Icons.ARROW_RIGHT).form(modelForm).seed(() -> buildWindControl(modelForm)));
+    }
+
+    /** A wind-control value seeded from the form's physics wind config, so a fresh keyframe matches the configured wind instead of drifting to defaults. */
+    private static WindControl buildWindControl(ModelForm modelForm)
+    {
+        WindControl control = new WindControl();
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null)
+            {
+                ModelPhysicsConfig.Wind wind = config.wind();
+
+                control.strength = wind.strength();
+                control.x = wind.x();
+                control.y = wind.y();
+                control.z = wind.z();
+                control.turbulence = wind.turbulence();
+                control.turbulenceSpeed = wind.turbulenceSpeed();
+                control.turbulenceScale = wind.turbulenceScale();
+            }
+        }
+
+        return control;
     }
 
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -564,6 +621,7 @@ public class UIReplaysEditorUtils
         {
             addMaterialTextureSheets(modelForm, properties, sheets);
             addPhysicsControlSheet(modelForm, properties, sheets);
+            addWindControlSheet(modelForm, properties, sheets);
             addPhysicsTargetSheets(modelForm, properties, sheets);
             addBoneTrackSheets(modelForm, properties, sheets);
             addIKControlSheet(modelForm, properties, sheets);
