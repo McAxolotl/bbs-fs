@@ -749,6 +749,14 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_TEXTURE = L10n.lang("bbs.ui.model_editor.texture");
     public static final IKey MODEL_EDITOR_UI_SCALE = L10n.lang("bbs.ui.model_editor.ui_scale");
     public static final IKey MODEL_EDITOR_SCALE = L10n.lang("bbs.ui.model_editor.scale");
+    public static final IKey MODEL_EDITOR_WELDS = L10n.lang("bbs.ui.model_editor.welds");
+    public static final IKey MODEL_EDITOR_WELD_SOURCE_BONE = L10n.lang("bbs.ui.model_editor.weld.source_bone");
+    public static final IKey MODEL_EDITOR_WELD_SOURCE_FACE = L10n.lang("bbs.ui.model_editor.weld.source_face");
+    public static final IKey MODEL_EDITOR_WELD_TARGET_BONE = L10n.lang("bbs.ui.model_editor.weld.target_bone");
+    public static final IKey MODEL_EDITOR_WELD_TARGET_FACE = L10n.lang("bbs.ui.model_editor.weld.target_face");
+    public static final IKey MODEL_EDITOR_WELD_MAX_ANGLE = L10n.lang("bbs.ui.model_editor.weld.max_angle");
+    public static final IKey MODEL_EDITOR_WELD_ADD = L10n.lang("bbs.ui.model_editor.weld.add");
+    public static final IKey MODEL_EDITOR_WELD_REMOVE = L10n.lang("bbs.ui.model_editor.weld.remove");
     public static final IKey MODEL_BLOCKS_TRANSFORM_FIRST_PERSON = L10n.lang("bbs.ui.model_blocks.transform.first_person");
     public static final IKey MODEL_BLOCKS_TRANSFORM_INVENTORY = L10n.lang("bbs.ui.model_blocks.transform.inventory");
     public static final IKey MODEL_BLOCKS_TRANSFORM_THIRD_PERSON = L10n.lang("bbs.ui.model_blocks.transform.third_person");
