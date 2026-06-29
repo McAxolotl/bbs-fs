@@ -139,6 +139,16 @@ public class ModelInstance implements IModelInstance
     }
 
     /**
+     * Re-resolve welds after the config's weld list was edited: drop the cached bindings (rebuilt on the
+     * next render) and refresh the config's derived caches so the new welds take effect.
+     */
+    public void invalidateWelds()
+    {
+        this.weldBindings = null;
+        this.config.rebuild();
+    }
+
+    /**
      * Resolve a material's static default texture: the per-material texture loaded
      * from {@code textures/<material>/} if present, otherwise the supplied fallback
      * (the form/model default texture). Animation tracks layer on top of this at

@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.model_editor;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
+import mchorse.bbs_mod.cubic.model.config.WeldValue;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -17,6 +18,7 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIFormRenderer;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -26,8 +28,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
-import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -54,14 +56,16 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private String pendingId;
     private int splitWidth = 220;
 
+    /** The live instance backing the current tab, kept so weld edits can re-resolve its bindings. */
+    private ModelInstance bound;
+
     public UIModelEditorPanel(UIDashboard dashboard)
     {
         super(dashboard);
 
         this.enableTabs();
 
-        this.general = new UIScrollView(ScrollDirection.VERTICAL);
-        this.general.column().scroll().vertical().stretch().padding(6).height(20);
+        this.general = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
 
         this.renderer = new UIFormRenderer();
         this.renderer.form = this.form;
@@ -134,6 +138,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         if (instance != null)
         {
+            this.bound = instance;
             this.form.model.set(this.pendingId);
             this.pendingId = null;
             this.fill(instance.config);
@@ -154,7 +159,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     @Override
     protected void fillData(ModelConfig data)
     {
-        this.rebuildGeneral(data);
+        this.rebuildSections(data);
     }
 
     @Override
@@ -186,44 +191,129 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         UIOverlay.addOverlay(this.getContext(), picker);
     }
 
-    private void rebuildGeneral(ModelConfig config)
+    private void rebuildSections(ModelConfig config)
     {
         this.general.removeAll();
 
         if (config != null)
         {
-            this.general.add(
-                this.toggle(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
-                this.toggle(UIKeys.MODEL_EDITOR_CULLING, config.culling),
-                this.toggle(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu),
-                this.row(UIKeys.MODEL_EDITOR_UI_SCALE, this.floatField(config.uiScale)),
-                this.row(UIKeys.MODEL_EDITOR_SCALE, this.vectorField(config.scale)),
-                this.row(UIKeys.MODEL_EDITOR_POSE_GROUP, this.stringField(config.poseGroup)),
-                this.row(UIKeys.MODEL_EDITOR_ANCHOR, this.stringField(config.anchor)),
-                this.row(UIKeys.MODEL_EDITOR_TEXTURE, this.textureField(config.texture))
-            );
+            this.general.add(this.generalSection(config), this.weldsSection(config));
         }
 
         this.general.resize();
     }
 
-    private UIToggle toggle(IKey label, ValueBoolean value)
+    private UISection generalSection(ModelConfig config)
     {
-        UIToggle toggle = new UIToggle(label, value.get(), (t) -> value.set(t.getValue()));
+        UISection section = new UISection(UIKeys.FORMS_EDITORS_GENERAL);
 
-        toggle.resetFlex();
+        section.fields.add(
+            this.toggle(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
+            this.toggle(UIKeys.MODEL_EDITOR_CULLING, config.culling),
+            this.toggle(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu),
+            UI.label(UIKeys.MODEL_EDITOR_UI_SCALE), this.floatField(config.uiScale),
+            UI.label(UIKeys.MODEL_EDITOR_SCALE), UI.row(this.component(config.scale, 0), this.component(config.scale, 1), this.component(config.scale, 2)),
+            UI.label(UIKeys.MODEL_EDITOR_POSE_GROUP), this.stringField(config.poseGroup),
+            UI.label(UIKeys.MODEL_EDITOR_ANCHOR), this.stringField(config.anchor),
+            UI.label(UIKeys.MODEL_EDITOR_TEXTURE), this.textureField(config.texture)
+        );
 
-        return toggle;
+        return section;
     }
 
-    private UIElement row(IKey label, UIElement control)
+    private UISection weldsSection(ModelConfig config)
     {
-        UIElement row = new UIElement();
+        UISection section = new UISection(UIKeys.MODEL_EDITOR_WELDS);
 
-        row.row(0).preferred(0).height(20);
-        row.add(UI.label(label).labelAnchor(0, 0.5F), control);
+        for (WeldValue weld : config.welds.getAllTyped())
+        {
+            section.fields.add(this.weldEntry(config, weld));
+        }
 
-        return row;
+        section.fields.add(new UIButton(UIKeys.MODEL_EDITOR_WELD_ADD, (b) -> this.addWeld(config)));
+
+        return section;
+    }
+
+    private UIElement weldEntry(ModelConfig config, WeldValue weld)
+    {
+        UIIcon remove = new UIIcon(Icons.REMOVE, (b) -> this.removeWeld(config, weld));
+
+        remove.tooltip(UIKeys.MODEL_EDITOR_WELD_REMOVE, Direction.LEFT);
+        remove.wh(20, 20);
+
+        UIElement angle = new UIElement();
+
+        angle.row(UIConstants.MARGIN).preferred(0);
+        angle.add(this.weldAngle(weld), remove);
+
+        UIElement entry = UI.column(
+            UI.row(this.weldField(weld.sourceBone, UIKeys.MODEL_EDITOR_WELD_SOURCE_BONE), this.weldField(weld.sourceFace, UIKeys.MODEL_EDITOR_WELD_SOURCE_FACE)),
+            UI.row(this.weldField(weld.targetBone, UIKeys.MODEL_EDITOR_WELD_TARGET_BONE), this.weldField(weld.targetFace, UIKeys.MODEL_EDITOR_WELD_TARGET_FACE)),
+            UI.label(UIKeys.MODEL_EDITOR_WELD_MAX_ANGLE),
+            angle
+        );
+
+        entry.marginBottom(6);
+
+        return entry;
+    }
+
+    private UITextbox weldField(ValueString value, IKey placeholder)
+    {
+        UITextbox textbox = new UITextbox(100, (text) ->
+        {
+            value.set(text);
+            this.invalidateWelds();
+        });
+
+        textbox.placeholder(placeholder);
+        textbox.setText(value.get());
+
+        return textbox;
+    }
+
+    private UITrackpad weldAngle(WeldValue weld)
+    {
+        UITrackpad trackpad = new UITrackpad((v) ->
+        {
+            weld.maxAngle.set(v.floatValue());
+            this.invalidateWelds();
+        });
+
+        trackpad.setValue(weld.maxAngle.get());
+        trackpad.delayedInput();
+
+        return trackpad;
+    }
+
+    private void addWeld(ModelConfig config)
+    {
+        config.welds.add(new WeldValue(String.valueOf(config.welds.getList().size())));
+        config.welds.sync();
+        this.invalidateWelds();
+        this.rebuildSections(config);
+    }
+
+    private void removeWeld(ModelConfig config, WeldValue weld)
+    {
+        config.welds.getAllTyped().remove(weld);
+        config.welds.sync();
+        this.invalidateWelds();
+        this.rebuildSections(config);
+    }
+
+    private void invalidateWelds()
+    {
+        if (this.bound != null)
+        {
+            this.bound.invalidateWelds();
+        }
+    }
+
+    private UIToggle toggle(IKey label, ValueBoolean value)
+    {
+        return new UIToggle(label, value.get(), (t) -> value.set(t.getValue()));
     }
 
     private UITrackpad floatField(ValueFloat value)
@@ -232,7 +322,6 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         trackpad.limit(value.getMin(), value.getMax()).delayedInput();
         trackpad.setValue(value.get());
-        trackpad.w(100);
 
         return trackpad;
     }
@@ -242,29 +331,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         UITextbox textbox = new UITextbox(10000, value::set);
 
         textbox.setText(value.get());
-        textbox.w(100);
 
         return textbox;
     }
 
     private UIButton textureField(ValueLink value)
     {
-        UIButton button = new UIButton(UIKeys.TEXTURE_PICK_TEXTURE, (b) -> UITexturePicker.open(this.getContext(), value.get(), value::set));
-
-        button.w(100);
-
-        return button;
-    }
-
-    private UIElement vectorField(ValueVector3f value)
-    {
-        UIElement fields = new UIElement();
-
-        fields.row(2).height(20);
-        fields.w(100);
-        fields.add(this.component(value, 0), this.component(value, 1), this.component(value, 2));
-
-        return fields;
+        return new UIButton(UIKeys.TEXTURE_PICK_TEXTURE, (b) -> UITexturePicker.open(this.getContext(), value.get(), value::set));
     }
 
     private UITrackpad component(ValueVector3f value, int axis)
