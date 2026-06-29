@@ -761,6 +761,7 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_LOOK_AT_HEAD = L10n.lang("bbs.ui.model_editor.look_at.head");
     public static final IKey MODEL_EDITOR_LOOK_AT_PITCH = L10n.lang("bbs.ui.model_editor.look_at.pitch");
     public static final IKey MODEL_EDITOR_LOOK_AT_LIMIT = L10n.lang("bbs.ui.model_editor.look_at.limit");
+    public static final IKey MODEL_EDITOR_BONES = L10n.lang("bbs.ui.model_editor.bones");
     public static final IKey MODEL_BLOCKS_TRANSFORM_FIRST_PERSON = L10n.lang("bbs.ui.model_blocks.transform.first_person");
     public static final IKey MODEL_BLOCKS_TRANSFORM_INVENTORY = L10n.lang("bbs.ui.model_blocks.transform.inventory");
     public static final IKey MODEL_BLOCKS_TRANSFORM_THIRD_PERSON = L10n.lang("bbs.ui.model_blocks.transform.third_person");

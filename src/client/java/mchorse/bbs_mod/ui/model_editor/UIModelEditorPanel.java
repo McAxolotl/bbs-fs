@@ -37,6 +37,7 @@ import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Model Editor — a proper data panel (tabs, right icon bar, save) over models. Each tab is an open model;
@@ -197,7 +198,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         if (config != null)
         {
-            this.general.add(this.generalSection(config), this.weldsSection(config), this.lookAtSection(config));
+            this.general.add(this.generalSection(config), this.weldsSection(config), this.lookAtSection(config), this.bonesSection(config));
         }
 
         this.general.resize();
@@ -268,6 +269,38 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         trackpad.delayedInput();
 
         return trackpad;
+    }
+
+    private UISection bonesSection(ModelConfig config)
+    {
+        UISection section = new UISection(UIKeys.MODEL_EDITOR_BONES);
+
+        if (this.bound != null)
+        {
+            Set<String> hidden = config.disabledBones.get();
+
+            for (String bone : this.bound.getModel().getGroupKeysInHierarchyOrder())
+            {
+                section.fields.add(this.boneToggle(bone, hidden));
+            }
+        }
+
+        return section;
+    }
+
+    private UIToggle boneToggle(String bone, Set<String> hidden)
+    {
+        return new UIToggle(IKey.raw(bone), !hidden.contains(bone), (t) ->
+        {
+            if (t.getValue())
+            {
+                hidden.remove(bone);
+            }
+            else
+            {
+                hidden.add(bone);
+            }
+        });
     }
 
     private UISection weldsSection(ModelConfig config)
