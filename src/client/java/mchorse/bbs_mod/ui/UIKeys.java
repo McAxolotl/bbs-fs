@@ -762,6 +762,13 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_LOOK_AT_PITCH = L10n.lang("bbs.ui.model_editor.look_at.pitch");
     public static final IKey MODEL_EDITOR_LOOK_AT_LIMIT = L10n.lang("bbs.ui.model_editor.look_at.limit");
     public static final IKey MODEL_EDITOR_BONES = L10n.lang("bbs.ui.model_editor.bones");
+    public static final IKey MODEL_EDITOR_PICK_BONE = L10n.lang("bbs.ui.model_editor.pick_bone");
+    public static final IKey MODEL_EDITOR_FACE_FRONT = L10n.lang("bbs.ui.model_editor.face.front");
+    public static final IKey MODEL_EDITOR_FACE_BACK = L10n.lang("bbs.ui.model_editor.face.back");
+    public static final IKey MODEL_EDITOR_FACE_RIGHT = L10n.lang("bbs.ui.model_editor.face.right");
+    public static final IKey MODEL_EDITOR_FACE_LEFT = L10n.lang("bbs.ui.model_editor.face.left");
+    public static final IKey MODEL_EDITOR_FACE_TOP = L10n.lang("bbs.ui.model_editor.face.top");
+    public static final IKey MODEL_EDITOR_FACE_BOTTOM = L10n.lang("bbs.ui.model_editor.face.bottom");
     public static final IKey MODEL_BLOCKS_TRANSFORM_FIRST_PERSON = L10n.lang("bbs.ui.model_blocks.transform.first_person");
     public static final IKey MODEL_BLOCKS_TRANSFORM_INVENTORY = L10n.lang("bbs.ui.model_blocks.transform.inventory");
     public static final IKey MODEL_BLOCKS_TRANSFORM_THIRD_PERSON = L10n.lang("bbs.ui.model_blocks.transform.third_person");

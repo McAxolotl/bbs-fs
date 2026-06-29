@@ -4,7 +4,10 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.model.config.WeldValue;
+import mchorse.bbs_mod.cubic.weld.CubeFace;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueString;
@@ -21,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -38,6 +42,8 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Model Editor — a proper data panel (tabs, right icon bar, save) over models. Each tab is an open model;
@@ -56,6 +62,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     /** The model id whose instance we're waiting on; models load asynchronously, so the fill is deferred. */
     private String pendingId;
     private int splitWidth = 220;
+
+    /** Cube faces in enum order; the face picker adds its icons in this order so the index maps straight back. */
+    private static final CubeFace[] FACES = CubeFace.values();
 
     /** The live instance backing the current tab, kept so weld edits can re-resolve its bindings. */
     private ModelInstance bound;
@@ -209,13 +218,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         UISection section = new UISection(UIKeys.FORMS_EDITORS_GENERAL);
 
         section.fields.add(
-            this.toggle(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
+            this.toggleRefresh(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
             this.toggle(UIKeys.MODEL_EDITOR_CULLING, config.culling),
-            this.toggle(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu),
+            this.toggleRefresh(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu),
             UI.label(UIKeys.MODEL_EDITOR_UI_SCALE), this.floatField(config.uiScale),
             UI.label(UIKeys.MODEL_EDITOR_SCALE), UI.row(this.component(config.scale, 0), this.component(config.scale, 1), this.component(config.scale, 2)),
             UI.label(UIKeys.MODEL_EDITOR_POSE_GROUP), this.stringField(config.poseGroup),
-            UI.label(UIKeys.MODEL_EDITOR_ANCHOR), this.stringField(config.anchor),
+            UI.label(UIKeys.MODEL_EDITOR_ANCHOR), this.bonePicker(config.anchor::get, config.anchor::set, () -> {}),
             UI.label(UIKeys.MODEL_EDITOR_TEXTURE), this.textureField(config.texture)
         );
 
@@ -227,25 +236,12 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         UISection section = new UISection(UIKeys.MODEL_EDITOR_LOOK_AT);
 
         section.fields.add(
-            UI.label(UIKeys.MODEL_EDITOR_LOOK_AT_HEAD), this.lookAtHead(config),
+            UI.label(UIKeys.MODEL_EDITOR_LOOK_AT_HEAD), this.bonePicker(config.lookAt.head::get, config.lookAt.head::set, config::rebuild),
             this.lookAtPitch(config),
             UI.label(UIKeys.MODEL_EDITOR_LOOK_AT_LIMIT), this.lookAtLimit(config)
         );
 
         return section;
-    }
-
-    private UITextbox lookAtHead(ModelConfig config)
-    {
-        UITextbox textbox = new UITextbox(100, (t) ->
-        {
-            config.lookAt.head.set(t);
-            config.rebuild();
-        });
-
-        textbox.setText(config.lookAt.head.get());
-
-        return textbox;
     }
 
     private UIToggle lookAtPitch(ModelConfig config)
@@ -275,17 +271,39 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     {
         UISection section = new UISection(UIKeys.MODEL_EDITOR_BONES);
 
+        UIScrollView list = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
+
+        list.h(160);
+
+        UITextbox search = new UITextbox(100, (query) -> this.fillBones(list, config, query));
+
+        search.placeholder(UIKeys.GENERAL_SEARCH);
+
+        section.fields.add(search, list);
+        this.fillBones(list, config, "");
+
+        return section;
+    }
+
+    private void fillBones(UIScrollView list, ModelConfig config, String query)
+    {
+        list.removeAll();
+
         if (this.bound != null)
         {
             Set<String> hidden = config.disabledBones.get();
+            String filter = query.trim().toLowerCase();
 
             for (String bone : this.bound.getModel().getGroupKeysInHierarchyOrder())
             {
-                section.fields.add(this.boneToggle(bone, hidden));
+                if (filter.isEmpty() || bone.toLowerCase().contains(filter))
+                {
+                    list.add(this.boneToggle(bone, hidden));
+                }
             }
         }
 
-        return section;
+        list.resize();
     }
 
     private UIToggle boneToggle(String bone, Set<String> hidden)
@@ -330,8 +348,8 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         angle.add(this.weldAngle(weld), remove);
 
         UIElement entry = UI.column(
-            UI.row(this.weldField(weld.sourceBone, UIKeys.MODEL_EDITOR_WELD_SOURCE_BONE), this.weldField(weld.sourceFace, UIKeys.MODEL_EDITOR_WELD_SOURCE_FACE)),
-            UI.row(this.weldField(weld.targetBone, UIKeys.MODEL_EDITOR_WELD_TARGET_BONE), this.weldField(weld.targetFace, UIKeys.MODEL_EDITOR_WELD_TARGET_FACE)),
+            UI.row(this.bonePicker(weld.sourceBone::get, weld.sourceBone::set, this::invalidateWelds), this.facePicker(weld.sourceFace, this::invalidateWelds)),
+            UI.row(this.bonePicker(weld.targetBone::get, weld.targetBone::set, this::invalidateWelds), this.facePicker(weld.targetFace, this::invalidateWelds)),
             UI.label(UIKeys.MODEL_EDITOR_WELD_MAX_ANGLE),
             angle
         );
@@ -341,18 +359,66 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         return entry;
     }
 
-    private UITextbox weldField(ValueString value, IKey placeholder)
+    private UIButton bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange)
     {
-        UITextbox textbox = new UITextbox(100, (text) ->
+        UIButton[] ref = new UIButton[1];
+        UIButton button = new UIButton(this.boneLabel(get.get()), (b) ->
         {
-            value.set(text);
-            this.invalidateWelds();
+            if (this.bound == null)
+            {
+                return;
+            }
+
+            String current = get.get();
+
+            this.getContext().replaceContextMenu((menu) ->
+            {
+                menu.action(Icons.REMOVE, UIKeys.GENERAL_NONE, current == null || current.isEmpty(), () -> this.pickBone(ref[0], set, onChange, ""));
+
+                for (String bone : this.bound.getModel().getGroupKeysInHierarchyOrder())
+                {
+                    menu.action(Icons.LIMB, IKey.constant(bone), bone.equals(current), () -> this.pickBone(ref[0], set, onChange, bone));
+                }
+            });
         });
 
-        textbox.placeholder(placeholder);
-        textbox.setText(value.get());
+        ref[0] = button;
 
-        return textbox;
+        return button;
+    }
+
+    private void pickBone(UIButton button, Consumer<String> set, Runnable onChange, String bone)
+    {
+        set.accept(bone);
+        button.label = this.boneLabel(bone);
+        onChange.run();
+    }
+
+    private IKey boneLabel(String bone)
+    {
+        return bone == null || bone.isEmpty() ? UIKeys.MODEL_EDITOR_PICK_BONE : IKey.raw(bone);
+    }
+
+    private UIIcons facePicker(ValueString value, Runnable onChange)
+    {
+        UIIcons icons = new UIIcons((b) ->
+        {
+            value.set(FACES[b.getValue()].name().toLowerCase());
+            onChange.run();
+        });
+
+        icons.add(Icons.FORWARD, UIKeys.MODEL_EDITOR_FACE_FRONT);
+        icons.add(Icons.BACKWARD, UIKeys.MODEL_EDITOR_FACE_BACK);
+        icons.add(Icons.ARROW_RIGHT, UIKeys.MODEL_EDITOR_FACE_RIGHT);
+        icons.add(Icons.ARROW_LEFT, UIKeys.MODEL_EDITOR_FACE_LEFT);
+        icons.add(Icons.ARROW_UP, UIKeys.MODEL_EDITOR_FACE_TOP);
+        icons.add(Icons.ARROW_DOWN, UIKeys.MODEL_EDITOR_FACE_BOTTOM);
+
+        CubeFace current = CubeFace.fromName(value.get());
+
+        icons.setValue(current == null ? 0 : current.ordinal());
+
+        return icons;
     }
 
     private UITrackpad weldAngle(WeldValue weld)
@@ -373,7 +439,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     {
         config.welds.add(new WeldValue(String.valueOf(config.welds.getList().size())));
         config.welds.sync();
-        this.invalidateWelds();
+        this.refresh();
         this.rebuildSections(config);
     }
 
@@ -381,7 +447,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     {
         config.welds.getAllTyped().remove(weld);
         config.welds.sync();
-        this.invalidateWelds();
+        this.refresh();
         this.rebuildSections(config);
     }
 
@@ -396,6 +462,43 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private UIToggle toggle(IKey label, ValueBoolean value)
     {
         return new UIToggle(label, value.get(), (t) -> value.set(t.getValue()));
+    }
+
+    /** A toggle for a setting that changes the render path/baked geometry (procedural, on_cpu) — refreshes. */
+    private UIToggle toggleRefresh(IKey label, ValueBoolean value)
+    {
+        return new UIToggle(label, value.get(), (t) ->
+        {
+            value.set(t.getValue());
+            this.refresh();
+        });
+    }
+
+    /**
+     * Rebuild the live instance's baked state so a config edit that changed the render path or geometry
+     * shows in the preview without saving: re-resolve welds + derived caches, re-bake VAOs, and reset the
+     * renderer's cached animator (the procedural/non-procedural choice). The plain scalar reads (scale,
+     * texture, culling...) already update every frame, so they don't go through here.
+     */
+    private void refresh()
+    {
+        if (this.bound == null)
+        {
+            return;
+        }
+
+        this.bound.invalidateWelds();
+        this.bound.delete();
+        this.bound.setup();
+        this.resetAnimator();
+    }
+
+    private void resetAnimator()
+    {
+        if (FormUtilsClient.getRenderer(this.form) instanceof ModelFormRenderer renderer)
+        {
+            renderer.resetAnimator();
+        }
     }
 
     private UITrackpad floatField(ValueFloat value)
