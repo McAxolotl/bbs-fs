@@ -67,8 +67,9 @@ public class CubicCubeRenderer implements ICubicRenderer
     private boolean captureOnly;
 
     /* A welded cube's faces bend within a band near the seam; drawn as two flat triangles their texture warps
-     * unevenly, so they are tessellated into this many sub-quads per side and the bend is resolved across them.
-     * Kept fairly high so a narrow falloff band stays smooth instead of faceting over too few cells. */
+     * unevenly, so the edge running ALONG the bone is split into this many segments and the bend is resolved
+     * across them (the cross-bone edge stays linear, so it needs no split). Kept fairly high so a narrow falloff
+     * band stays smooth instead of faceting over too few cells — cheap now that it is one direction, not N×N. */
     private static final int WELD_SUBDIVISIONS = 8;
 
     private final Vector3f[] rigidPos = {new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f()};
@@ -390,16 +391,32 @@ public class CubicCubeRenderer implements ICubicRenderer
             this.cornerV[i] = corner.uv.y;
         }
 
-        int n = WELD_SUBDIVISIONS;
+        int nS = 1;
+        int nT = 1;
+        Vector3f axis = this.weldAxis();
 
-        for (int row = 0; row < n; row++)
+        if (axis != null)
         {
-            for (int col = 0; col < n; col++)
+            Vector3f c0 = quad.vertices.get(0).vertex;
+            float alongS = Math.abs((quad.vertices.get(1).vertex.x - c0.x) * axis.x + (quad.vertices.get(1).vertex.y - c0.y) * axis.y + (quad.vertices.get(1).vertex.z - c0.z) * axis.z);
+            float alongT = Math.abs((quad.vertices.get(3).vertex.x - c0.x) * axis.x + (quad.vertices.get(3).vertex.y - c0.y) * axis.y + (quad.vertices.get(3).vertex.z - c0.z) * axis.z);
+
+            /* Only the edge running along the bone bends non-linearly; the other stays linear, so 1 segment is exact. */
+            if (Math.max(alongS, alongT) > 1.0e-4F)
             {
-                float s0 = (float) col / n;
-                float s1 = (float) (col + 1) / n;
-                float t0 = (float) row / n;
-                float t1 = (float) (row + 1) / n;
+                if (alongS >= alongT) nS = WELD_SUBDIVISIONS;
+                else nT = WELD_SUBDIVISIONS;
+            }
+        }
+
+        for (int row = 0; row < nT; row++)
+        {
+            for (int col = 0; col < nS; col++)
+            {
+                float s0 = (float) col / nS;
+                float s1 = (float) (col + 1) / nS;
+                float t0 = (float) row / nT;
+                float t1 = (float) (row + 1) / nT;
 
                 this.emitInterp(builder, group, s0, t0, normal);
                 this.emitInterp(builder, group, s1, t0, normal);
@@ -409,6 +426,15 @@ public class CubicCubeRenderer implements ICubicRenderer
                 this.emitInterp(builder, group, s0, t1, normal);
             }
         }
+    }
+
+    /** The bone-length axis (local) the welded cube bends along, or null when this cube has no ready seam. */
+    private Vector3f weldAxis()
+    {
+        if (this.weldHasTarget) return this.targetLayer.targetFaceNormal;
+        if (this.weldHasSource) return this.sourceLayer.sourceFaceNormal;
+
+        return null;
     }
 
     /**
