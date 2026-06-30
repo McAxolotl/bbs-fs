@@ -25,7 +25,6 @@ import net.minecraft.world.chunk.ChunkManager;
 import net.minecraft.world.entity.EntityLookup;
 import net.minecraft.world.event.GameEvent;
 import net.minecraft.world.tick.QueryableTickScheduler;
-import net.minecraft.world.tick.TickManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -132,12 +131,6 @@ public class StructureWorld extends World
     public QueryableTickScheduler<net.minecraft.fluid.Fluid> getFluidTickScheduler()
     {
         return this.delegate.getFluidTickScheduler();
-    }
-
-    @Override
-    public TickManager getTickManager()
-    {
-        return this.delegate.getTickManager();
     }
 
     @Override

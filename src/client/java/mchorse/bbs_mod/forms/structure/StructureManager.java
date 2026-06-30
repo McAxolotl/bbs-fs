@@ -3,7 +3,6 @@ package mchorse.bbs_mod.forms.structure;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtTagSizeTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.WorldSavePath;
 
@@ -150,7 +149,7 @@ public class StructureManager
 
         try
         {
-            NbtCompound root = NbtIo.readCompressed(file, NbtTagSizeTracker.ofUnlimitedBytes());
+            NbtCompound root = NbtIo.readCompressed(file.toFile());
 
             data = StructureRenderData.parse(id, root);
             CACHE.put(id, data);
