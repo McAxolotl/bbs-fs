@@ -63,15 +63,9 @@ public class CubicCubeRenderer implements ICubicRenderer
     private WeldBinding.Layer targetLayer;
     private WeldBinding.Layer sourceLayer;
 
-    /* Capture pass records the rigid world corners of welded faces without drawing; the draw pass snaps to the seam. */
+    /* Capture pass records the rigid world corners of welded faces without drawing; the draw pass snaps to the seam.
+     * It only touches welded cubes and only their welded face's four corners — not every vertex of the model. */
     private boolean captureOnly;
-
-    /* Bone (group) world matrix of the cube being captured, sampled before the cube's own rotate — its basis carries
-     * each welded face's local normal into world for the bend angle, so a cube's static modeling rotation can't leak
-     * in and read as a folded joint. A matrix (not a quaternion) so scale AND reflection — the UI preview mirrors Y —
-     * survive: transforming a direction by the basis is exact where quaternion extraction from a scaled/mirrored
-     * matrix is not. */
-    private final Matrix4f boneMatrix = new Matrix4f();
 
     /* A welded cube's faces bend within a band near the seam; drawn as two flat triangles their texture warps
      * unevenly, so the edge running ALONG the bone is split into this many segments and the bend is resolved
@@ -182,7 +176,9 @@ public class CubicCubeRenderer implements ICubicRenderer
     {
         if (this.captureOnly)
         {
-            this.boneMatrix.set(stack.peek().getPositionMatrix());
+            this.captureCube(stack, cube);
+
+            return;
         }
 
         stack.push();
@@ -192,7 +188,7 @@ public class CubicCubeRenderer implements ICubicRenderer
 
         this.pickWelds(cube);
 
-        boolean subdivide = !this.captureOnly && (this.targetLayer != null || this.sourceLayer != null);
+        boolean subdivide = (this.targetLayer != null && this.targetLayer.seamReady) || (this.sourceLayer != null && this.sourceLayer.seamReady);
         Matrix4f matrix = stack.peek().getPositionMatrix();
 
         for (ModelQuad quad : cube.quads)
@@ -225,6 +221,12 @@ public class CubicCubeRenderer implements ICubicRenderer
 
     protected void renderMesh(BufferBuilder builder, MatrixStack stack, Model model, ModelGroup group, ModelMesh mesh)
     {
+        if (this.captureOnly)
+        {
+            /* Meshes carry no welded box faces, so the capture pass has nothing to record from them. */
+            return;
+        }
+
         this.targetLayer = null;
         this.sourceLayer = null;
 
@@ -330,13 +332,6 @@ public class CubicCubeRenderer implements ICubicRenderer
     {
         this.vertex.set(vertex.vertex.x, vertex.vertex.y, vertex.vertex.z, 1);
         stack.peek().getPositionMatrix().transform(this.vertex);
-
-        if (this.captureOnly)
-        {
-            this.captureWeldCorner(vertex.vertex, stack.peek().getPositionMatrix());
-
-            return;
-        }
 
         this.snapWeldCorner(vertex.vertex);
 
@@ -516,45 +511,59 @@ public class CubicCubeRenderer implements ICubicRenderer
         return 1F - x * x * (3F - 2F * x);
     }
 
-    /** Capture pass: record a welded face corner's rigid world position, plus the face and bone axes once. */
-    private void captureWeldCorner(Vector3f local, Matrix4f matrix)
+    /**
+     * Capture pass for one cube: if it carries a welded face, record that face's four rigid world corners plus the
+     * shear axis (face normal by the FULL cube matrix — the cube's modeling rotation is a legit part of the face
+     * direction) and the bend axis (same normal by the BONE matrix only, so a cube's static rotate can't masquerade
+     * as a fold). Only welded cubes do any transform work; every other cube returns at once, so the capture is a
+     * light matrix walk over the tree, not a full per-vertex pass.
+     */
+    private void captureCube(MatrixStack stack, ModelCube cube)
     {
-        if (this.targetLayer != null)
+        this.pickWelds(cube);
+
+        if (this.targetLayer == null && this.sourceLayer == null)
         {
-            int corner = WeldBinding.cornerIndex(this.targetLayer.targetCorners, local);
-
-            if (corner != -1)
-            {
-                if (!this.targetLayer.targetCaptured)
-                {
-                    /* Shear axis = the target face's outward normal carried to world by the FULL cube matrix (bone x
-                     * cube rotate) — the cube's modeling rotation is a legit part of the face direction here. */
-                    matrix.transformDirection(this.targetLayer.capturedTargetNormalWorld.set(this.targetLayer.targetFaceNormal)).normalize();
-                    /* Bend axis = the same normal by the BONE matrix only (no cube rotate), so a cube's static rotate
-                     * can't masquerade as a fold. */
-                    this.boneMatrix.transformDirection(this.targetLayer.capturedTargetBoneAxis.set(this.targetLayer.targetFaceNormal)).normalize();
-                }
-
-                this.targetLayer.capturedTargetWorld[corner].set(this.vertex.x, this.vertex.y, this.vertex.z);
-                this.targetLayer.targetCaptured = true;
-            }
+            return;
         }
 
-        if (this.sourceLayer != null)
+        Matrix4f bone = stack.peek().getPositionMatrix();
+
+        stack.push();
+        moveToPivot(stack, cube.pivot);
+        rotate(stack, cube.rotate);
+        moveBackFromPivot(stack, cube.pivot);
+
+        Matrix4f cubeMatrix = stack.peek().getPositionMatrix();
+
+        if (this.targetLayer != null && !this.targetLayer.targetCaptured)
         {
-            int corner = WeldBinding.cornerIndex(this.sourceLayer.sourceCorners, local);
+            WeldBinding.Layer layer = this.targetLayer;
 
-            if (corner != -1)
+            for (int i = 0; i < layer.targetCorners.length; i++)
             {
-                if (!this.sourceLayer.sourceCaptured)
-                {
-                    this.boneMatrix.transformDirection(this.sourceLayer.capturedSourceBoneAxis.set(this.sourceLayer.sourceFaceNormal)).normalize();
-                }
-
-                this.sourceLayer.capturedSourceWorld[corner].set(this.vertex.x, this.vertex.y, this.vertex.z);
-                this.sourceLayer.sourceCaptured = true;
+                cubeMatrix.transformPosition(layer.targetCorners[i], layer.capturedTargetWorld[i]);
             }
+
+            cubeMatrix.transformDirection(layer.capturedTargetNormalWorld.set(layer.targetFaceNormal)).normalize();
+            bone.transformDirection(layer.capturedTargetBoneAxis.set(layer.targetFaceNormal)).normalize();
+            layer.targetCaptured = true;
         }
+
+        if (this.sourceLayer != null && !this.sourceLayer.sourceCaptured)
+        {
+            WeldBinding.Layer layer = this.sourceLayer;
+
+            for (int i = 0; i < layer.sourceCorners.length; i++)
+            {
+                cubeMatrix.transformPosition(layer.sourceCorners[i], layer.capturedSourceWorld[i]);
+            }
+
+            bone.transformDirection(layer.capturedSourceBoneAxis.set(layer.sourceFaceNormal)).normalize();
+            layer.sourceCaptured = true;
+        }
+
+        stack.pop();
     }
 
     /** Draw pass: pull a welded corner onto the layer's seam, so both sides of the joint bend toward it. */
