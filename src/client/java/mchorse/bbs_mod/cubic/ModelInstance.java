@@ -3,6 +3,8 @@ package mchorse.bbs_mod.cubic;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.bobj.BOBJBone;
+import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
@@ -31,6 +33,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
@@ -39,6 +42,7 @@ import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -52,6 +56,9 @@ import java.util.function.Supplier;
 
 public class ModelInstance implements IModelInstance
 {
+    /** Identity NormalMat for the welded immediate draw — its normals are already CPU-transformed to world space. */
+    private static final Matrix3f WELD_NORMAL_MAT = new Matrix3f();
+
     public final String id;
     public IModel model;
     public Animations animations;
@@ -434,17 +441,39 @@ public class ModelInstance implements IModelInstance
             }
             else
             {
-                RenderSystem.setShader(() -> shader);
-
                 if (welded)
                 {
                     this.captureWelds(renderProcessor, stack, model);
                 }
 
+                /* A welded model draws immediate with its corners already CPU-transformed to world space, so it
+                 * can't ride a VAO and the explicit uniform setup that comes with it. On drawWithGlobalProgram it
+                 * inherits whatever NormalMat the previous draw left behind — harmless most of the time, but the
+                 * first-person hand during video export lands after a foreign one and the whole arm's diffuse
+                 * lighting goes dark. So (outside stencil picking and the Iris pipeline, which run their own state)
+                 * draw it through the BBS model shader and pin NormalMat to identity: the normals are already in
+                 * world space, the same space the VAO path's NormalMat*Normal resolves to, so lighting matches the
+                 * VAO path and no longer rides leaked state. */
+                boolean explicitWeld = welded && stencilMap == null && !(BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld());
+                ShaderProgram drawShader = explicitWeld ? BBSShaders.getModel() : shader;
+
+                RenderSystem.setShader(() -> drawShader);
+
                 BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
                 builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
+
+                if (explicitWeld)
+                {
+                    GlUniform normalMat = drawShader.getUniform("NormalMat");
+
+                    if (normalMat != null)
+                    {
+                        normalMat.set(WELD_NORMAL_MAT);
+                    }
+                }
+
                 BufferRenderer.drawWithGlobalProgram(builder.end());
             }
         }
