@@ -437,11 +437,9 @@ public class ModelInstance implements IModelInstance
             weldedGroups.add(binding.targetGroup);
         }
 
-        /* Seams only shape the drawn pose; picking renders the rest pose, so it needs no capture. */
-        if (stencilMap == null)
-        {
-            this.captureWelds(bindings, stack, model, light, overlay, stencilMap, keys);
-        }
+        /* Capture the seams for the visible draw AND for picking: the stencil must match the deformed geometry, or
+         * hovering a bent welded bone highlights its wrong, un-sealed rest silhouette at the joint. */
+        this.captureWelds(bindings, stack, model, light, overlay, stencilMap, keys);
 
         /* The welded cubes draw immediate with world-space corners, so — outside picking and the Iris pipeline, which
          * run their own shader state — they go through the BBS model shader with NormalMat pinned to identity (the
