@@ -513,6 +513,12 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_RESET = L10n.lang("bbs.ui.forms.editors.model.physics.context.reset");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_SAVE = L10n.lang("bbs.ui.forms.editors.model.physics.context.save");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_NAME = L10n.lang("bbs.ui.forms.editors.model.physics.context.name");
+    public static final IKey MODEL_DEBUG_ENABLED = L10n.lang("bbs.ui.model_debug.enabled");
+    public static final IKey MODEL_DEBUG_XRAY = L10n.lang("bbs.ui.model_debug.xray");
+    public static final IKey MODEL_DEBUG_DASHED = L10n.lang("bbs.ui.model_debug.dashed");
+    public static final IKey MODEL_DEBUG_SHAPE = L10n.lang("bbs.ui.model_debug.shape");
+    public static final IKey MODEL_DEBUG_OPACITY = L10n.lang("bbs.ui.model_debug.opacity");
+    public static final IKey MODEL_DEBUG_CONFIGURE = L10n.lang("bbs.ui.model_debug.configure");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_TITLE = L10n.lang("bbs.ui.forms.editors.model.constraints.title");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_BONES = L10n.lang("bbs.ui.forms.editors.model.constraints.bones");
     public static final IKey FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.constraints.settings");
