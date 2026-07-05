@@ -134,6 +134,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     /** Configs we've already wired the undo pre-callback into (by identity), so a re-open doesn't stack it. */
     private final Set<ModelConfig> hookedConfigs = Collections.newSetFromMap(new IdentityHashMap<>());
 
+    /** Set for one {@link #fill} when re-binding to a reloaded instance, so the reload keeps the undo stack. */
+    private boolean preserveUndo;
+
     public UIModelEditorPanel(UIDashboard dashboard)
     {
         super(dashboard);
@@ -262,10 +265,49 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         super.update();
 
         this.tryLoadPending();
+        this.checkReload();
 
         if (this.undoHandler != null)
         {
             this.undoHandler.submitUndo();
+        }
+    }
+
+    /**
+     * When the model's files change on disk (e.g. a bone deleted in Blockbench) the watchdog drops the old
+     * {@link ModelInstance} and a fresh one loads under the same id. The preview follows it by id every frame,
+     * but our settings widgets are static — built off {@link #bound} — so the bone lists keep the old bones
+     * until re-entering the tab. Detect the swap and re-bind + rebuild so they track the reload live.
+     *
+     * <p>Gated on a model actually being open here ({@code data != null}): switching to a new tab first
+     * auto-saves the model we're leaving, whose {@code config.json} write trips the same watchdog reload —
+     * without this gate that reload would yank the old model back over the fresh tab's empty picker.
+     */
+    private void checkReload()
+    {
+        if (this.data == null || this.bound == null || this.pendingId != null)
+        {
+            return;
+        }
+
+        String id = this.form.model.get();
+
+        if (id == null || id.isEmpty())
+        {
+            return;
+        }
+
+        ModelInstance instance = BBSModClient.getModels().getModel(id);
+
+        if (instance != null && instance != this.bound)
+        {
+            /* A reload (our own 60s periodic save writes config.json too, tripping the watchdog) — keep the
+             * undo stack: its commands are path-based and resolve fine against the fresh config, so re-binding
+             * shouldn't wipe the user's history every time it autosaves. */
+            this.preserveUndo = true;
+            this.hookedConfigs.remove(this.data);
+            this.bound = instance;
+            this.fill(instance.config);
         }
     }
 
@@ -301,6 +343,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     @Override
     protected void fillData(ModelConfig data)
     {
+        if (data == null)
+        {
+            /* No model open in this tab — drop the (possibly already watchdog-deleted) instance so neither
+             * the preview nor checkReload clings to it while the picker is up. */
+            this.bound = null;
+        }
+
         this.setupUndo(data);
 
         this.seedMap(this.flippedEntries, data == null ? null : data.flippedParts);
@@ -350,10 +399,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         {
             this.undoHandler = new UIFormUndoHandler(this);
         }
-        else
+        else if (!this.preserveUndo)
         {
+            /* Reset on real navigation (open / tab switch / pick) but keep it across a live reload re-bind. */
             this.undoHandler.reset();
         }
+
+        this.preserveUndo = false;
 
         if (this.hookedConfigs.add(data))
         {
