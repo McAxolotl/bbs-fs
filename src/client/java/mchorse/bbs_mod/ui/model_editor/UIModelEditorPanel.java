@@ -216,6 +216,16 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     @Override
+    public void render(UIContext context)
+    {
+        /* A fully solid dark backdrop over the whole panel so the dashboard background doesn't show through
+         * the settings pane or behind the preview. deepSurface() is the same solid the mini preview uses. */
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.deepSurface());
+
+        super.render(context);
+    }
+
+    @Override
     public ContentType getType()
     {
         return ContentType.MODELS;
