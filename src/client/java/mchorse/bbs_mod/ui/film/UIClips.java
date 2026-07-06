@@ -228,6 +228,8 @@ public class UIClips extends UIElement
         this.keys().register(Keys.CLIP_SELECT_TRACK_AFTER, this::selectTrackAfter).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SELECT_AFTER, this::selectAfter).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SELECT_BEFORE, this::selectBefore).category(KEYS_CATEGORY).active(canUseKeybinds);
+        this.keys().register(Keys.CLIP_LAYER_UP, () -> this.moveSelectedByLayer(1)).category(KEYS_CATEGORY).active(canUseKeybindsSelected);
+        this.keys().register(Keys.CLIP_LAYER_DOWN, () -> this.moveSelectedByLayer(-1)).category(KEYS_CATEGORY).active(canUseKeybindsSelected);
         this.keys().register(Keys.FADE_IN, () ->
         {
             Clip clip = this.delegate.getClip();
@@ -1421,6 +1423,42 @@ public class UIClips extends UIElement
             Vector3i clipData = data.get(i);
 
             this.setClipData(selected.get(i), clipData.x() + adjusted[0], clipData.y(), clipData.z());
+        }
+
+        this.delegate.fillData();
+    }
+
+    private void moveSelectedByLayer(int dy)
+    {
+        List<Clip> selected = this.getClipsFromSelection();
+
+        if (selected.isEmpty())
+        {
+            return;
+        }
+
+        List<Vector3i> data = new ArrayList<>(selected.size());
+
+        for (Clip clip : selected)
+        {
+            data.add(new Vector3i(clip.tick.get(), clip.layer.get(), clip.duration.get()));
+        }
+
+        List<Clip> others = new ArrayList<>(this.clips.get());
+        others.removeIf(selected::contains);
+
+        int[] adjusted = this.resolveCollisions(others, data, 0, dy);
+
+        if (adjusted[1] == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < selected.size(); i++)
+        {
+            Vector3i clipData = data.get(i);
+
+            this.setClipData(selected.get(i), clipData.x(), clipData.y() + adjusted[1], clipData.z());
         }
 
         this.delegate.fillData();

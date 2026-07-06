@@ -347,6 +347,8 @@
 	"bbs.ui.camera.editor.keys.clips.select_track": "Выделить все клипы на текущей дорожке",
 	"bbs.ui.camera.editor.keys.clips.select_track_before": "Выделить налево на текущей дорожке",
 	"bbs.ui.camera.editor.keys.clips.select_track_after": "Выделить направо на текущей дорожке",
+	"bbs.ui.camera.editor.keys.clips.layer_up": "Переместить клип(ы) на слой выше",
+	"bbs.ui.camera.editor.keys.clips.layer_down": "Переместить клип(ы) на слой ниже",
 	"bbs.ui.camera.editor.keys.clips.title": "Клипы",
 	"bbs.ui.camera.editor.keys.editor.fade_in": "Установить появление на месте курсора",
 	"bbs.ui.camera.editor.keys.editor.fade_out": "Установить затухание на месте курсора",
