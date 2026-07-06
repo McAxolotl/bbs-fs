@@ -111,16 +111,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
     private void togglePin()
     {
-        UIFilmController controller = this.panel.getController();
-
-        if (controller.isMotionPathPinned())
-        {
-            controller.unpinMotionPath();
-        }
-        else
-        {
-            controller.pinMotionPath();
-        }
+        this.panel.getController().toggleMotionPathPin();
     }
 
     @Override

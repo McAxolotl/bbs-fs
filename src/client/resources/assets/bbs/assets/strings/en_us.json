@@ -560,6 +560,8 @@
 	"bbs.ui.film.controller.onion_skin.all-description": "Enable onion skin for all replays",
 	"bbs.ui.film.controller.onion_skin.group": "Group: %s",
 	"bbs.ui.film.controller.onion_skin.keys.toggle": "Toggle onion skin",
+	"bbs.ui.film.controller.motion_path.keys.toggle": "Toggle motion path",
+	"bbs.ui.film.controller.motion_path.keys.toggle_pin": "Pin / unpin the motion path",
 	"bbs.ui.film.controller.onion_skin.next": "Next frames and colors",
 	"bbs.ui.film.controller.onion_skin.prev": "Previous frames and colors",
 	"bbs.ui.film.controller.onion_skin.title": "Onion skin",

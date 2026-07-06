@@ -3201,6 +3201,19 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return !this.isFlying();
     }
 
+    /**
+     * Whether a visible clips timeline has a clip selected — i.e. the clip
+     * keybinds (like {@code M} for duration) would claim the key. Preview
+     * shortcuts that share a key with a clip keybind (the motion path toggle)
+     * step aside when this is true, since the clips editor sits before the
+     * controller in the key dispatch and would otherwise never see the press.
+     */
+    public boolean hasSelectedClip()
+    {
+        return (this.cameraEditor != null && this.cameraEditor.isVisible() && this.cameraEditor.getClip() != null)
+            || (this.actionEditor != null && this.actionEditor.isVisible() && this.actionEditor.getClip() != null);
+    }
+
     public void fillData()
     {
         this.cameraEditor.fillData();

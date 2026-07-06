@@ -194,6 +194,18 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             UIUtils.playClick();
         }).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_MOTION_PATH, () ->
+        {
+            this.getMotionPath().enabled.toggle();
+
+            UIUtils.playClick();
+        }).strict().active(() -> !this.panel.hasSelectedClip()).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_MOTION_PATH_PIN, () ->
+        {
+            this.toggleMotionPathPin();
+
+            UIUtils.playClick();
+        }).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_OPEN_REPLAYS, () ->
         {
             this.panel.showPanel(this.panel.replayEditor);
@@ -292,6 +304,18 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         this.pinnedReplay = null;
         this.pinnedBone = null;
+    }
+
+    public void toggleMotionPathPin()
+    {
+        if (this.isMotionPathPinned())
+        {
+            this.unpinMotionPath();
+        }
+        else
+        {
+            this.pinMotionPath();
+        }
     }
 
     private int getTick()

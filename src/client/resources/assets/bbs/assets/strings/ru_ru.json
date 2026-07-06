@@ -556,6 +556,8 @@
 	"bbs.ui.film.controller.onion_skin.all-description": "Включить луковую кожу для всех записей",
 	"bbs.ui.film.controller.onion_skin.group": "Группа: %s",
 	"bbs.ui.film.controller.onion_skin.keys.toggle": "Переключить луковую кожу",
+	"bbs.ui.film.controller.motion_path.keys.toggle": "Переключить траекторию движения",
+	"bbs.ui.film.controller.motion_path.keys.toggle_pin": "Закрепить / открепить траекторию движения",
 	"bbs.ui.film.controller.onion_skin.next": "Последующие кадры и цвета",
 	"bbs.ui.film.controller.onion_skin.prev": "Предыдущие кадры и цвета",
 	"bbs.ui.film.controller.onion_skin.title": "Луковая кожа",
