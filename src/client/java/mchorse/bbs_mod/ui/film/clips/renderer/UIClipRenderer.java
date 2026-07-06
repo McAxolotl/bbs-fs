@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.clips.renderer;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -41,15 +40,15 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
         int left = area.x;
         int right = area.ex();
 
-        if (current)
-        {
-            int color = BBSSettings.primaryColor.get();
-
-            context.batcher.dropShadow(left + 2, y + 2, right - 2, y + h - 2, 8, Colors.A75 + color, color);
-        }
-
         ClipFactoryData data = clips.getFactory().getData(clip);
         int color = Colors.A100 | data.color;
+
+        if (current)
+        {
+            int shadow = data.color & Colors.RGB;
+
+            context.batcher.dropShadow(left + 2, y + 2, right - 2, y + h - 2, 8, Colors.A75 | shadow, shadow);
+        }
 
         if (clip.enabled.get())
         {
