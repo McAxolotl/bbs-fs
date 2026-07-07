@@ -856,6 +856,8 @@
 	"bbs.ui.forms.editors.model.physics.wind_turbulence": "Порывистость",
 	"bbs.ui.forms.editors.model.physics.wind_turbulence_speed": "Скорость порывов",
 	"bbs.ui.forms.editors.model.physics.wind_turbulence_scale": "Масштаб порывов",
+	"bbs.ui.forms.editors.model.physics.wind_local": "Локальное направление",
+	"bbs.ui.forms.editors.model.physics.wind_local_tooltip": "Направление ветра станет относительным к модели и будет следовать за её вращением, а не оставаться привязанным к миру.",
 	"bbs.ui.forms.editors.model.physics.save_error": "Не удалось сохранить конфиг физики",
 	"bbs.ui.forms.editors.model.physics.saved": "Конфиг физики сохранён",
 	"bbs.ui.forms.editors.model.physics.invalid_chain": "Неверная цепочка: %s -> %s",

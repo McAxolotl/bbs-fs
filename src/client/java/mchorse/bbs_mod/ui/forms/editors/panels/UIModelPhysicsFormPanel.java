@@ -63,6 +63,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad windTurbulence;
     public UITrackpad windTurbulenceSpeed;
     public UITrackpad windTurbulenceScale;
+    public UIToggle windLocal;
 
     private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
@@ -97,10 +98,11 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         public float turbulence = ModelPhysicsConfig.Wind.NONE.turbulence();
         public float turbulenceSpeed = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
         public float turbulenceScale = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
+        public boolean local = ModelPhysicsConfig.Wind.NONE.local();
 
         public ModelPhysicsConfig.Wind toWind()
         {
-            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z, this.turbulence, this.turbulenceSpeed, this.turbulenceScale);
+            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z, this.turbulence, this.turbulenceSpeed, this.turbulenceScale, this.local);
         }
 
         public void set(ModelPhysicsConfig.Wind wind)
@@ -112,6 +114,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.turbulence = wind.turbulence();
             this.turbulenceSpeed = wind.turbulenceSpeed();
             this.turbulenceScale = wind.turbulenceScale();
+            this.local = wind.local();
         }
     }
 
@@ -415,6 +418,18 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.windTurbulenceScale.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
         this.windTurbulenceScale.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE);
 
+        this.windLocal = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL, (b) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.local = b.getValue();
+            this.commitChanges();
+        });
+        this.windLocal.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP);
+
         this.end = new UIButton(IKey.EMPTY, (b) ->
         {
             BoneData d = this.getSelectedData();
@@ -493,6 +508,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH, this.windStrength),
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION),
             UI.row(this.windX, this.windY, this.windZ),
+            this.windLocal,
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE, this.windTurbulence),
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED, this.windTurbulenceSpeed),
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE, this.windTurbulenceScale)
@@ -582,6 +598,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.windTurbulence.setEnabled(enabled);
         this.windTurbulenceSpeed.setEnabled(enabled);
         this.windTurbulenceScale.setEnabled(enabled);
+        this.windLocal.setEnabled(enabled);
     }
 
     private BoneData getSelectedData()
@@ -686,6 +703,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.windTurbulence.setValue(this.wind.turbulence);
             this.windTurbulenceSpeed.setValue(this.wind.turbulenceSpeed);
             this.windTurbulenceScale.setValue(this.wind.turbulenceScale);
+            this.windLocal.setValue(this.wind.local);
         }
         finally
         {

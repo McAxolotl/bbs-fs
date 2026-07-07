@@ -92,10 +92,32 @@ public final class ModelPhysicsRuntime
         {
             WindControl override = modelForm.windControlOverride;
 
-            wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale);
+            wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale, override.local);
         }
 
+        wind = resolveWindDirection(wind, baseTransform);
+
         applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), wind, constraints, state, baseTransform);
+    }
+
+    /**
+     * When the wind direction is local to the model, rotates it by the model's world orientation (the
+     * rotation baked into {@code baseTransform}, the same transform the chain positions live in), so the
+     * wind follows the model as it turns. The solver only ever sees a plain world-space direction. A
+     * world-space or inactive wind is returned unchanged.
+     */
+    private static ModelPhysicsConfig.Wind resolveWindDirection(ModelPhysicsConfig.Wind wind, Matrix4f baseTransform)
+    {
+        if (wind == null || !wind.local() || !wind.active() || baseTransform == null)
+        {
+            return wind;
+        }
+
+        Vector3f dir = new Vector3f(wind.x(), wind.y(), wind.z());
+
+        baseTransform.transformDirection(dir);
+
+        return new ModelPhysicsConfig.Wind(wind.strength(), dir.x, dir.y, dir.z, wind.turbulence(), wind.turbulenceSpeed(), wind.turbulenceScale(), false);
     }
 
     private static void applyCompiled(World world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)

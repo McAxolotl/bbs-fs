@@ -512,6 +512,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_speed");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_scale");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL = L10n.lang("bbs.ui.forms.editors.model.physics.wind_local");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP = L10n.lang("bbs.ui.forms.editors.model.physics.wind_local_tooltip");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.physics.save_error");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVED = L10n.lang("bbs.ui.forms.editors.model.physics.saved");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN = L10n.lang("bbs.ui.forms.editors.model.physics.invalid_chain");
