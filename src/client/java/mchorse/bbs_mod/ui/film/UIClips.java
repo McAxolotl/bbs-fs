@@ -1571,11 +1571,42 @@ public class UIClips extends UIElement
         int dx = this.fromGraphX(mouseX) - this.fromGraphX(this.initialX);
         int dy = this.fromLayerY(mouseY) - this.fromLayerY(this.initialY);
 
-        if (this.grabMode == 0) this.moveClips(others, dx, dy);
+        if (this.grabMode != 0 && Window.isShiftPressed())
+        {
+            this.dragEnvelope(this.grabMode == 1, mouseX);
+        }
+        else if (this.grabMode == 0) this.moveClips(others, dx, dy);
         else if (this.grabMode == 1) this.dragLeftEdge(others, dx, dy);
         else if (this.grabMode == 2) this.dragRightEdge(others, dx, dy);
 
         this.delegate.fillData();
+    }
+
+    /**
+     * While dragging a clip's edge with shift held, adjust the envelope's fade
+     * instead of the clip length — the left handle drives fade in, the right handle
+     * fade out. The clip's own bounds stay put.
+     */
+    private void dragEnvelope(boolean left, int mouseX)
+    {
+        Clip clip = this.grabbedClips.get(this.grabbedClips.size() - 1);
+        Vector3i data = this.grabbedData.get(this.grabbedData.size() - 1);
+        int tick = data.x();
+        int duration = data.z();
+        int mouse = this.fromGraphX(mouseX);
+
+        /* Pin the clip to its original bounds — an earlier frame may have resized it. */
+        this.setClipData(clip, tick, data.y(), duration);
+        clip.envelope.enabled.set(true);
+
+        if (left)
+        {
+            clip.envelope.fadeIn.set((float) MathUtils.clamp(mouse - tick, 0, duration));
+        }
+        else
+        {
+            clip.envelope.fadeOut.set((float) MathUtils.clamp(tick + duration - mouse, 0, duration));
+        }
     }
 
     private void moveClips(List<Clip> others, int dx, int dy)
