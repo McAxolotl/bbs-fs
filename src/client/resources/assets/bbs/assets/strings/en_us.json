@@ -548,6 +548,7 @@
 	"bbs.ui.film.controller.keys.category": "Player controller",
 	"bbs.ui.film.controller.keys.change_camera_mode": "Change camera mode",
 	"bbs.ui.film.controller.keys.cycle_editors": "Cycle editors",
+	"bbs.ui.film.controller.keys.toggle_actions": "Toggle actions editor",
 	"bbs.ui.film.controller.keys.attach_orbit": "Attach orbit to replay",
 	"bbs.ui.film.controller.keys.insert_frame": "Insert keyframe",
 	"bbs.ui.film.controller.keys.move_replay_to_cursor": "Move replay to cursor",

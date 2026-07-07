@@ -239,6 +239,7 @@ public class UIKeys
     public static final IKey FILM_CONTROLLER_KEYS_INSERT_FRAME = L10n.lang("bbs.ui.film.controller.keys.insert_frame");
     public static final IKey FILM_CONTROLLER_KEYS_MOVE_REPLAY_TO_CURSOR = L10n.lang("bbs.ui.film.controller.keys.move_replay_to_cursor");
     public static final IKey FILM_CONTROLLER_KEYS_NEXT_REPLAY = L10n.lang("bbs.ui.film.controller.keys.next_replay");
+    public static final IKey FILM_CONTROLLER_KEYS_TOGGLE_ACTIONS = L10n.lang("bbs.ui.film.controller.keys.toggle_actions");
     public static final IKey FILM_CONTROLLER_KEYS_OPEN_REPLAYS = L10n.lang("bbs.ui.film.controller.keys.open_replays");
     public static final IKey FILM_CONTROLLER_KEYS_PREV_REPLAY = L10n.lang("bbs.ui.film.controller.keys.prev_replay");
     public static final IKey FILM_CONTROLLER_KEYS_RESTART_ACTIONS = L10n.lang("bbs.ui.film.controller.keys.restart_actions");
