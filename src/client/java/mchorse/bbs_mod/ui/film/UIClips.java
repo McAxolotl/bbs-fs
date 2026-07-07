@@ -47,13 +47,10 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Supplier;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 public class UIClips extends UIElement
 {
@@ -63,6 +60,7 @@ public class UIClips extends UIElement
     private static final int MARGIN = 10;
     private static final int LAYER_HEIGHT_MIN = 12;
     private static final int LAYER_HEIGHT_MAX = 48;
+    private static final int SNAP_DISTANCE = 10;
 
     private static final Area CLIP_AREA = new Area();
 
@@ -108,7 +106,7 @@ public class UIClips extends UIElement
 
     private List<Clip> grabbedClips = Collections.emptyList();
     private List<Clip> otherClips = Collections.emptyList();
-    private Set<Integer> snappingPoints = new HashSet<>();
+    private Set<Integer> snappingPoints = new TreeSet<>();
     private List<Vector3i> grabbedData = new ArrayList<>();
 
     private UICopyPasteController copyPasteController;
@@ -1582,16 +1580,7 @@ public class UIClips extends UIElement
 
     private void moveClips(List<Clip> others, int dx, int dy)
     {
-        Anchor anchor = this.findClosestAnchor(this.grabbedData);
-
-        if (anchor != null)
-        {
-            Vector3i ref = this.grabbedData.get(anchor.clipIndex());
-            int edgeTick = ref.x() + (anchor.isLeft() ? 0 : ref.z());
-            int snapped = this.snap(edgeTick + dx);
-
-            dx += snapped - (edgeTick + dx);
-        }
+        dx += this.snapMove(others, dx, dy);
 
         int[] adjusted = this.resolveCollisions(others, this.grabbedData, dx, dy);
 
@@ -1603,31 +1592,82 @@ public class UIClips extends UIElement
         }
     }
 
+    /**
+     * Nudge the horizontal delta so the dragged edge lands on the closest snapping
+     * point. Only one edge snaps — the one nearest to where the drag started, i.e.
+     * the edge the user is actually positioning. Snapping every edge of every clip
+     * made the selection jump between unrelated targets. Candidates that would make
+     * the selection overlap another clip (or go out of bounds) are discarded, so the
+     * magnet only ever offers legal positions and never fights collision resolution.
+     */
+    private int snapMove(List<Clip> others, int dx, int dy)
+    {
+        if (Window.isAltPressed())
+        {
+            return 0;
+        }
+
+        int edge = this.grabbedEdge() + dx;
+        int edgeX = this.toGraphX(edge);
+        int best = SNAP_DISTANCE + 1;
+        int delta = 0;
+
+        for (int point : this.snappingPoints)
+        {
+            int pixels = Math.abs(edgeX - this.toGraphX(point));
+
+            if (pixels < best && !this.collisionExists(others, this.grabbedData, dx + point - edge, dy))
+            {
+                best = pixels;
+                delta = point - edge;
+            }
+        }
+
+        return delta;
+    }
+
+    /**
+     * The tick of the grabbed clips' edge (left or right of any of them) that sits
+     * closest to where the drag began — this stays fixed for the whole drag so the
+     * snapping edge never switches mid-move.
+     */
+    private int grabbedEdge()
+    {
+        int best = Integer.MAX_VALUE;
+        int edge = 0;
+
+        for (Vector3i v : this.grabbedData)
+        {
+            for (int candidate : new int[] {v.x(), v.x() + v.z()})
+            {
+                int pixels = Math.abs(this.toGraphX(candidate) - this.initialX);
+
+                if (pixels < best)
+                {
+                    best = pixels;
+                    edge = candidate;
+                }
+            }
+        }
+
+        return edge;
+    }
+
     private void dragLeftEdge(List<Clip> others, int dx, int dy)
     {
         Vector3i data = grabbedData.get(grabbedData.size() - 1);
         Clip clip = grabbedClips.get(grabbedClips.size() - 1);
         int tick = data.x();
-        int duration = data.z();
-        int newTick = tick + dx;
-        int newDuration = duration - dx;
-        int snapped = this.snap(newTick);
+        int right = tick + data.z();
         int minLeft = others.stream()
             .filter((o) -> this.sameLayer(o, clip) && o.tick.get() + o.duration.get() <= tick)
             .mapToInt((o) -> o.tick.get() + o.duration.get())
             .max()
             .orElse(0);
 
-        newDuration += newTick - snapped;
-        newTick = Math.max(minLeft, snapped);
+        int newTick = MathUtils.clamp(this.snapEdge(tick + dx), minLeft, right - 1);
 
-        if (newDuration < 1)
-        {
-            newDuration = 1;
-            newTick = tick + duration - 1;
-        }
-
-        this.setClipData(clip, newTick, data.y(), newDuration);
+        this.setClipData(clip, newTick, data.y(), right - newTick);
     }
 
     private void dragRightEdge(List<Clip> others, int dx, int dy)
@@ -1635,48 +1675,58 @@ public class UIClips extends UIElement
         Vector3i data = grabbedData.get(grabbedData.size() - 1);
         Clip clip = grabbedClips.get(grabbedClips.size() - 1);
         int tick = data.x();
-        int duration = data.z();
-        int newDuration = duration + dx;
-        int snapped = this.snap(tick + newDuration);
         int maxRight = others.stream()
-            .filter((o) -> this.sameLayer(o, clip) && o.tick.get() >= tick + duration)
+            .filter((o) -> this.sameLayer(o, clip) && o.tick.get() >= tick + data.z())
             .mapToInt((o) -> o.tick.get())
             .min()
             .orElse(Integer.MAX_VALUE);
 
-        newDuration = snapped - tick;
+        int newEnd = MathUtils.clamp(this.snapEdge(tick + data.z() + dx), tick + 1, maxRight);
 
-        if (tick + newDuration >= maxRight)
-        {
-            newDuration = maxRight - tick;
-        }
-
-        if (newDuration < 1)
-        {
-            newDuration = 1;
-        }
-
-        this.setClipData(clip, tick, data.y(), newDuration);
+        this.setClipData(clip, tick, data.y(), newEnd - tick);
     }
 
-    private Anchor findClosestAnchor(List<Vector3i> data)
+    /**
+     * Snap a single dragged edge to the closest snapping point (used while
+     * resizing). Neighbour clamping is applied by the caller, so this only picks
+     * the nearest point within reach.
+     */
+    private int snapEdge(int tick)
     {
-        return IntStream.range(0, data.size())
-            .boxed()
-            .flatMap((i) ->
-            {
-                Vector3i v = data.get(i);
-                int left = this.toGraphX(v.x());
-                int right = this.toGraphX(v.x() + v.z());
+        if (Window.isAltPressed())
+        {
+            return tick;
+        }
 
-                return Stream.of(new Anchor(i, true, left), new Anchor(i, false, right));
-            })
-            .min(Comparator.comparingInt((a) -> Math.abs(a.graphX() - this.initialX)))
-            .orElse(null);
+        int best = SNAP_DISTANCE + 1;
+        int tickX = this.toGraphX(tick);
+        int snapped = tick;
+
+        for (int point : this.snappingPoints)
+        {
+            int pixels = Math.abs(tickX - this.toGraphX(point));
+
+            if (pixels < best)
+            {
+                best = pixels;
+                snapped = point;
+            }
+        }
+
+        return snapped;
     }
 
     private int[] resolveCollisions(List<Clip> others, List<Vector3i> data, int dx, int dy)
     {
+        /* Clamp each axis to its own bound first, so running into the timeline start
+         * (or the bottom layer) on one axis never drags the other axis back toward
+         * the origin — that coupling teleported clips home when dropped at the edge. */
+        for (Vector3i v : data)
+        {
+            if (v.x() + dx < 0) dx = -v.x();
+            if (v.y() + dy < 0) dy = -v.y();
+        }
+
         int dir = 0;
 
         while (this.collisionExists(others, data, dx, dy))
@@ -1732,31 +1782,6 @@ public class UIClips extends UIElement
         clip.tick.set(newTick);
         clip.duration.set(newDuration);
         clip.layer.set(newLayer);
-    }
-
-    private int snap(int tick)
-    {
-        if (Window.isAltPressed())
-        {
-            return tick;
-        }
-
-        int diff = 11;
-        int closest = tick;
-
-        for (int point : this.snappingPoints)
-        {
-            int pointX = this.toGraphX(point);
-            int abs = Math.abs(this.toGraphX(tick) - pointX);
-
-            if (abs <= 10 && abs < diff)
-            {
-                closest = point;
-                diff = abs;
-            }
-        }
-
-        return closest;
     }
 
     private void captureSelection(Area area)
@@ -2010,13 +2035,5 @@ public class UIClips extends UIElement
             context.batcher.box(minX, y, minX + 1, this.area.ey(), color);
             context.batcher.box(maxX - 1, y, maxX, this.area.ey(), color);
         }
-    }
-
-    private record Anchor(int clipIndex, boolean isLeft, int graphX)
-    {}
-
-    private interface ClipTransformStrategy
-    {
-        public void apply(List<Clip> others, List<Clip> grabbedClips, List<Vector3i> grabbedData, int dx, int dy);
     }
 }
