@@ -111,17 +111,18 @@ final class ChainSolver
     }
 
     /**
-     * Interpolates the settled chain shape of the two latest simulation ticks and re-roots it onto the live
-     * anchor. The chain is rebuilt segment by segment from the anchor outwards: each segment's direction is
-     * slerped between the two ticks (so the bone swings along an arc, not a straight chord) and its length is
-     * lerped, while the anchor's leftover sub-tick rotation carries the whole chain. This keeps the motion
-     * smooth between simulation ticks instead of reading as stepping.
+     * Interpolates the settled chain shape of the two latest simulation ticks and plants it on the live
+     * anchor. The shapes are blended in the anchor-local frame they were snapshot in — each segment's
+     * direction is slerped between the two ticks (so the bone swings along an arc, not a straight chord)
+     * and its length is lerped — and the blend is carried into the world by the live anchor frame. The
+     * anchor's own motion, turning included, is thus applied once and live, never quantized to the
+     * simulation rate; only the chain's internal lag is tick-sampled, and that is what the blend smooths.
      */
     static Vector3f[] renderInterpolate(ChainState state, float transition, Vector3f liveAnchor, Quaternionf liveAnchorRotation, Vector3f target)
     {
         Vector3f[] render = state.render;
-        Vector3f[] settled = state.settled;
-        Vector3f[] settledPrev = state.settledPrev;
+        Vector3f[] settled = state.settledLocal;
+        Vector3f[] settledPrev = state.settledPrevLocal;
 
         if (render == null || settled == null || settledPrev == null || render.length != settled.length || settledPrev.length != settled.length)
         {
@@ -132,19 +133,16 @@ final class ChainSolver
 
         Vector3f dir = new Vector3f();
         Vector3f dirCurr = new Vector3f();
-        Quaternionf swing = new Quaternionf();
         Quaternionf segRot = new Quaternionf();
         Quaternionf frac = new Quaternionf();
-
-        swing.set(liveAnchorRotation).mul(segRot.set(state.anchorRotation).invert()).normalize(); // anchor sub-tick swing
 
         /* Root point is pinned to the live anchor, the rest is rebuilt outwards from it */
         render[0].set(liveAnchor);
 
         for (int i = 0; i + 1 < render.length; i++)
         {
-            dir.set(settledPrev[i + 1]).sub(settledPrev[i]); // segment last tick
-            dirCurr.set(settled[i + 1]).sub(settled[i]); // segment this tick
+            dir.set(settledPrev[i + 1]).sub(settledPrev[i]); // segment last tick, anchor-local
+            dirCurr.set(settled[i + 1]).sub(settled[i]); // segment this tick, anchor-local
 
             float lenPrev = dir.length();
             float lenCurr = dirCurr.length();
@@ -174,10 +172,7 @@ final class ChainSolver
                 continue;
             }
 
-            /* Carry the chain by the anchor's leftover sub-tick rotation. The lag of the tip during a
-             * turn is produced by the simulation now, so the render carries every segment equally
-             * instead of faking the trail with a per-segment falloff. */
-            swing.transform(dir);
+            liveAnchorRotation.transform(dir);
             render[i + 1].set(render[i]).add(dir.mul(len));
         }
 
@@ -194,6 +189,18 @@ final class ChainSolver
         for (int i = 0; i < src.length; i++)
         {
             dst[i].set(src[i]);
+        }
+    }
+
+    /** Snapshots the chain shape into the given anchor frame — the form the settled shapes are stored in, so the render can plant them on the live anchor. */
+    private static void snapshotLocal(Vector3f[] pos, Vector3f anchor, Quaternionf anchorRotation, Vector3f[] out)
+    {
+        Quaternionf inv = new Quaternionf(anchorRotation).invert();
+
+        for (int i = 0; i < pos.length; i++)
+        {
+            out[i].set(pos[i]).sub(anchor);
+            inv.transform(out[i]);
         }
     }
 
@@ -305,9 +312,10 @@ final class ChainSolver
 
         BlockPos.Mutable mutable = collisions ? new BlockPos.Mutable() : null;
 
-        /* Snapshot the previous tick's settled shape once; the new tick's shape is snapshot after the
-         * sub-steps. renderInterpolate blends these two by the sub-tick transition. */
-        copyPositions(state.settled, state.settledPrev);
+        /* Roll the settled snapshots: the previous tick's shape keeps its own anchor frame, the new
+         * tick's shape is snapshot after the sub-steps in its. renderInterpolate blends the two local
+         * shapes by the sub-tick transition. */
+        copyPositions(state.settledLocal, state.settledPrevLocal);
 
         for (int s = 0; s < steps; s++)
         {
@@ -404,7 +412,7 @@ final class ChainSolver
             }
         }
 
-        copyPositions(state.pos, state.settled);
+        snapshotLocal(state.pos, state.anchor, state.anchorRotation, state.settledLocal);
         state.lastAge = age;
     }
 
@@ -451,8 +459,8 @@ final class ChainSolver
         state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(tipDir.mul(lengths[lengths.length - 1]));
         state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
 
-        copyPositions(state.pos, state.settled);
-        copyPositions(state.pos, state.settledPrev);
+        snapshotLocal(state.pos, anchor, anchorRotation, state.settledLocal);
+        copyPositions(state.settledLocal, state.settledPrevLocal);
     }
 
     /** Re-fixes the chain endpoints after a constraint pass: the root onto the anchor and, when the tip is hard-pinned, onto its target. */

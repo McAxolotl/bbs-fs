@@ -200,8 +200,8 @@ public final class ModelPhysicsRuntime
         {
             state.pos = new Vector3f[pointCount];
             state.prev = new Vector3f[pointCount];
-            state.settled = new Vector3f[pointCount];
-            state.settledPrev = new Vector3f[pointCount];
+            state.settledLocal = new Vector3f[pointCount];
+            state.settledPrevLocal = new Vector3f[pointCount];
             state.render = new Vector3f[pointCount];
             state.poseLocal = new Vector3f[pointCount];
 
@@ -209,8 +209,8 @@ public final class ModelPhysicsRuntime
             {
                 state.pos[i] = new Vector3f();
                 state.prev[i] = new Vector3f();
-                state.settled[i] = new Vector3f();
-                state.settledPrev[i] = new Vector3f();
+                state.settledLocal[i] = new Vector3f();
+                state.settledPrevLocal[i] = new Vector3f();
                 state.render[i] = new Vector3f();
                 state.poseLocal[i] = new Vector3f();
             }
