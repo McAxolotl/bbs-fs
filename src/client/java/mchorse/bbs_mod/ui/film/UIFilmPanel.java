@@ -461,7 +461,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.keys().register(Keys.JUMP_BACKWARD, () -> this.setCursor(this.getCursor() - BBSSettings.editorJump.get())).active(active).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, () ->
         {
-            this.showPanel(MathUtils.cycler(this.getPanelIndex() + (Window.isShiftPressed() ? -1 : 1), this.panels));
+            this.showPanel(MathUtils.cycler(this.getPanelIndex() + 1, this.panels));
+            UIUtils.playClick();
+        }).category(editor);
+        this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ACTIONS, () ->
+        {
+            this.showPanel(this.replayEditor);
+            this.replayEditor.setActionsMode(!this.replayEditor.isActionsMode());
             UIUtils.playClick();
         }).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->

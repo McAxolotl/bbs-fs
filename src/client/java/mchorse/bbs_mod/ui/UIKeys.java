@@ -239,6 +239,7 @@ public class UIKeys
     public static final IKey FILM_CONTROLLER_KEYS_INSERT_FRAME = L10n.lang("bbs.ui.film.controller.keys.insert_frame");
     public static final IKey FILM_CONTROLLER_KEYS_MOVE_REPLAY_TO_CURSOR = L10n.lang("bbs.ui.film.controller.keys.move_replay_to_cursor");
     public static final IKey FILM_CONTROLLER_KEYS_NEXT_REPLAY = L10n.lang("bbs.ui.film.controller.keys.next_replay");
+    public static final IKey FILM_CONTROLLER_KEYS_TOGGLE_ACTIONS = L10n.lang("bbs.ui.film.controller.keys.toggle_actions");
     public static final IKey FILM_CONTROLLER_KEYS_OPEN_REPLAYS = L10n.lang("bbs.ui.film.controller.keys.open_replays");
     public static final IKey FILM_CONTROLLER_KEYS_PREV_REPLAY = L10n.lang("bbs.ui.film.controller.keys.prev_replay");
     public static final IKey FILM_CONTROLLER_KEYS_RESTART_ACTIONS = L10n.lang("bbs.ui.film.controller.keys.restart_actions");
@@ -512,6 +513,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_speed");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_scale");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL = L10n.lang("bbs.ui.forms.editors.model.physics.wind_local");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP = L10n.lang("bbs.ui.forms.editors.model.physics.wind_local_tooltip");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.physics.save_error");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVED = L10n.lang("bbs.ui.forms.editors.model.physics.saved");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN = L10n.lang("bbs.ui.forms.editors.model.physics.invalid_chain");
@@ -763,6 +766,8 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_TEXTURE = L10n.lang("bbs.ui.model_editor.texture");
     public static final IKey MODEL_EDITOR_UI_SCALE = L10n.lang("bbs.ui.model_editor.ui_scale");
     public static final IKey MODEL_EDITOR_SCALE = L10n.lang("bbs.ui.model_editor.scale");
+    public static final IKey MODEL_EDITOR_BEVEL = L10n.lang("bbs.ui.model_editor.bevel");
+    public static final IKey MODEL_EDITOR_BEVEL_SEGMENTS = L10n.lang("bbs.ui.model_editor.bevel_segments");
     public static final IKey MODEL_EDITOR_WELDS = L10n.lang("bbs.ui.model_editor.welds");
     public static final IKey MODEL_EDITOR_WELD_SOURCE_BONE = L10n.lang("bbs.ui.model_editor.weld.source_bone");
     public static final IKey MODEL_EDITOR_WELD_SOURCE_FACE = L10n.lang("bbs.ui.model_editor.weld.source_face");

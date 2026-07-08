@@ -411,10 +411,18 @@ public final class ModelPhysicsDebug
             Vector3f p = pts.get(i);
 
             /* Sample in the solver's world space (carry the local point out through the draw matrix), then
-             * carry the world-space force back into local space so the arrow points the right way on screen. */
+             * carry the world-space force back into local space so the arrow points the right way on screen.
+             * When the wind is local to the model, its direction is already expressed in the model's own
+             * frame — which is this drawing space — so it is drawn directly without the world round-trip. */
             matrix.transformPosition(world.set(p));
             PhysicsForces.windForceAt(windDir, windMagnitude, wind, age, world, force);
-            inverse.transformDirection(force).mul(unit * config.wind.size.get());
+
+            if (!wind.local())
+            {
+                inverse.transformDirection(force);
+            }
+
+            force.mul(unit * config.wind.size.get());
 
             Vector3f end = new Vector3f(p).add(force);
 

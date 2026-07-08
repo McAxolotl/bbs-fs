@@ -496,6 +496,7 @@ public class UIReplaysEditorUtils
                 control.turbulence = wind.turbulence();
                 control.turbulenceSpeed = wind.turbulenceSpeed();
                 control.turbulenceScale = wind.turbulenceScale();
+                control.local = wind.local();
             }
         }
 
