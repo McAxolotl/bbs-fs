@@ -743,9 +743,9 @@ final class ChainSolver
                     maxZ = t;
                 }
 
-                eulerDeg.x = eulerDeg.x < minX ? minX : Math.min(eulerDeg.x, maxX);
-                eulerDeg.y = eulerDeg.y < minY ? minY : Math.min(eulerDeg.y, maxY);
-                eulerDeg.z = eulerDeg.z < minZ ? minZ : Math.min(eulerDeg.z, maxZ);
+                eulerDeg.x = clampAngleArc(eulerDeg.x, minX, maxX);
+                eulerDeg.y = clampAngleArc(eulerDeg.y, minY, maxY);
+                eulerDeg.z = clampAngleArc(eulerDeg.z, minZ, maxZ);
 
                 applied = Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z);
                 Vector3f dirLocal = new Vector3f(restDirLocal);
@@ -761,6 +761,30 @@ final class ChainSolver
 
             parentWorld.mul(applied);
         }
+    }
+
+    /**
+     * Clamps an euler channel to the [min, max] arc of the angle circle. The euler decomposition hands
+     * out angles in (-180, 180], so a bone swinging past the vertical wraps from +179 to -179; a plain
+     * numeric clamp reads that as "below min" and teleports the bone across the whole allowed range.
+     * Treating the limits as an arc and snapping to the nearest edge by circular distance keeps the
+     * clamp continuous through the wrap — inside the range both clamps agree.
+     */
+    private static float clampAngleArc(float angle, float min, float max)
+    {
+        if (angle >= min && angle <= max)
+        {
+            return angle;
+        }
+
+        return circularDistance(angle, min) <= circularDistance(angle, max) ? min : max;
+    }
+
+    private static float circularDistance(float a, float b)
+    {
+        float d = Math.abs(a - b) % 360F;
+
+        return d > 180F ? 360F - d : d;
     }
 
     private static float clamp01(float v)
