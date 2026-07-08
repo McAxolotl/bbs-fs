@@ -154,6 +154,7 @@ public class WorldVideoExportSession extends VideoExportSession
     protected void teardown(boolean cancelled)
     {
         if (cancelled && this.filmId != null && BBSModClient.getFilms().has(this.filmId))
+        {
             Films.playFilm(this.filmId, false);
         }
 
