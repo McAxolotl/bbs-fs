@@ -1199,6 +1199,17 @@ public class UIReplaysEditor extends UIElement
     }
 
     /**
+     * Bone pick from the 3D viewport with the Shift / Ctrl offer gestures. The gizmo
+     * sphere's deferred pick goes through here so clicking a bone on the sphere behaves
+     * like a direct bone click — Shift opens the hierarchy menu, Ctrl multi-selects —
+     * instead of only doing a plain select.
+     */
+    public void pickFormWithOffers(UIContext context, Form form, String bone)
+    {
+        UIReplaysEditorUtils.pickFormWithOffers(context, new Pair<>(form, bone), this::pickFormBone);
+    }
+
+    /**
      * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
      * only exist in the {@link ReplayCategory#POSE} category. So when another category
      * is open, jump to Pose first (and out of actions mode) before delegating to the

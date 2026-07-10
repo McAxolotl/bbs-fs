@@ -758,7 +758,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     public void pickGizmoForm(UIContext context, Form form, String bone)
     {
-        this.panel.replayEditor.pickForm(form, bone);
+        this.panel.replayEditor.pickFormWithOffers(context, form, bone);
     }
 
     private void pickReplay(int index)
