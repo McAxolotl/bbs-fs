@@ -40,7 +40,12 @@ final class ModelIKApplier
 
         /* Apply ancestor chains (shallower root) first, and re-collect frames per
          * chain, so a child chain (e.g. an arm) sees the pose its parent chain
-         * (e.g. the body) already produced and rides along with it. */
+         * (e.g. the body) already produced and rides along with it. The re-collect
+         * folds in the ancestors' IK stretch (their transient offset) too, so a child
+         * rooted under a stretched parent solves against the parent's shifted position
+         * — the spot the renderer actually draws it — instead of the un-stretched pose.
+         * A chain's OWN stretch is written only after its solve, so its offset is still
+         * null at collect time and never leaks into its own solve. */
         List<ModelIKCache.CompiledChain> ordered = new ArrayList<>(chains);
         ordered.sort(Comparator.comparingInt((ModelIKCache.CompiledChain chain) -> rootDepth(model, chain)));
 
@@ -56,7 +61,7 @@ final class ModelIKApplier
             }
 
             Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-            ModelPivotFrames.collect(model, wanted, frames);
+            ModelPivotFrames.collect(model, wanted, frames, null, true);
 
             applyChain(model, chain, frames, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
         }
