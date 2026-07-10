@@ -210,7 +210,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
             stack.pop();
 
-            this.stencil.pickGUI(context, this.area);
+            this.stencil.pickGUI(context, this.area, BBSSettings.gizmoHoverTolerance.get(), Gizmo.STENCIL_MAX);
             this.stencil.unbind(this.stencilMap);
 
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
