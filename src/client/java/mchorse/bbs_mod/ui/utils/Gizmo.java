@@ -66,9 +66,11 @@ public class Gizmo
     public final static int STENCIL_VIEW = 17;
     /** Screen-space translate handle: the big centre cube that grabs in the view plane. */
     public final static int STENCIL_SCREEN = 18;
+    /** Uniform-scale handle: the centre cube in scale mode that scales all three axes at once. */
+    public final static int STENCIL_SCALE_ALL = 19;
 
     /** Highest gizmo handle id; form-part stencil ids begin right after it. */
-    public final static int STENCIL_MAX = STENCIL_SCREEN;
+    public final static int STENCIL_MAX = STENCIL_SCALE_ALL;
 
     /** Radius of the view-plane ring relative to the per-axis rings. */
     private final static float VIEW_RING_SCALE = 1.2F;
@@ -91,12 +93,12 @@ public class Gizmo
      *  size in the visual and stencil passes and its hitbox matches the drawn cube exactly. */
     private final static float SCALE_CUBE_HALF = 0.032F;
 
-    /** Half-size of the screen-space (centre) translate cube, in gizmo-local units
-     *  (× axes scale × thickness). Twice the translate bars' half-thickness (the visual
-     *  bar offset is {@code 0.008}), so the cube reads as a grabbable handle. Like
-     *  {@link #SCALE_CUBE_HALF} it is offset-independent so the visual and stencil
-     *  passes match and the hitbox lines up with the drawn cube. */
-    private final static float SCREEN_CUBE_HALF = 0.016F;
+    /** Half-size of the centre cube shared by the screen-space (view-plane) translate
+     *  handle and the uniform (three-axis) scale handle, in gizmo-local units
+     *  (× axes scale × thickness). Deliberately large so the centre reads as an easy
+     *  grab target. Like {@link #SCALE_CUBE_HALF} it is offset-independent so the visual
+     *  and stencil passes match and the hitbox lines up with the drawn cube. */
+    private final static float SCREEN_CUBE_HALF = 0.03F;
 
     public final static Gizmo INSTANCE = new Gizmo();
 
@@ -126,7 +128,6 @@ public class Gizmo
 
     /* VBO caching for rotation rings to save resources */
     private VertexBuffer rotateRingVbo;
-    private VertexBuffer rotateStencilRingVbo;
     private VertexBuffer rotateSphereVbo;
     private float lastScale = -1F;
     private float lastThickness = -1F;
@@ -242,6 +243,7 @@ public class Gizmo
     {
         return this.currentTransform == null ? null : this.currentTransform.getDragReadout();
     }
+
 
     public void setSphereHovered(boolean hovered)
     {
@@ -537,6 +539,9 @@ public class Gizmo
                 case ROTATE:
                     transform.enableMode(handle.op.modeOrdinal, handle.axis, handle.axis2, drag);
                     break;
+                case SCALE_ALL:
+                    transform.enableUniformScale(drag);
+                    break;
                 case SCREEN:
                     transform.enableScreenTranslate(drag);
                     break;
@@ -768,8 +773,15 @@ public class Gizmo
             return;
         }
 
-        if (transform.isSphereRotate() || transform.isViewRotate())
+        if (transform.isSphereRotate())
         {
+            return;
+        }
+
+        if (transform.isViewRotate())
+        {
+            this.drawViewPie(stack);
+
             return;
         }
 
@@ -779,6 +791,119 @@ public class Gizmo
         {
             this.drawRotatePie(stack, axis);
         }
+    }
+
+    /**
+     * Sweep pie for the view (screen-plane) ring, drawn as a billboard through the
+     * exact same transform as the ring itself ({@link #drawCachedRingBillboard}),
+     * so it sits on the ring at any FOV — a 2D screen-space pie drifted off it
+     * because its radius was projected separately from the ring. Anchored at the
+     * ring's local zero and swept by the accumulated turn.
+     */
+    private void drawViewPie(MatrixStack stack)
+    {
+        /* Negated: the billboard's local XZ winds opposite to the screen sweep, so
+         * the raw accumulated angle would grow the pie the wrong way. */
+        float sweepDeg = -this.currentTransform.getAccumulatedRotateDeg();
+
+        if (Math.abs(sweepDeg) < 0.01F)
+        {
+            return;
+        }
+
+        float scale = BBSSettings.axesScale.get();
+        float radius = 0.22F * scale;
+
+        stack.push();
+
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        {
+            basis.invert().transform(toCamera);
+        }
+
+        if (toCamera.lengthSquared() > 1.0E-8F)
+        {
+            toCamera.normalize();
+            stack.multiply(new Quaternionf().rotationTo(0F, 1F, 0F, toCamera.x, toCamera.y, toCamera.z));
+        }
+
+        stack.scale(VIEW_RING_SCALE, VIEW_RING_SCALE, VIEW_RING_SCALE);
+
+        int color = Colors.LIGHTEST_GRAY;
+        float r = Colors.getR(color);
+        float g = Colors.getG(color);
+        float b = Colors.getB(color);
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f mat = stack.peek().getPositionMatrix();
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.disableCull();
+
+        int segments = Math.max(2, (int) (Math.abs(sweepDeg) / 360F * 64F));
+        float step = sweepDeg / segments;
+
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        for (int i = 0; i < segments; i++)
+        {
+            float a1 = MathUtils.toRad(step * i);
+            float a2 = MathUtils.toRad(step * (i + 1));
+            float x1 = (float) Math.cos(a1) * radius;
+            float z1 = (float) Math.sin(a1) * radius;
+            float x2 = (float) Math.cos(a2) * radius;
+            float z2 = (float) Math.sin(a2) * radius;
+
+            builder.vertex(mat, 0, 0, 0).color(r, g, b, 0.25F).next();
+
+            if (sweepDeg > 0)
+            {
+                builder.vertex(mat, x1, 0, z1).color(r, g, b, 0.25F).next();
+                builder.vertex(mat, x2, 0, z2).color(r, g, b, 0.25F).next();
+            }
+            else
+            {
+                builder.vertex(mat, x2, 0, z2).color(r, g, b, 0.25F).next();
+                builder.vertex(mat, x1, 0, z1).color(r, g, b, 0.25F).next();
+            }
+        }
+
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        /* Bright radial edges at the start and leading angle, like the axis pie. */
+        float lineThickness = 0.005F * scale;
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        this.pieEdge(builder, mat, 0F, radius, lineThickness, r, g, b);
+        this.pieEdge(builder, mat, MathUtils.toRad(sweepDeg), radius, lineThickness, r, g, b);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+
+        stack.pop();
+    }
+
+    /** One radial boundary line of a billboard pie: a thin quad from centre to rim
+     *  along {@code angle} (radians) in the local XZ plane. */
+    private void pieEdge(BufferBuilder builder, Matrix4f mat, float angle, float radius, float thickness, float r, float g, float b)
+    {
+        float ex = (float) Math.cos(angle) * radius;
+        float ez = (float) Math.sin(angle) * radius;
+        Vector3f p = new Vector3f(-ez, 0, ex).normalize().mul(thickness);
+
+        builder.vertex(mat, p.x, 0, p.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, -p.x, 0, -p.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex - p.x, 0, ez - p.z).color(r, g, b, 1F).next();
+
+        builder.vertex(mat, p.x, 0, p.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex - p.x, 0, ez - p.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, ex + p.x, 0, ez + p.z).color(r, g, b, 1F).next();
     }
 
     private float getAxesDistanceScale(MatrixStack stack)
@@ -841,30 +966,21 @@ public class Gizmo
             if (this.rotateRingVbo != null)
             {
                 this.rotateRingVbo.close();
-                this.rotateStencilRingVbo.close();
                 this.rotateSphereVbo.close();
             }
 
             this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
             BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
             float radius = 0.22F * scale;
             float thicknessRing = 0.02F * scale * thickness;
-            float outlinePad = 0.015F * scale * thickness;
-            float thicknessStencil = 0.05F * scale * thickness + outlinePad;
 
             builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
             Draw.arc3D(builder, new MatrixStack(), Axis.Y, radius, thicknessRing, 1F, 1F, 1F, 0F, 360F);
             this.rotateRingVbo.bind();
             this.rotateRingVbo.upload(builder.end());
-
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-            Draw.arc3D(builder, new MatrixStack(), Axis.Y, radius, thicknessStencil, 1F, 1F, 1F, 0F, 360F);
-            this.rotateStencilRingVbo.bind();
-            this.rotateStencilRingVbo.upload(builder.end());
 
             builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
             Draw.sphere(builder, new MatrixStack(), radius, 24, 24, 1F, 1F, 1F, 1F);
@@ -1218,6 +1334,11 @@ public class Gizmo
             return Handle.SCREEN;
         }
 
+        if (op == 1 && transform.isScaleAll())
+        {
+            return Handle.SCALE_ALL;
+        }
+
         Op handleOp = op == 1 ? Op.SCALE : Op.MOVE;
         Axis axis2 = transform.getAxis2();
 
@@ -1289,7 +1410,7 @@ public class Gizmo
         Handle active = this.activeDragHandle();
 
         boolean showMove = this.mode.shows(Op.MOVE) && (active == null || active.op == Op.MOVE || active.op == Op.SCREEN);
-        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE);
+        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE || active.op == Op.SCALE_ALL);
         boolean showRotate = this.mode.shows(Op.ROTATE) && (active == null || active.op == Op.ROTATE || active.op == Op.VIEW || active.op == Op.TRACKBALL);
 
         axisSize *= scale * this.combinedInnerScale();
@@ -1331,6 +1452,16 @@ public class Gizmo
                 float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
 
                 Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, Colors.WHITE);
+            }
+
+            /* Uniform-scale handle: the same centre cube, shown in scale mode only when
+             * move isn't (in combined the centre is the translate handle), so the pick
+             * is never ambiguous between the two. */
+            if (showScale && !showMove && (active == null || active == Handle.SCALE_ALL))
+            {
+                float scaleAllHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                Draw.fillBox(builder, stack, -scaleAllHalf, -scaleAllHalf, -scaleAllHalf, scaleAllHalf, scaleAllHalf, scaleAllHalf, Colors.WHITE);
             }
 
             /* The plane quad's footprint is a fixed fraction of the axis length,
@@ -1409,7 +1540,9 @@ public class Gizmo
 
         stack.push();
         stack.scale(distanceScale, distanceScale, distanceScale);
-        this.drawAxes(stack, map, 0.25F, 0.025F);
+        /* Same axisOffset as the visual pass (Gizmo#drawGizmo) so the pick hitbox
+         * matches the drawn handles instead of overhanging them. */
+        this.drawAxes(stack, map, 0.25F, 0.008F);
         stack.pop();
     }
 
@@ -1515,7 +1648,7 @@ public class Gizmo
         Handle active = this.activeDragHandle();
 
         boolean showMove = this.mode.shows(Op.MOVE) && (active == null || active.op == Op.MOVE || active.op == Op.SCREEN);
-        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE);
+        boolean showScale = this.mode.shows(Op.SCALE) && (active == null || active.op == Op.SCALE || active.op == Op.SCALE_ALL);
         boolean showRotate = this.mode.shows(Op.ROTATE) && (active == null || active.op == Op.ROTATE || active.op == Op.VIEW || active.op == Op.TRACKBALL);
 
         axisSize *= scale * this.combinedInnerScale();
@@ -1529,8 +1662,9 @@ public class Gizmo
 
             if (!BBSSettings.rotateHideRings.get())
             {
-                float outlinePad = 0.015F * scale * thickness;
-                float stencilThickness = 0.05F * scale * thickness + outlinePad;
+                /* Match the visual ring thickness (Gizmo#drawRotateHandles) so the
+                 * pick tube lines up with the drawn ring. */
+                float stencilThickness = 0.02F * scale * thickness;
                 float radius = 0.22F * scale;
 
                 if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, stencilThickness, STENCIL_ROTATE_Z / 255F, 0F, 0F);
@@ -1538,8 +1672,9 @@ public class Gizmo
                 if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, stencilThickness, STENCIL_ROTATE_Y / 255F, 0F, 0F);
             }
 
-            /* View ring stays pickable even when the rings are hidden (see drawAxes visual pass). */
-            if (active == null || active == Handle.VIEW) this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
+            /* View ring stays pickable even when the rings are hidden (see drawAxes visual pass).
+             * Uses the same ring VBO as the visual so the pick matches its thickness. */
+            if (active == null || active == Handle.VIEW) this.drawCachedRingBillboard(stack, this.rotateRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
         }
 
         if (showMove || showScale)
@@ -1570,6 +1705,14 @@ public class Gizmo
                 float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
 
                 Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, STENCIL_SCREEN / 255F, 0F, 0F);
+            }
+
+            /* Uniform-scale hitbox: matches the visual centre cube in scale-only mode. */
+            if (showScale && !showMove && (active == null || active == Handle.SCALE_ALL))
+            {
+                float scaleAllHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                Draw.fillBox(builder, stack, -scaleAllHalf, -scaleAllHalf, -scaleAllHalf, scaleAllHalf, scaleAllHalf, scaleAllHalf, STENCIL_SCALE_ALL / 255F, 0F, 0F);
             }
 
             /* The plane quad's footprint is a fixed fraction of the axis length,
@@ -1626,11 +1769,12 @@ public class Gizmo
      * Kind of transform a handle drives. {@link #modeOrdinal} matches the
      * {@code mode} argument {@link UIPropTransform#enableMode(int, Axis, Axis, GizmoDrag)}
      * expects (0 translate, 1 scale, 2 rotate); VIEW and TRACKBALL are rotate
-     * variants routed through their own enable* calls.
+     * variants routed through their own enable* calls, and SCALE_ALL is the
+     * uniform (three-axis) scale variant routed through its own enable call.
      */
     public static enum Op
     {
-        MOVE(0), SCALE(1), ROTATE(2), VIEW(2), TRACKBALL(2), SCREEN(0);
+        MOVE(0), SCALE(1), SCALE_ALL(1), ROTATE(2), VIEW(2), TRACKBALL(2), SCREEN(0);
 
         public final int modeOrdinal;
 
@@ -1665,7 +1809,8 @@ public class Gizmo
         ROTATE_Z(STENCIL_ROTATE_Z, Op.ROTATE, Axis.Z, null),
         TRACKBALL(STENCIL_TRACKBALL, Op.TRACKBALL, null, null),
         VIEW(STENCIL_VIEW, Op.VIEW, null, null),
-        SCREEN(STENCIL_SCREEN, Op.SCREEN, null, null);
+        SCREEN(STENCIL_SCREEN, Op.SCREEN, null, null),
+        SCALE_ALL(STENCIL_SCALE_ALL, Op.SCALE_ALL, null, null);
 
         public final int index;
         public final Op op;
