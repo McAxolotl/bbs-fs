@@ -279,6 +279,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         super.render(context);
 
         this.gizmo.renderSphereHighlight(context);
+        this.gizmo.renderReadout(context);
 
         if (!this.stencil.hasPicked())
         {

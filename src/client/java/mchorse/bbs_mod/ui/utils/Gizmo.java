@@ -235,6 +235,14 @@ public class Gizmo
         return this.mode;
     }
 
+    /** The active drag's on-screen readout (angle / offset / scale delta), or
+     *  {@code null} when nothing is being dragged. See
+     *  {@link UIPropTransform#getDragReadout()}. */
+    public String getDragReadout()
+    {
+        return this.currentTransform == null ? null : this.currentTransform.getDragReadout();
+    }
+
     public void setSphereHovered(boolean hovered)
     {
         this.sphereHovered = hovered;
@@ -694,7 +702,7 @@ public class Gizmo
             stack.scale(distanceScale, distanceScale, distanceScale);
             this.lastSphereMatrix.set(stack.peek().getPositionMatrix());
             this.hasLastSphereMatrix = true;
-            this.drawAxes(stack, 0.25F, 0.008F);
+            this.drawOccludedGizmo(stack);
             stack.pop();
         }
         else
@@ -708,6 +716,69 @@ public class Gizmo
         }
 
         this.drawInfiniteLine(stack);
+    }
+
+    /**
+     * Draw the opaque gizmo handles with real depth so nearer parts hide farther
+     * ones — the solid look a typical 3D gizmo has, instead of every bar, plane
+     * and ring bleeding over each other flat.
+     *
+     * <p>The gizmo still sits on top of the scene: a first depth-only pass stamps
+     * every handle pixel to the far plane (via {@code depthRange(1,1)}), so the
+     * model's own depth can't occlude the gizmo; the real pass then draws the
+     * handles against that clean slate with an ordinary depth test, sorting them
+     * among themselves. The translucent sweep pie stays on top of everything and
+     * writes no depth, so it can't punch holes in the handles.
+     */
+    private void drawOccludedGizmo(MatrixStack stack)
+    {
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthMask(true);
+
+        GL11.glDepthRange(1D, 1D);
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        RenderSystem.colorMask(false, false, false, false);
+        this.drawAxes(stack, 0.25F, 0.008F);
+
+        GL11.glDepthRange(0D, 1D);
+        RenderSystem.colorMask(true, true, true, true);
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        this.drawAxes(stack, 0.25F, 0.008F);
+
+        /* The sweep pie overlays the handles and must not write depth. */
+        RenderSystem.depthMask(false);
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        this.drawRotatePieIfActive(stack);
+        RenderSystem.depthMask(true);
+
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+    }
+
+    /**
+     * Draw the rotation sweep pie when an axis ring is being dragged. Split out
+     * of the handle pass so it can be composited last, on top of and without
+     * disturbing the depth-sorted handles.
+     */
+    private void drawRotatePieIfActive(MatrixStack stack)
+    {
+        UIPropTransform transform = this.currentTransform;
+
+        if (transform == null || !transform.isEditing() || transform.getMode() != Op.ROTATE.modeOrdinal)
+        {
+            return;
+        }
+
+        if (transform.isSphereRotate() || transform.isViewRotate())
+        {
+            return;
+        }
+
+        Axis axis = transform.getAxis();
+
+        if (axis != null)
+        {
+            this.drawRotatePie(stack, axis);
+        }
     }
 
     private float getAxesDistanceScale(MatrixStack stack)
@@ -1180,18 +1251,14 @@ public class Gizmo
         return this.mode == Mode.COMBINED && !BBSSettings.rotateHideRings.get() ? COMBINED_INNER_SCALE : 1F;
     }
 
-    private void drawRotateHandles(MatrixStack stack, boolean editing, int activeOp, Handle active)
+    private void drawRotateHandles(MatrixStack stack, Handle active)
     {
         this.updateVbos();
 
-        boolean rotating = editing && activeOp == Op.ROTATE.modeOrdinal;
-        Axis activeAxis = rotating ? this.currentTransform.getAxis() : null;
-
         /* The 3D sphere itself is invisible — it only acts as the trackball grab
          * area. Hover feedback is a screen-space glow composited in
-         * {@link #renderSphereHighlight}. */
-
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+         * {@link #renderSphereHighlight}. Depth state is owned by the caller
+         * ({@link #drawOccludedGizmo}) so the handles sort against each other. */
 
         if (!BBSSettings.rotateHideRings.get())
         {
@@ -1212,13 +1279,6 @@ public class Gizmo
 
             this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
         }
-
-        if (rotating && activeAxis != null)
-        {
-            this.drawRotatePie(stack, activeAxis);
-        }
-
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
     private void drawAxes(MatrixStack stack, float axisSize, float axisOffset)
@@ -1226,8 +1286,6 @@ public class Gizmo
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
 
-        boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
-        int activeOp = editing ? this.currentTransform.getMode() : -1;
         Handle active = this.activeDragHandle();
 
         boolean showMove = this.mode.shows(Op.MOVE) && (active == null || active.op == Op.MOVE || active.op == Op.SCREEN);
@@ -1242,7 +1300,7 @@ public class Gizmo
 
         if (showRotate)
         {
-            this.drawRotateHandles(stack, editing, activeOp, active);
+            this.drawRotateHandles(stack, active);
         }
 
         if (showMove || showScale)
@@ -1278,8 +1336,8 @@ public class Gizmo
             /* The plane quad's footprint is a fixed fraction of the axis length,
              * independent of axesThickness — thickness only fattens the bars and
              * the flat slab depth, not how big the two-axis plane reads. */
-            float planeStart = axisSize * 0.25F;
-            float planeEnd = planeStart + axisSize * 0.25F;
+            float planeStart = axisSize * 0.2F;
+            float planeEnd = planeStart + axisSize * 0.2F;
             float planeThickness = axisOffset * 0.5F;
 
             if (active == null || active == planeXZ) Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, Colors.PLANE_XZ);
@@ -1310,12 +1368,11 @@ public class Gizmo
 
         if (building)
         {
+            /* Depth func/mask is owned by {@link #drawOccludedGizmo} so bars,
+             * planes and cubes depth-sort against the rings and each other. */
             RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
             BufferRenderer.drawWithGlobalProgram(builder.end());
-
-            RenderSystem.depthFunc(GL11.GL_LEQUAL);
         }
     }
 
@@ -1518,8 +1575,8 @@ public class Gizmo
             /* The plane quad's footprint is a fixed fraction of the axis length,
              * independent of axesThickness — thickness only fattens the bars and
              * the flat slab depth, not how big the two-axis plane reads. */
-            float planeStart = axisSize * 0.25F;
-            float planeEnd = planeStart + axisSize * 0.25F;
+            float planeStart = axisSize * 0.2F;
+            float planeEnd = planeStart + axisSize * 0.2F;
             float planeThickness = axisOffset * 0.5F;
 
             if (active == null || active == planeXZ) Draw.fillBox(builder, stack, planeStart, -planeThickness, planeStart, planeEnd, planeThickness, planeEnd, planeXZ.index / 255F, 0F, 0F);

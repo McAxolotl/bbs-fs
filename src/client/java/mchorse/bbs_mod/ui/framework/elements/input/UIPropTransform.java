@@ -417,6 +417,61 @@ public class UIPropTransform extends UITransform
         return this.accumulatedRotateDeg;
     }
 
+    /**
+     * A short summary of what the active drag has changed so far, for the gizmo's
+     * on-screen readout: degrees for an axis rotation, the per-axis offset for a
+     * move, the per-axis factor delta for a scale. Returns {@code null} when there
+     * is nothing single-valued to show (no drag, or a free sphere / view rotation).
+     */
+    public String getDragReadout()
+    {
+        if (!this.editing || this.transform == null)
+        {
+            return null;
+        }
+
+        if (this.mode == 2)
+        {
+            return this.rotateKind == RotateKind.AXIS ? String.format("%.1f°", this.accumulatedRotateDeg) : null;
+        }
+
+        Vector3f delta;
+        boolean allAxes;
+
+        if (this.mode == 0)
+        {
+            delta = new Vector3f(this.transform.translate).sub(this.dragStartTranslate);
+            allAxes = this.translateScreen;
+        }
+        else if (this.mode == 1)
+        {
+            delta = new Vector3f(this.transform.scale).sub(this.dragStartScale);
+            allAxes = false;
+        }
+        else
+        {
+            return null;
+        }
+
+        StringBuilder builder = new StringBuilder();
+
+        if (allAxes || this.axis == Axis.X || this.axis2 == Axis.X) this.appendAxis(builder, "X", delta.x);
+        if (allAxes || this.axis == Axis.Y || this.axis2 == Axis.Y) this.appendAxis(builder, "Y", delta.y);
+        if (allAxes || this.axis == Axis.Z || this.axis2 == Axis.Z) this.appendAxis(builder, "Z", delta.z);
+
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
+    private void appendAxis(StringBuilder builder, String label, float value)
+    {
+        if (builder.length() > 0)
+        {
+            builder.append("  ");
+        }
+
+        builder.append(label).append(' ').append(String.format("%+.3f", value));
+    }
+
     public GizmoDrag getDrag()
     {
         return this.drag;
