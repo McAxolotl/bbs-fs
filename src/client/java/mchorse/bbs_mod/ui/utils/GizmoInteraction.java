@@ -1,8 +1,10 @@
 package mchorse.bbs_mod.ui.utils;
 
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.colors.Colors;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
 
@@ -172,6 +174,36 @@ public class GizmoInteraction
     public void renderSphereHighlight(UIContext context)
     {
         Gizmo.INSTANCE.renderSphereHighlight(context, this.viewport.getGizmoProjection(), this.viewport.getGizmoArea());
+    }
+
+    /**
+     * Draw the active drag's numeric readout (rotation degrees, move offset or
+     * scale delta) as a small card just above the gizmo's on-screen origin. Call
+     * from the host's GUI overlay pass, alongside {@link #renderSphereHighlight}.
+     */
+    public void renderReadout(UIContext context)
+    {
+        String readout = Gizmo.INSTANCE.getDragReadout();
+        Area area = this.viewport.getGizmoArea();
+        Matrix4f projection = this.viewport.getGizmoProjection();
+
+        if (readout == null || area == null || projection == null)
+        {
+            return;
+        }
+
+        Vector2f center = new Vector2f();
+
+        if (!Gizmo.INSTANCE.computeScreenCenter(projection, area.x, area.y, area.w, area.h, center))
+        {
+            return;
+        }
+
+        FontRenderer font = context.batcher.getFont();
+        int x = (int) (center.x - font.getWidth(readout) / 2F);
+        int y = (int) (center.y - 28);
+
+        context.batcher.textCard(readout, x, y, Colors.WHITE, Colors.A75);
     }
 
     public void stop()

@@ -490,9 +490,18 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             return;
         }
 
-        if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
-        else if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
-        else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
+        if (Window.isCtrlPressed() && !pair.b.isEmpty())
+        {
+            /* Ctrl + a valid parent bone attaches the active body part to it; otherwise it
+             * toggles the bone in the pose editor's multi-selection (no rebuild, so the
+             * selection accumulates), matching the film editor. */
+            if (this.bodyPartEditor.pickBone(pair) || (this.editor != null && this.editor.toggleBoneSelection(pair.b)))
+            {
+                return;
+            }
+        }
+
+        if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else this.pickFormBone(pair.a, pair.b);
     }
 

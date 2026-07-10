@@ -758,7 +758,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     public void pickGizmoForm(UIContext context, Form form, String bone)
     {
-        this.panel.replayEditor.pickForm(form, bone);
+        this.panel.replayEditor.pickFormWithOffers(context, form, bone);
     }
 
     private void pickReplay(int index)
@@ -1351,6 +1351,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.gizmo.update(context);
             this.gizmo.renderSphereHighlight(context);
+            this.gizmo.renderReadout(context);
         }
 
         if (!this.stencil.hasPicked())
@@ -1651,8 +1652,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
         int y = (int) ((1F - (context.mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
+        int radius = Math.round(BBSSettings.gizmoHoverTolerance.get() * mainTexture.width / (float) viewport.w);
 
-        this.stencil.pick(x, y);
+        this.stencil.pick(x, y, radius, Gizmo.STENCIL_MAX);
         this.stencil.unbind(this.stencilMap);
 
         MinecraftClient.getInstance().getFramebuffer().beginWrite(true);

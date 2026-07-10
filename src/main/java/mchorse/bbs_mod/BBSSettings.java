@@ -53,6 +53,8 @@ public class BBSSettings {
 	public static ValueFloat snapTranslate;
 	public static ValueFloat snapRotate;
 	public static ValueFloat snapScale;
+	public static ValueInt gizmoHoverTolerance;
+	public static ValueFloat gizmoOpacity;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -474,6 +476,8 @@ public class BBSSettings {
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
 		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
 		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
+		gizmoHoverTolerance = builder.getInt("gizmo_hover_tolerance", 8, 0, 40);
+		gizmoOpacity = builder.getFloat("gizmo_opacity", 1F, 0.05F, 1F);
 		defaultLocalTransform = builder.getBoolean("default_local", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
