@@ -76,6 +76,16 @@ public class Gizmo
     /** Move/scale handles shrink inside the rotation rings in combined mode. */
     private final static float COMBINED_INNER_SCALE = 0.6F;
 
+    /** How much a ring is allowed to reach past the sphere's silhouette so a
+     *  ring seen face-on still draws in full. {@code 0} would cut every ring
+     *  dead on the silhouette (a face-on ring, sitting exactly on it, would
+     *  flicker to half); a small value keeps face-on rings whole while a tilted
+     *  ring's far half still ends right at the silhouette. */
+    private final static float RING_FACE_ON_BIAS = 0.18F;
+
+    /** Angular resolution used to find a ring's camera-facing (visible) arc. */
+    private final static int RING_OCCLUSION_SAMPLES = 180;
+
     /** Half-size of the scale handle's end cube, in gizmo-local units (× axes scale × thickness).
      *  Based on scale/thickness rather than the per-pass line offset, so the cube is the same
      *  size in the visual and stencil passes and its hitbox matches the drawn cube exactly. */
@@ -825,6 +835,116 @@ public class Gizmo
         stack.pop();
     }
 
+    /**
+     * Compute a rotation ring's camera-facing arc — the part not hidden behind
+     * the central sphere — as {@code [startDeg, sweepDeg]} in the ring's own
+     * plane (the angle convention {@link Draw#arc3D} draws in). A ring seen
+     * face-on returns the full {@code 360}; an edge-on ring returns roughly
+     * half. Writes the result into {@code out}; returns {@code false} only in
+     * the degenerate case where the whole ring is hidden.
+     */
+    private boolean visibleRingArc(MatrixStack stack, Axis axis, float radius, Vector2f out)
+    {
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+
+        /* Camera position expressed in the gizmo's local frame (the inverse of
+         * the model-view applied to the view-space origin), as the billboard
+         * ring already does. */
+        Vector3f camera = matrix.getTranslation(new Vector3f()).negate();
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        {
+            basis.invert().transform(camera);
+        }
+
+        /* Move it into the ring's own plane frame, matching the axis rotation
+         * arc3D applies, so the arc angles line up with what it draws. */
+        Quaternionf rot = new Quaternionf();
+
+        if (axis == Axis.X) rot.rotationZ(MathUtils.PI / 2F);
+        else if (axis == Axis.Z) rot.rotationX(MathUtils.PI / 2F);
+
+        rot.conjugate().transform(camera);
+
+        /* A ring point (unit direction in the ring's plane) is on the near side
+         * of the sphere when its in-plane dot with the camera is positive; the
+         * cut then lands exactly on the sphere's silhouette. The out-of-plane
+         * bias lifts that cut just enough that a ring viewed face-on — where the
+         * in-plane dot is ~0 all the way round — stays fully drawn. */
+        float length = camera.length();
+        float bias = length > 1.0E-6F ? RING_FACE_ON_BIAS * (camera.y * camera.y) / length : 0F;
+        int n = RING_OCCLUSION_SAMPLES;
+        boolean[] visible = new boolean[n];
+        int count = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            float angle = (float) (i * 2D * Math.PI / n);
+            float ct = (float) Math.cos(angle);
+            float st = (float) Math.sin(angle);
+            boolean vis = camera.x * ct + camera.z * st + bias > 0F;
+
+            visible[i] = vis;
+
+            if (vis) count++;
+        }
+
+        if (count == 0)
+        {
+            return false;
+        }
+
+        if (count == n)
+        {
+            out.set(0F, 360F);
+
+            return true;
+        }
+
+        /* The visible region is one contiguous arc; find where it begins after a
+         * hidden sample and how far it runs, wrapping around. */
+        int hidden = 0;
+
+        while (visible[hidden]) hidden++;
+
+        int start = hidden;
+
+        while (!visible[start % n]) start++;
+
+        int run = 0;
+
+        while (visible[(start + run) % n]) run++;
+
+        float step = 360F / n;
+
+        out.set(start * step, run * step);
+
+        return true;
+    }
+
+    /**
+     * Draw a rotation ring with its far half (behind the central sphere) culled,
+     * so it reads like the rings in a typical 3D gizmo. Immediate mode, since the
+     * visible arc changes with the camera every frame.
+     */
+    private void drawOccludedRing(MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b)
+    {
+        Vector2f arc = new Vector2f();
+
+        if (!this.visibleRingArc(stack, axis, radius, arc))
+        {
+            return;
+        }
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        Draw.arc3D(builder, stack, axis, radius, thickness, r, g, b, arc.x, arc.y);
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
     private void drawCachedRingBillboard(MatrixStack stack, VertexBuffer vbo, float r, float g, float b, float a)
     {
         stack.push();
@@ -1075,9 +1195,13 @@ public class Gizmo
 
         if (!BBSSettings.rotateHideRings.get())
         {
-            if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
-            if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
-            if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            float scale = BBSSettings.axesScale.get();
+            float radius = 0.22F * scale;
+            float ringThickness = 0.02F * scale * BBSSettings.axesThickness.get();
+
+            if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, ringThickness, Colors.getR(Colors.BLUE), Colors.getG(Colors.BLUE), Colors.getB(Colors.BLUE));
+            if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, ringThickness, Colors.getR(Colors.RED), Colors.getG(Colors.RED), Colors.getB(Colors.RED));
+            if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, ringThickness, Colors.getR(Colors.GREEN), Colors.getG(Colors.GREEN), Colors.getB(Colors.GREEN));
         }
 
         /* The screen-space (billboard) view-rotation ring is intentionally excluded from the
@@ -1345,9 +1469,13 @@ public class Gizmo
 
             if (!BBSSettings.rotateHideRings.get())
             {
-                if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
-                if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
-                if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
+                float outlinePad = 0.015F * scale * thickness;
+                float stencilThickness = 0.05F * scale * thickness + outlinePad;
+                float radius = 0.22F * scale;
+
+                if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, stencilThickness, STENCIL_ROTATE_Z / 255F, 0F, 0F);
+                if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, stencilThickness, STENCIL_ROTATE_X / 255F, 0F, 0F);
+                if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, stencilThickness, STENCIL_ROTATE_Y / 255F, 0F, 0F);
             }
 
             /* View ring stays pickable even when the rings are hidden (see drawAxes visual pass). */
