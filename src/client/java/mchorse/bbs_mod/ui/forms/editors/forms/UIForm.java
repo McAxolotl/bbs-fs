@@ -165,6 +165,17 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         }
     }
 
+    /**
+     * Toggle a bone in the pose editor's multi-selection without rebuilding the panel,
+     * so a viewport Ctrl+click accumulates a selection instead of resetting it. Returns
+     * whether this form actually owns the bone and handled the toggle (only model forms
+     * with a pose editor do). See {@link mchorse.bbs_mod.ui.forms.editors.forms.UIModelForm}.
+     */
+    public boolean toggleBoneSelection(String bone)
+    {
+        return false;
+    }
+
     public Class<?> getActivePanelClass()
     {
         return this.view == null ? null : this.view.getClass();

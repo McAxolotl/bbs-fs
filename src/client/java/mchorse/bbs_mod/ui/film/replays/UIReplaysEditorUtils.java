@@ -890,6 +890,20 @@ public class UIReplaysEditorUtils
             return;
         }
 
+        /* Ctrl multi-select: toggle the bone in the live pose editor without changing the
+         * selected keyframe. Selecting a keyframe recreates the factory (see
+         * UIKeyframeEditor#pickKeyframe), which resets the pose editor — so it caps the
+         * multi-selection. When a pose factory is already up and owns this bone, just
+         * toggle it and stop, so the selection accumulates. */
+        if (!insert && Window.isCtrlPressed()
+            && keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory
+            && poseFactory.poseEditor.hasBone(bone))
+        {
+            poseFactory.poseEditor.selectBone(bone, true);
+
+            return;
+        }
+
         String path = FormUtils.getPath(form);
         String boneKey = PerLimbService.toPoseBoneKey(path, bone);
 
@@ -1344,11 +1358,11 @@ public class UIReplaysEditorUtils
     }
 
     /**
-     * Shared viewport bone-pick gesture for the film, replay and animation
-     * state editors: left / Ctrl+right select, middle inserts, Ctrl offers
-     * adjacent bones, Shift offers the hierarchy. The leaf {@code picker}
-     * supplies the editor-specific selection. Returns whether the click
-     * was consumed.
+     * Shared viewport bone-pick gesture for the film / replay editor: left / Ctrl+middle
+     * select, right inserts, Shift offers the hierarchy. Ctrl+click toggles the bone in
+     * the pose editor's multi-selection (handled at the leaf), so it no longer opens the
+     * adjacent-bones menu here. The leaf {@code picker} supplies the editor-specific
+     * selection. Returns whether the click was consumed.
      */
     public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker)
     {
@@ -1360,11 +1374,9 @@ public class UIReplaysEditorUtils
             return false;
         }
 
-        if (Window.isCtrlPressed())
-        {
-            offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
-        }
-        else if (Window.isShiftPressed())
+        /* Shift keeps the hierarchy menu; Ctrl now falls straight through to the pick,
+         * where the modifier turns the selection additive (multi-bone). */
+        if (Window.isShiftPressed())
         {
             offerHierarchy(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
         }

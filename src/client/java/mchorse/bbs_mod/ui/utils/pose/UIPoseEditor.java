@@ -283,9 +283,43 @@ public class UIPoseEditor extends UIElement
 
     public void selectBone(String bone)
     {
+        this.selectBone(bone, false);
+    }
+
+    /** Whether this pose editor lists the given bone (so a viewport pick can target it). */
+    public boolean hasBone(String bone)
+    {
+        return bone != null && !bone.isEmpty() && this.groups.list.getList().contains(bone);
+    }
+
+    /**
+     * Select a bone, or — when {@code additive} — toggle it in the multi-selection,
+     * so the viewport's Ctrl+click builds the same multi-bone selection the bone list
+     * does. Never leaves the selection empty (toggling off the last bone keeps it).
+     */
+    public void selectBone(String bone, boolean additive)
+    {
         lastLimb = bone;
 
-        this.groups.list.setCurrentScroll(bone);
+        if (additive)
+        {
+            int index = this.groups.list.getList().indexOf(bone);
+
+            if (index != -1)
+            {
+                this.groups.list.toggleIndex(index);
+
+                if (this.groups.list.getCurrent().isEmpty())
+                {
+                    this.groups.list.toggleIndex(index);
+                }
+            }
+        }
+        else
+        {
+            this.groups.list.setCurrentScroll(bone);
+        }
+
         this.pickBones(this.groups.list.getCurrent());
     }
 

@@ -87,4 +87,17 @@ public class UIModelForm extends UIForm<ModelForm>
     {
         return StringUtils.combinePaths(FormUtils.getPath(this.form), this.modelPanel.poseEditor.groups.list.getCurrentFirst());
     }
+
+    @Override
+    public boolean toggleBoneSelection(String bone)
+    {
+        if (!this.modelPanel.poseEditor.hasBone(bone))
+        {
+            return false;
+        }
+
+        this.modelPanel.poseEditor.selectBone(bone, true);
+
+        return true;
+    }
 }
