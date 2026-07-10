@@ -805,44 +805,38 @@ public class Gizmo
     }
 
     /**
-     * Sweep pie for the view (screen-plane) ring, drawn as a billboard through the
-     * exact same transform as the ring itself ({@link #drawCachedRingBillboard}),
-     * so it sits on the ring at any FOV — a 2D screen-space pie drifted off it
-     * because its radius was projected separately from the ring. Anchored at the
-     * ring's local zero and swept by the accumulated turn.
+     * Sweep pie for the view (screen-plane) ring. Built straight from the cursor's
+     * screen angles using the gizmo's local directions that map to screen right and
+     * down, so it starts exactly under the grab, its leading edge follows the cursor,
+     * and — being in the gizmo's own (distance-scaled) frame — its radius rides the
+     * ring at any FOV.
      */
     private void drawViewPie(MatrixStack stack)
     {
-        /* Negated: the billboard's local XZ winds opposite to the screen sweep, so
-         * the raw accumulated angle would grow the pie the wrong way. */
-        float sweepDeg = -this.currentTransform.getAccumulatedRotateDeg();
+        float sweepRad = this.currentTransform.getViewScreenSweepRad();
 
-        if (Math.abs(sweepDeg) < 0.01F)
+        if (Math.abs(sweepRad) < 1.0E-4F)
         {
             return;
         }
 
+        Matrix4f mat = stack.peek().getPositionMatrix();
+        Matrix3f basis = mat.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) < 1.0E-8F)
+        {
+            return;
+        }
+
+        /* Local directions mapping to screen right and screen down. Unit vectors,
+         * so a step of {@code radius} along them lands on the ring. */
+        Matrix3f inverse = basis.invert();
+        Vector3f right = inverse.transform(new Vector3f(1F, 0F, 0F)).normalize();
+        Vector3f down = inverse.transform(new Vector3f(0F, -1F, 0F)).normalize();
+
+        float startRad = this.currentTransform.getViewGrabScreenAngle();
         float scale = BBSSettings.axesScale.get();
-        float radius = 0.22F * scale;
-
-        stack.push();
-
-        Matrix4f matrix = stack.peek().getPositionMatrix();
-        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
-        Matrix3f basis = matrix.get3x3(new Matrix3f());
-
-        if (Math.abs(basis.determinant()) > 1.0E-8F)
-        {
-            basis.invert().transform(toCamera);
-        }
-
-        if (toCamera.lengthSquared() > 1.0E-8F)
-        {
-            toCamera.normalize();
-            stack.multiply(new Quaternionf().rotationTo(0F, 1F, 0F, toCamera.x, toCamera.y, toCamera.z));
-        }
-
-        stack.scale(VIEW_RING_SCALE, VIEW_RING_SCALE, VIEW_RING_SCALE);
+        float radius = 0.22F * scale * VIEW_RING_SCALE;
 
         int color = Colors.LIGHTEST_GRAY;
         float r = Colors.getR(color);
@@ -850,71 +844,69 @@ public class Gizmo
         float b = Colors.getB(color);
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
-        Matrix4f mat = stack.peek().getPositionMatrix();
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.disableCull();
 
-        int segments = Math.max(2, (int) (Math.abs(sweepDeg) / 360F * 64F));
-        float step = sweepDeg / segments;
+        int segments = Math.max(2, (int) (Math.abs(sweepRad) / (float) (2D * Math.PI) * 64F));
+        float step = sweepRad / segments;
+        Vector3f p1 = new Vector3f();
+        Vector3f p2 = new Vector3f();
 
         builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         for (int i = 0; i < segments; i++)
         {
-            float a1 = MathUtils.toRad(step * i);
-            float a2 = MathUtils.toRad(step * (i + 1));
-            float x1 = (float) Math.cos(a1) * radius;
-            float z1 = (float) Math.sin(a1) * radius;
-            float x2 = (float) Math.cos(a2) * radius;
-            float z2 = (float) Math.sin(a2) * radius;
+            this.pieRim(p1, right, down, startRad + step * i, radius);
+            this.pieRim(p2, right, down, startRad + step * (i + 1), radius);
 
             builder.vertex(mat, 0, 0, 0).color(r, g, b, 0.25F).next();
-
-            if (sweepDeg > 0)
-            {
-                builder.vertex(mat, x1, 0, z1).color(r, g, b, 0.25F).next();
-                builder.vertex(mat, x2, 0, z2).color(r, g, b, 0.25F).next();
-            }
-            else
-            {
-                builder.vertex(mat, x2, 0, z2).color(r, g, b, 0.25F).next();
-                builder.vertex(mat, x1, 0, z1).color(r, g, b, 0.25F).next();
-            }
+            builder.vertex(mat, p1.x, p1.y, p1.z).color(r, g, b, 0.25F).next();
+            builder.vertex(mat, p2.x, p2.y, p2.z).color(r, g, b, 0.25F).next();
         }
 
         BufferRenderer.drawWithGlobalProgram(builder.end());
 
-        /* Bright radial edges at the start and leading angle, like the axis pie. */
-        float lineThickness = 0.005F * scale;
+        /* Bright radial edges at the grab angle and the leading angle, like the axis pie. */
+        float thickness = 0.005F * scale;
         builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-        this.pieEdge(builder, mat, 0F, radius, lineThickness, r, g, b);
-        this.pieEdge(builder, mat, MathUtils.toRad(sweepDeg), radius, lineThickness, r, g, b);
+        this.pieEdge(builder, mat, right, down, startRad, radius, thickness, r, g, b);
+        this.pieEdge(builder, mat, right, down, startRad + sweepRad, radius, thickness, r, g, b);
         BufferRenderer.drawWithGlobalProgram(builder.end());
 
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
-
-        stack.pop();
     }
 
-    /** One radial boundary line of a billboard pie: a thin quad from centre to rim
-     *  along {@code angle} (radians) in the local XZ plane. */
-    private void pieEdge(BufferBuilder builder, Matrix4f mat, float angle, float radius, float thickness, float r, float g, float b)
+    /** Point at screen angle {@code angle} and {@code radius} in the screen right/down
+     *  basis, written into {@code out}. */
+    private void pieRim(Vector3f out, Vector3f right, Vector3f down, float angle, float radius)
     {
-        float ex = (float) Math.cos(angle) * radius;
-        float ez = (float) Math.sin(angle) * radius;
-        Vector3f p = new Vector3f(-ez, 0, ex).normalize().mul(thickness);
+        float c = (float) Math.cos(angle) * radius;
+        float s = (float) Math.sin(angle) * radius;
 
-        builder.vertex(mat, p.x, 0, p.z).color(r, g, b, 1F).next();
-        builder.vertex(mat, -p.x, 0, -p.z).color(r, g, b, 1F).next();
-        builder.vertex(mat, ex - p.x, 0, ez - p.z).color(r, g, b, 1F).next();
+        out.set(right.x * c + down.x * s, right.y * c + down.y * s, right.z * c + down.z * s);
+    }
 
-        builder.vertex(mat, p.x, 0, p.z).color(r, g, b, 1F).next();
-        builder.vertex(mat, ex - p.x, 0, ez - p.z).color(r, g, b, 1F).next();
-        builder.vertex(mat, ex + p.x, 0, ez + p.z).color(r, g, b, 1F).next();
+    /** One radial boundary line of the view pie: a thin quad from centre to the rim at
+     *  screen {@code angle}, built from the screen right/down basis. */
+    private void pieEdge(BufferBuilder builder, Matrix4f mat, Vector3f right, Vector3f down, float angle, float radius, float thickness, float r, float g, float b)
+    {
+        Vector3f rim = new Vector3f();
+        Vector3f perp = new Vector3f();
+
+        this.pieRim(rim, right, down, angle, radius);
+        this.pieRim(perp, right, down, angle + (float) (Math.PI / 2D), thickness);
+
+        builder.vertex(mat, perp.x, perp.y, perp.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, -perp.x, -perp.y, -perp.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, rim.x - perp.x, rim.y - perp.y, rim.z - perp.z).color(r, g, b, 1F).next();
+
+        builder.vertex(mat, perp.x, perp.y, perp.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, rim.x - perp.x, rim.y - perp.y, rim.z - perp.z).color(r, g, b, 1F).next();
+        builder.vertex(mat, rim.x + perp.x, rim.y + perp.y, rim.z + perp.z).color(r, g, b, 1F).next();
     }
 
     private float getAxesDistanceScale(MatrixStack stack)

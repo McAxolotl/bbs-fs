@@ -111,6 +111,9 @@ public class UIPropTransform extends UITransform
     private float dragLastScreenAngle;
     /** Maps screen-space angular motion to a rotation about {@link #dragAxisDir} (+1 or -1). */
     private float dragRotateSign = 1F;
+    /** Cursor angle (radians, screen convention) at the moment a view-ring drag began —
+     *  the fixed start edge of the view sweep pie. */
+    private float viewGrabScreenAngle;
     /** Screen right/up axes in the bone's parent frame, captured at trackball-drag start. */
     private final Vector3f trackballRightLocal = new Vector3f();
     private final Vector3f trackballUpLocal = new Vector3f();
@@ -430,6 +433,19 @@ public class UIPropTransform extends UITransform
     public float getAccumulatedRotateDeg()
     {
         return this.accumulatedRotateDeg;
+    }
+
+    /** Screen-space start edge of the view sweep pie (radians, Y-down convention). */
+    public float getViewGrabScreenAngle()
+    {
+        return this.viewGrabScreenAngle;
+    }
+
+    /** Signed screen-space span of the view sweep, in radians. The screen angle winds
+     *  opposite to the applied turn, hence the {@link #dragRotateSign} fold. */
+    public float getViewScreenSweepRad()
+    {
+        return MathUtils.toRad(this.accumulatedRotateDeg) * this.dragRotateSign;
     }
 
 
@@ -2031,6 +2047,7 @@ public class UIPropTransform extends UITransform
 
         this.dragAxisDir.set(viewAxis.normalize());
         this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
+        this.viewGrabScreenAngle = this.dragLastScreenAngle;
 
         /* The axis points at the camera (out of the screen), so an increasing
          * screen angle (clockwise, Y down) is a negative turn about it &mdash;
