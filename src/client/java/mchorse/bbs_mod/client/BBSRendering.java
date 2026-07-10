@@ -24,7 +24,6 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
@@ -150,7 +149,13 @@ public class BBSRendering
 
     public static boolean canReplaceFramebuffer()
     {
-        return customSize && renderingWorld;
+        /* The world always renders at the export size. The interface (HUD) is drawn after the
+         * world but still into our export framebuffer — toggleFramebuffer stays on until the blit —
+         * so it must use the export size too. Otherwise it renders at the real window size and, when
+         * the window can't physically reach the requested resolution, comes out stretched in the
+         * file. Excluded while a BBS editor is open so the film panel's own UI keeps rendering at the
+         * real window size. */
+        return customSize && (renderingWorld || (toggleFramebuffer && UIScreen.getCurrentMenu() == null));
     }
 
     public static boolean isCustomSize()
@@ -435,6 +440,8 @@ public class BBSRendering
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
 
+        renderRecordingOverlay();
+
         toggleFramebuffer(false);
 
         if (pendingExportResolutionAction != null)
@@ -470,29 +477,50 @@ public class BBSRendering
     public static void renderHud(DrawContext drawContext, float tickDelta)
     {
         Batcher2D batcher2D = new Batcher2D(drawContext);
-        VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+    }
 
-        if (BBSSettings.recordingOverlays.get() && UIScreen.getCurrentMenu() == null)
+    /**
+     * Draw the recording countdown / frame-counter overlay. This is operator UI: it is drawn from
+     * {@link #onRenderBeforeScreen()} after the export blit but before the buffer is copied to the
+     * screen, so it shows up on screen but is never captured into the file.
+     */
+    private static void renderRecordingOverlay()
+    {
+        if (!BBSSettings.recordingOverlays.get() || UIScreen.getCurrentMenu() != null)
         {
-            if (BBSModClient.isVideoExportDelayPending())
-            {
-                int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
-
-                renderRecordingTimerOverlay(batcher2D, String.valueOf(countdown / 20F));
-            }
-            else if (videoRecorder.isRecording())
-            {
-                int count = videoRecorder.getCounter();
-                String label = UIKeys.FILM_VIDEO_RECORDING.format(
-                    count,
-                    BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
-                ).get();
-
-                renderRecordingTimerOverlay(batcher2D, label);
-            }
+            return;
         }
+
+        String label;
+
+        if (BBSModClient.isVideoExportDelayPending())
+        {
+            int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
+
+            label = String.valueOf(countdown / 20F);
+        }
+        else if (BBSModClient.getVideoRecorder().isRecording())
+        {
+            int count = BBSModClient.getVideoRecorder().getCounter();
+
+            label = UIKeys.FILM_VIDEO_RECORDING.format(
+                count,
+                BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
+            ).get();
+        }
+        else
+        {
+            return;
+        }
+
+        MinecraftClient mc = MinecraftClient.getInstance();
+        DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
+
+        renderRecordingTimerOverlay(new Batcher2D(drawContext), label);
+
+        drawContext.draw();
     }
 
     public static void renderRecordingTimerOverlay(Batcher2D batcher2D, String label)
@@ -562,6 +590,22 @@ public class BBSRendering
         }
 
         return IrisUtils.isShadowPass();
+    }
+
+    /**
+     * Iris considers a vanilla core program applied during world rendering a stray
+     * draw into its G-buffers and masks its color/depth writes. Reporting that the
+     * main framebuffer isn't bound (like vanilla render targets do via bindWrite)
+     * turns both core shader overrides and that masking off.
+     */
+    public static void setIrisMainBound(boolean bound)
+    {
+        if (!iris)
+        {
+            return;
+        }
+
+        IrisUtils.setMainBound(bound);
     }
 
     public static void trackTexture(Texture texture)

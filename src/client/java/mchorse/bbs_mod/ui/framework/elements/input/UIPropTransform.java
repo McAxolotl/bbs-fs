@@ -3,12 +3,14 @@ package mchorse.bbs_mod.ui.framework.elements.input;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
@@ -45,10 +47,13 @@ public class UIPropTransform extends UITransform
     private static final float TRACKBALL_WHEEL_DEG = 5F;
     /** Factor the modifier keys apply to a gizmo step: Ctrl coarsens, Alt refines. */
     private static final float STEP_MODIFIER = 5F;
+    /** Cursor-speed multiplier for a ray gesture while Shift is held (precision drag). */
+    private static final float FINE_DRAG_FACTOR = 0.1F;
 
     private Transform transform;
     private Runnable preCallback;
     private Runnable postCallback;
+    private Runnable endCallback;
 
     private boolean editing;
     private int mode;
@@ -106,6 +111,9 @@ public class UIPropTransform extends UITransform
     private float dragLastScreenAngle;
     /** Maps screen-space angular motion to a rotation about {@link #dragAxisDir} (+1 or -1). */
     private float dragRotateSign = 1F;
+    /** Cursor angle (radians, screen convention) at the moment a view-ring drag began —
+     *  the fixed start edge of the view sweep pie. */
+    private float viewGrabScreenAngle;
     /** Screen right/up axes in the bone's parent frame, captured at trackball-drag start. */
     private final Vector3f trackballRightLocal = new Vector3f();
     private final Vector3f trackballUpLocal = new Vector3f();
@@ -150,6 +158,9 @@ public class UIPropTransform extends UITransform
      * or the user constrains to an axis with X/Y/Z.
      */
     private boolean translateScreen;
+    /** Uniform (three-axis) scale: the centre scale handle drives every axis off one
+     *  lever, just like holding Ctrl during an axis scale. Lives only on scale mode. */
+    private boolean scaleAll;
     private boolean hotkeyMode;
     private Supplier<GizmoDrag> hotkeyDragSupplier;
 
@@ -171,12 +182,22 @@ public class UIPropTransform extends UITransform
      *  {@link Axis#Y} = vertical (screen-right axis). */
     private Axis trackballAxis = Axis.X;
 
+    /* Fine-drag (Shift) precision: a virtual cursor that lags the real one,
+     * advancing at {@link #FINE_DRAG_FACTOR} speed while Shift is held, so every
+     * ray gesture slows uniformly without per-mode code. The lag is the
+     * accumulated offset between the two. */
+    private float fineOffsetX;
+    private float fineOffsetY;
+    private int fineLastX;
+    private int fineLastY;
+    private boolean fineHasLast;
+
     private UITransformHandler handler;
 
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.local = BBSSettings.transformSpace.get() == 1;
+        this.local = BBSSettings.defaultLocalTransform.get();
 
         this.context((menu) ->
         {
@@ -194,6 +215,13 @@ public class UIPropTransform extends UITransform
         this.iconT.setEnabled(true);
         this.updateLocalUI();
 
+        /* Each finished value-field drag closes the current undo block, so dragging a
+         * field several times in a row undoes one drag at a time (see endGesture). */
+        for (UITrackpad field : new UITrackpad[]{this.tx, this.ty, this.tz, this.sx, this.sy, this.sz, this.rx, this.ry, this.rz, this.r2x, this.r2y, this.r2z})
+        {
+            field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endGesture());
+        }
+
         this.noCulling();
     }
 
@@ -201,14 +229,21 @@ public class UIPropTransform extends UITransform
     {
         return this.callbacks(
             () -> notifier.get().preNotify(),
-            () -> notifier.get().postNotify()
+            () -> notifier.get().postNotify(),
+            () -> notifier.get().preNotify(IValueListener.FLAG_UNMERGEABLE)
         );
     }
 
     public UIPropTransform callbacks(Runnable pre, Runnable post)
     {
+        return this.callbacks(pre, post, null);
+    }
+
+    public UIPropTransform callbacks(Runnable pre, Runnable post, Runnable end)
+    {
         this.preCallback = pre;
         this.postCallback = post;
+        this.endCallback = end;
 
         return this;
     }
@@ -221,6 +256,17 @@ public class UIPropTransform extends UITransform
     public void postCallback()
     {
         if (this.postCallback != null) this.postCallback.run();
+    }
+
+    /**
+     * Close the current undo block so the next transform gesture starts a fresh,
+     * separately-undoable entry. Fired at each gesture boundary — a value-field drag
+     * end and the gizmo commit — rather than per value change, so one continuous drag
+     * still merges into a single undo while consecutive drags stay distinct.
+     */
+    public void endGesture()
+    {
+        if (this.endCallback != null) this.endCallback.run();
     }
 
     public void setModel()
@@ -389,6 +435,89 @@ public class UIPropTransform extends UITransform
         return this.accumulatedRotateDeg;
     }
 
+    /** Screen-space start edge of the view sweep pie (radians, Y-down convention). */
+    public float getViewGrabScreenAngle()
+    {
+        return this.viewGrabScreenAngle;
+    }
+
+    /** Signed screen-space span of the view sweep, in radians. The screen angle winds
+     *  opposite to the applied turn, hence the {@link #dragRotateSign} fold. */
+    public float getViewScreenSweepRad()
+    {
+        return MathUtils.toRad(this.accumulatedRotateDeg) * this.dragRotateSign;
+    }
+
+
+    /**
+     * A short summary of what the active drag has changed so far, for the gizmo's
+     * on-screen readout: degrees for a rotation (axis or view ring by swept angle,
+     * the 3D sphere by net turn), the per-axis offset for a move, the per-axis
+     * factor delta for a scale. Returns {@code null} when there is nothing to show.
+     */
+    public String getDragReadout()
+    {
+        if (!this.editing || this.transform == null)
+        {
+            return null;
+        }
+
+        if (this.mode == 2)
+        {
+            /* A single axis ring turns about one axis, so its swept angle says it
+             * all. The free sphere and the view ring spread the turn across all
+             * three components, so show each axis's change in degrees. */
+            if (this.rotateKind == RotateKind.AXIS)
+            {
+                return String.format("%.1f°", this.accumulatedRotateDeg);
+            }
+
+            Vector3f start = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+            Vector3f now = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+
+            return String.format("X %+.1f°  Y %+.1f°  Z %+.1f°",
+                MathUtils.toDeg(now.x - start.x),
+                MathUtils.toDeg(now.y - start.y),
+                MathUtils.toDeg(now.z - start.z));
+        }
+
+        Vector3f delta;
+        boolean allAxes;
+
+        if (this.mode == 0)
+        {
+            delta = new Vector3f(this.transform.translate).sub(this.dragStartTranslate);
+            allAxes = this.translateScreen;
+        }
+        else if (this.mode == 1)
+        {
+            delta = new Vector3f(this.transform.scale).sub(this.dragStartScale);
+            allAxes = this.scaleAll;
+        }
+        else
+        {
+            return null;
+        }
+
+        StringBuilder builder = new StringBuilder();
+
+        if (allAxes || this.axis == Axis.X || this.axis2 == Axis.X) this.appendAxis(builder, "X", delta.x);
+        if (allAxes || this.axis == Axis.Y || this.axis2 == Axis.Y) this.appendAxis(builder, "Y", delta.y);
+        if (allAxes || this.axis == Axis.Z || this.axis2 == Axis.Z) this.appendAxis(builder, "Z", delta.z);
+
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
+    private void appendAxis(StringBuilder builder, String label, float value)
+    {
+        if (builder.length() > 0)
+        {
+            builder.append("  ");
+        }
+
+        builder.append(label).append(' ').append(String.format("%+.3f", value));
+    }
+
     public GizmoDrag getDrag()
     {
         return this.drag;
@@ -469,6 +598,15 @@ public class UIPropTransform extends UITransform
     {
         GizmoDrag drag = this.getHotkeyDrag();
         boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
+
+        /* The scale key defaults to a uniform three-axis scale (Blender-style);
+         * X/Y/Z then constrain it to one axis via setEditingAxis. */
+        if (mode == 1)
+        {
+            this.enableUniformScale(drag, true);
+
+            return;
+        }
 
         /* G/S/R walk their handles in the user-configured order (the
          * *_hotkey_order settings), wrapping past the end back to the first
@@ -574,6 +712,7 @@ public class UIPropTransform extends UITransform
         this.mode = mode;
         this.rotateKind = RotateKind.AXIS;
         this.translateScreen = false;
+        this.scaleAll = false;
         this.axis = axis;
         this.axis2 = null;
         this.hotkeyMode = true;
@@ -632,6 +771,7 @@ public class UIPropTransform extends UITransform
         }
 
         this.translateScreen = false;
+        this.scaleAll = false;
         this.rotateKind = RotateKind.AXIS;
         this.axis = axis == null ? Axis.X : axis;
         this.axis2 = axis2;
@@ -818,6 +958,77 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    /**
+     * Start a uniform (three-axis) scale from the centre scale handle: one lever
+     * axis drives all three, the same math Ctrl+axis-scale uses. A mouse pick
+     * never switches the gizmo's display mode.
+     */
+    public void enableUniformScale(GizmoDrag drag)
+    {
+        this.enableUniformScale(drag, false);
+    }
+
+    /**
+     * Start a uniform (three-axis) scale: one lever axis drives all three, the
+     * same math Ctrl+axis-scale uses. A mouse pick ({@code hotkeyMode == false})
+     * never switches the gizmo's display mode; as the S-key walk step it switches
+     * to scale mode on the first press like the other hotkey starters.
+     */
+    public void enableUniformScale(GizmoDrag drag, boolean hotkeyMode)
+    {
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.SCALE))
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.editing = true;
+        this.mode = 1;
+        this.rotateKind = RotateKind.AXIS;
+        this.translateScreen = false;
+        this.scaleAll = true;
+        this.axis = Axis.X;
+        this.axis2 = null;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (this.useRayDrag())
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    /** Whether the active scale drives all three axes off one lever (centre scale
+     *  handle or an unconstrained S). Distinct from {@link #isUniformScale()}, which
+     *  is the trackpad's scale-field linking. */
+    public boolean isScaleAll()
+    {
+        return this.scaleAll;
+    }
+
     public void enableScreenTranslate(GizmoDrag drag)
     {
         this.enableScreenTranslate(drag, false);
@@ -887,6 +1098,14 @@ public class UIPropTransform extends UITransform
             return false;
         }
 
+        /* Uniform (three-axis) scale uses the plain left/right drag: the ray's
+         * lever runs along a single axis, which reads wildly for a centre grab
+         * and makes the scale explode. The additive screen drag stays gentle. */
+        if (this.scaleAll)
+        {
+            return false;
+        }
+
         return this.drag != null && (this.mode != 2 || this.axis2 == null || this.rotateKind == RotateKind.TRACKBALL);
     }
 
@@ -894,6 +1113,7 @@ public class UIPropTransform extends UITransform
     {
         this.rotateKind = RotateKind.AXIS;
         this.translateScreen = false;
+        this.scaleAll = false;
 
         if (Window.isShiftPressed())
         {
@@ -1101,7 +1321,7 @@ public class UIPropTransform extends UITransform
      */
     private void applyRayScale(Vector3d hit)
     {
-        boolean all = Window.isCtrlPressed();
+        boolean all = this.scaleAll || Window.isCtrlPressed();
         Vector3f s = new Vector3f(this.dragStartScale);
 
         this.applyRayScaleAxis(hit, this.axis, all, s);
@@ -1109,6 +1329,15 @@ public class UIPropTransform extends UITransform
         if (this.axis2 != null)
         {
             this.applyRayScaleAxis(hit, this.axis2, all, s);
+        }
+
+        if (this.shouldSnap(1))
+        {
+            float step = BBSSettings.snapScale.get();
+
+            if (all || this.axis == Axis.X || this.axis2 == Axis.X) s.x = (float) snap(s.x, step);
+            if (all || this.axis == Axis.Y || this.axis2 == Axis.Y) s.y = (float) snap(s.y, step);
+            if (all || this.axis == Axis.Z || this.axis2 == Axis.Z) s.z = (float) snap(s.z, step);
         }
 
         this.setS(null, s.x, s.y, s.z);
@@ -1281,6 +1510,19 @@ public class UIPropTransform extends UITransform
         Vector3f translateAxis = new Vector3f();
 
         this.dragTranslateBasis.getColumn(axis.ordinal(), translateAxis);
+
+        /* Snap the distance moved along the handle in translate units, so the
+         * step means the same thing whatever frame the handle works in. */
+        if (this.shouldSnap(0))
+        {
+            float length = translateAxis.length();
+
+            if (length > 1.0E-8F)
+            {
+                t = (float) (snap(t * length, BBSSettings.snapTranslate.get()) / length);
+            }
+        }
+
         out.add(translateAxis.mul(t));
     }
 
@@ -1805,6 +2047,7 @@ public class UIPropTransform extends UITransform
 
         this.dragAxisDir.set(viewAxis.normalize());
         this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
+        this.viewGrabScreenAngle = this.dragLastScreenAngle;
 
         /* The axis points at the camera (out of the screen), so an increasing
          * screen angle (clockwise, Y down) is a negative turn about it &mdash;
@@ -2030,6 +2273,8 @@ public class UIPropTransform extends UITransform
         this.drag = null;
         this.dragHasStart = false;
         this.arcballAnchored = false;
+        this.fineHasLast = false;
+        this.scaleAll = false;
         this.clearNumericInput();
         Gizmo.INSTANCE.clearTrackedTransform(this);
 
@@ -2043,6 +2288,7 @@ public class UIPropTransform extends UITransform
     {
         this.disable();
         this.setTransform(this.transform);
+        this.endGesture();
     }
 
     public void rejectChanges()
@@ -2329,6 +2575,10 @@ public class UIPropTransform extends UITransform
         this.lastX = context.mouseX;
         this.lastY = context.mouseY;
 
+        /* The cursor was free to roam while typing; re-anchor the precision
+         * tracking here so the resumed drag doesn't inherit a stale lag. */
+        this.resetFineCursor(context.mouseX, context.mouseY);
+
         if (this.useRayDrag())
         {
             this.beginRayDrag(context.mouseX, context.mouseY);
@@ -2411,7 +2661,7 @@ public class UIPropTransform extends UITransform
 
     private void applyNumericScale(double value)
     {
-        boolean all = Window.isCtrlPressed();
+        boolean all = this.scaleAll || Window.isCtrlPressed();
         Vector3f s = new Vector3f(this.cache.scale);
 
         if (all || this.axis == Axis.X || this.axis2 == Axis.X) s.x = (float) (this.cache.scale.x * value);
@@ -2509,19 +2759,28 @@ public class UIPropTransform extends UITransform
         }
     }
 
-    private boolean shouldSnapGizmoValues()
+    /* Blender-style snapping: every gesture is free by default and snaps to the
+     * configured step only while Ctrl is held. Typed numeric input is exact
+     * already, so it never snaps. */
+
+    private boolean shouldSnap(int mode)
     {
-        return this.editing && this.mode == 2 && this.rotateKind == RotateKind.AXIS && !Window.isAltPressed() && !this.numericActive;
+        return this.editing && this.mode == mode && Window.isCtrlPressed() && !this.numericActive;
+    }
+
+    private static double snap(double value, float step)
+    {
+        return step <= 0F ? value : Math.round(value / step) * (double) step;
     }
 
     private double snapGizmoValue(double value)
     {
-        if (!this.shouldSnapGizmoValues())
+        if (this.rotateKind != RotateKind.AXIS || !this.shouldSnap(2))
         {
             return value;
         }
 
-        return value < 0D ? Math.ceil(value) : Math.floor(value);
+        return snap(value, BBSSettings.snapRotate.get());
     }
 
     @Override
@@ -2618,7 +2877,7 @@ public class UIPropTransform extends UITransform
             if (this.rotateKind == RotateKind.VIEW) return UIKeys.TRANSFORMS_TARGET_VIEW.get();
         }
 
-        if (this.mode == 1 && Window.isCtrlPressed())
+        if (this.mode == 1 && (this.scaleAll || Window.isCtrlPressed()))
         {
             return "XYZ";
         }
@@ -2639,7 +2898,7 @@ public class UIPropTransform extends UITransform
         boolean singleAxis = !this.translateScreen
             && this.axis != null && this.axis2 == null
             && (this.mode != 2 || this.rotateKind == RotateKind.AXIS)
-            && !(this.mode == 1 && Window.isCtrlPressed());
+            && !(this.mode == 1 && (this.scaleAll || Window.isCtrlPressed()));
 
         if (!singleAxis)
         {
@@ -2663,6 +2922,53 @@ public class UIPropTransform extends UITransform
         return (this.local ? UIKeys.TRANSFORMS_SPACE_LOCAL : UIKeys.TRANSFORMS_SPACE_GLOBAL).get();
     }
 
+    /**
+     * Maintain the virtual cursor for the current frame. While Shift is held it
+     * advances at {@link #FINE_DRAG_FACTOR} of the real cursor — the rest of the
+     * motion piles into the lag offset; released, it tracks the cursor 1:1 again
+     * with no jump. Ray gestures read {@link #fineX}/{@link #fineY} so they all
+     * slow uniformly without any per-mode code.
+     */
+    private void updateFineCursor(int mouseX, int mouseY)
+    {
+        if (!this.fineHasLast)
+        {
+            this.resetFineCursor(mouseX, mouseY);
+
+            return;
+        }
+
+        if (Window.isShiftPressed())
+        {
+            float keep = 1F - FINE_DRAG_FACTOR;
+
+            this.fineOffsetX += (mouseX - this.fineLastX) * keep;
+            this.fineOffsetY += (mouseY - this.fineLastY) * keep;
+        }
+
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+    }
+
+    private void resetFineCursor(int mouseX, int mouseY)
+    {
+        this.fineOffsetX = 0F;
+        this.fineOffsetY = 0F;
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+        this.fineHasLast = true;
+    }
+
+    private int fineX(int mouseX)
+    {
+        return Math.round(mouseX - this.fineOffsetX);
+    }
+
+    private int fineY(int mouseY)
+    {
+        return Math.round(mouseY - this.fineOffsetY);
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -2684,12 +2990,18 @@ public class UIPropTransform extends UITransform
             int border = 5;
             int borderPadding = border + 1;
 
+            this.updateFineCursor(context.mouseX, context.mouseY);
+
             if (rawX <= border)
             {
                 Window.moveCursor(w - borderPadding, (int) mc.mouse.getY());
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
+
+                /* The wrap re-anchors the drag at the teleported position, so the
+                 * virtual cursor resets there too — no lag carries across the seam. */
+                this.resetFineCursor(this.lastX, context.mouseY);
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
@@ -2700,19 +3012,21 @@ public class UIPropTransform extends UITransform
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
 
+                this.resetFineCursor(this.lastX, context.mouseY);
+
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (this.useRayDrag())
             {
-                this.applyRayDrag(context.mouseX, context.mouseY);
+                this.applyRayDrag(this.fineX(context.mouseX), this.fineY(context.mouseY));
             }
             else
             {
                 int dx = context.mouseX - this.lastX;
                 Vector3f vector = this.getValue();
-                boolean all = this.mode == 1 && Window.isCtrlPressed();
+                boolean all = this.mode == 1 && (this.scaleAll || Window.isCtrlPressed());
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
-                float factor = (float) reference.getValueModifier();
+                float factor = (float) reference.getValueModifier() * (Window.isShiftPressed() ? FINE_DRAG_FACTOR : 1F);
 
                 if (this.local && this.mode == 0)
                 {

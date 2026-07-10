@@ -16,13 +16,16 @@ public final class UIConstants
     public static final int TOGGLE_HEIGHT = 14;
 
     /** Padding inside scroll areas. */
-    public static final int SCROLL_PADDING = 3;
+    public static final int SCROLL_PADDING = 6;
 
     /** Gap between logical sections in clip/form panels. */
     public static final int SECTION_GAP = 3;
 
     /** Height of list items in dropdowns (e.g. bone list) for a compact list. */
     public static final int LIST_ITEM_HEIGHT = 14;
+
+    /** Width of the fixed control column in a "label : control" row (see {@link UI#labelRow}); the name fills the rest. */
+    public static final int VALUE_WIDTH = 90;
 
     private UIConstants()
     {}

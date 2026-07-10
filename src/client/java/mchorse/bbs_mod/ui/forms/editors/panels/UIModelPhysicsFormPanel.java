@@ -1,9 +1,9 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
-import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -11,7 +11,11 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.forms.editors.utils.UIDebugOverlayContextMenu;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -52,10 +56,19 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad iterations;
     public UIToggle collisions;
     public UITrackpad radius;
+    public UITrackpad windStrength;
+    public UITrackpad windX;
+    public UITrackpad windY;
+    public UITrackpad windZ;
+    public UITrackpad windTurbulence;
+    public UITrackpad windTurbulenceSpeed;
+    public UITrackpad windTurbulenceScale;
+    public UIToggle windLocal;
 
     private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
     private final Map<String, BoneData> data = new HashMap<>();
+    private final WindData wind = new WindData();
     private ModelInstance modelInstance;
     private String presetGroup = "";
     private boolean syncingUI;
@@ -74,6 +87,35 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         public int iterations = DEFAULT_ITERATIONS;
         public boolean collisions;
         public float radius = DEFAULT_RADIUS;
+    }
+
+    private static class WindData
+    {
+        public float strength = ModelPhysicsConfig.Wind.NONE.strength();
+        public float x = ModelPhysicsConfig.Wind.NONE.x();
+        public float y = ModelPhysicsConfig.Wind.NONE.y();
+        public float z = ModelPhysicsConfig.Wind.NONE.z();
+        public float turbulence = ModelPhysicsConfig.Wind.NONE.turbulence();
+        public float turbulenceSpeed = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
+        public float turbulenceScale = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
+        public boolean local = ModelPhysicsConfig.Wind.NONE.local();
+
+        public ModelPhysicsConfig.Wind toWind()
+        {
+            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z, this.turbulence, this.turbulenceSpeed, this.turbulenceScale, this.local);
+        }
+
+        public void set(ModelPhysicsConfig.Wind wind)
+        {
+            this.strength = wind.strength();
+            this.x = wind.x();
+            this.y = wind.y();
+            this.z = wind.z();
+            this.turbulence = wind.turbulence();
+            this.turbulenceSpeed = wind.turbulenceSpeed();
+            this.turbulenceScale = wind.turbulenceScale();
+            this.local = wind.local();
+        }
     }
 
     public UIModelPhysicsFormPanel(UIForm editor)
@@ -96,8 +138,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_NAME
         ));
 
-        this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DEBUG, (b) -> ModelPhysicsDebug.enabled = b.getValue());
-        this.debug.setValue(ModelPhysicsDebug.enabled);
+        this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DEBUG, (b) -> BBSSettings.physicsDebug.enabled.set(b.getValue()));
+        this.debug.setValue(BBSSettings.physicsDebug.enabled.get());
+        this.debug.context(() -> new UIDebugOverlayContextMenu(BBSSettings.physicsDebug));
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ENABLED, (b) ->
         {
@@ -292,6 +335,101 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.radius.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
         this.radius.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS);
 
+        this.windStrength = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.strength = v.floatValue();
+            this.commitChanges();
+        });
+        this.windStrength.onlyNumbers().values(0.1D, 0.01D, 0.5D).increment(0.25D).limit(0D, 10D);
+        this.windStrength.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH);
+
+        this.windX = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.x = v.floatValue();
+            this.commitChanges();
+        }, Colors.RED);
+        this.windY = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.y = v.floatValue();
+            this.commitChanges();
+        }, Colors.GREEN);
+        this.windZ = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.z = v.floatValue();
+            this.commitChanges();
+        }, Colors.BLUE);
+
+        this.windTurbulence = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulence = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulence.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.05D).limit(0D, 1D);
+        this.windTurbulence.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE);
+
+        this.windTurbulenceSpeed = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceSpeed = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceSpeed.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceSpeed.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED);
+
+        this.windTurbulenceScale = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceScale = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceScale.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceScale.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE);
+
+        this.windLocal = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL, (b) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.local = b.getValue();
+            this.commitChanges();
+        });
+        this.windLocal.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP);
+
         this.end = new UIButton(IKey.EMPTY, (b) ->
         {
             BoneData d = this.getSelectedData();
@@ -340,28 +478,58 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             });
         });
 
-        this.options.add(
-            this.debug,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CHAINS),
-            this.bones,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
+        UISection settings = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS);
+
+        settings.fields.add(
             this.enabled,
             this.end,
             this.targetBone,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY),
-            this.gravity,
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_GRAVITY, this.gravity),
             this.relativeGravity,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION),
             UI.row(this.relativeGravityRotateX, this.relativeGravityRotateY, this.relativeGravityRotateZ),
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS),
-            this.stiffness,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DAMPING),
-            this.damping,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS),
-            this.iterations,
-            this.collisions.marginTop(UIConstants.SECTION_GAP),
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS),
-            this.radius
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS, this.stiffness),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DAMPING, this.damping),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS, this.iterations)
+        );
+
+        UISection collisionsSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS);
+
+        collisionsSection.fields.add(
+            this.collisions,
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS, this.radius)
+        );
+
+        /* Wind is one field for the whole model's physics, not bound to any bone, so the section is always
+         * editable and does not depend on which bone is selected in the list. */
+        UISection windSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND);
+
+        windSection.fields.add(
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH, this.windStrength),
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION),
+            UI.row(this.windX, this.windY, this.windZ),
+            this.windLocal,
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE, this.windTurbulence),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED, this.windTurbulenceSpeed),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE, this.windTurbulenceScale)
+        );
+
+        UIIcon debugSettings = new UIIcon(Icons.GEAR, (b) -> this.getContext().replaceContextMenu(new UIDebugOverlayContextMenu(BBSSettings.physicsDebug)));
+
+        debugSettings.tooltip(UIKeys.MODEL_DEBUG_CONFIGURE);
+        debugSettings.wh(20, 14);
+
+        UIElement debugRow = new UIElement();
+
+        debugRow.row(0).preferred(0).height(14);
+        debugRow.add(this.debug, debugSettings);
+
+        this.options.add(
+            debugRow,
+            this.bones,
+            settings,
+            collisionsSection,
+            windSection
         );
     }
 
@@ -369,6 +537,8 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public void startEdit(ModelForm form)
     {
         super.startEdit(form);
+
+        this.debug.setValue(BBSSettings.physicsDebug.enabled.get());
 
         ModelInstance model = ModelFormRenderer.getModel(form);
         this.modelInstance = model;
@@ -378,20 +548,23 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         {
             this.availableBones = Collections.emptyList();
             this.data.clear();
+            this.wind.set(ModelPhysicsConfig.Wind.NONE);
             this.bones.setList(Collections.emptyList());
             this.bones.deselect();
             this.selectedBone = "";
             this.setElementsEnabled(false);
+            this.updateWindFields();
         }
         else
         {
             List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-            bones.removeIf(model.disabledBones::contains);
+            bones.removeIf(model.getDisabledBones()::contains);
             this.availableBones = bones;
 
             this.setElementsEnabled(true);
             this.load();
             this.bones.setList(this.availableBones);
+            this.updateWindFields();
 
             if (!this.availableBones.isEmpty())
             {
@@ -418,6 +591,14 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.iterations.setEnabled(enabled);
         this.collisions.setEnabled(enabled);
         this.radius.setEnabled(enabled);
+        this.windStrength.setEnabled(enabled);
+        this.windX.setEnabled(enabled);
+        this.windY.setEnabled(enabled);
+        this.windZ.setEnabled(enabled);
+        this.windTurbulence.setEnabled(enabled);
+        this.windTurbulenceSpeed.setEnabled(enabled);
+        this.windTurbulenceScale.setEnabled(enabled);
+        this.windLocal.setEnabled(enabled);
     }
 
     private BoneData getSelectedData()
@@ -509,6 +690,27 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
+    private void updateWindFields()
+    {
+        this.syncingUI = true;
+
+        try
+        {
+            this.windStrength.setValue(this.wind.strength);
+            this.windX.setValue(this.wind.x);
+            this.windY.setValue(this.wind.y);
+            this.windZ.setValue(this.wind.z);
+            this.windTurbulence.setValue(this.wind.turbulence);
+            this.windTurbulenceSpeed.setValue(this.wind.turbulenceSpeed);
+            this.windTurbulenceScale.setValue(this.wind.turbulenceScale);
+            this.windLocal.setValue(this.wind.local);
+        }
+        finally
+        {
+            this.syncingUI = false;
+        }
+    }
+
     private void openEndMenu(String current, Consumer<String> callback)
     {
         if (this.availableBones.isEmpty() || this.selectedBone.isEmpty())
@@ -547,6 +749,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     private void load(ModelPhysicsConfig config)
     {
         this.data.clear();
+        this.wind.set(config == null ? ModelPhysicsConfig.Wind.NONE : config.wind());
 
         if (config == null || config.bones() == null)
         {
@@ -630,12 +833,14 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             bones.put(root, new ModelPhysicsConfig.Bone(d.end, target, d.gravity, d.damping, d.stiffness, d.iterations, d.relativeGravity, d.relativeGravityRotateX, d.relativeGravityRotateY, d.relativeGravityRotateZ, d.collisions, d.radius, ModelPhysicsConfig.DEFAULT_WEIGHT));
         }
 
-        if (bones.isEmpty())
+        ModelPhysicsConfig.Wind wind = this.wind.toWind();
+
+        if (bones.isEmpty() && wind.isDefault())
         {
             return new MapType();
         }
 
-        return ModelPhysicsIO.toData(new ModelPhysicsConfig(bones));
+        return ModelPhysicsIO.toData(new ModelPhysicsConfig(bones, wind));
     }
 
     private void applyPresetData(MapType map)
@@ -643,6 +848,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         String current = this.selectedBone;
 
         this.load(ModelPhysicsIO.fromData(map));
+        this.updateWindFields();
 
         if (current == null || current.isEmpty() || !this.availableBones.contains(current))
         {
@@ -779,9 +985,16 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         return t;
     }
 
+    private static UITrackpad windAxisTrackpad(Consumer<Double> callback, int color)
+    {
+        UITrackpad t = new UITrackpad(callback).onlyNumbers().values(0.1D, 0.5D, 1D).increment(0.1D);
+        t.textbox.setColor(color);
+        return t;
+    }
+
     private String resolvePresetGroup(ModelForm form, ModelInstance model)
     {
-        String group = model != null ? model.poseGroup : "";
+        String group = model != null ? model.getPoseGroup() : "";
 
         if (group == null || group.isEmpty())
         {

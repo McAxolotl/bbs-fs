@@ -42,3 +42,4 @@ replay_*.log
 *.jfr
 
 ik_test/*
+.claude/settings.local.json

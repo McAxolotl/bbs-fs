@@ -31,7 +31,7 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
 
         this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
         this.options.scroll.cancelScrolling();
-        this.options.relative(this).x(1F).w(widths.getOrDefault(this.getClass(), DEFAULT_OPTIONS_WIDTH)).minW(140).h(1F).anchorX(1F);
+        this.options.relative(this).x(1F).w(widths.getOrDefault(this.getClass(), DEFAULT_OPTIONS_WIDTH)).minW(120).h(1F).anchorX(1F);
 
         this.draggable = new UIDraggable((context) ->
         {

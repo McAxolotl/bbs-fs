@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
-import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -10,7 +10,11 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.forms.editors.utils.UIDebugOverlayContextMenu;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -41,6 +45,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public UITrackpad softness;
     public UITrackpad weight;
     public UIToggle tipRotation;
+    public UIToggle stretch;
 
     private String selectedBone = "";
     private Map<String, IKData> ikData = new HashMap<>();
@@ -58,6 +63,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         public float weight = ModelIKConfig.DEFAULT_WEIGHT;
         public boolean enabled = true;
         public boolean tipRotation = ModelIKConfig.DEFAULT_TIP_ROTATION;
+        public boolean stretch = ModelIKConfig.DEFAULT_STRETCH;
     }
 
     public UIModelIKFormPanel(UIForm editor)
@@ -78,8 +84,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             UIKeys.FORMS_EDITORS_MODEL_IK_CONTEXT_NAME
         ));
 
-        this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_DEBUG, (b) -> ModelIKDebug.enabled = b.getValue());
-        this.debug.setValue(ModelIKDebug.enabled);
+        this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_DEBUG, (b) -> BBSSettings.ikDebug.enabled.set(b.getValue()));
+        this.debug.setValue(BBSSettings.ikDebug.enabled.get());
+        this.debug.context(() -> new UIDebugOverlayContextMenu(BBSSettings.ikDebug));
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_ENABLED, (b) ->
         {
@@ -201,24 +208,47 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         });
 
-        this.options.add(
-            this.debug,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_BONES),
-            this.bones,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
+        this.stretch = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_STRETCH, (b) ->
+        {
+            if (this.syncingUI || this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.stretch = b.getValue();
+            this.commitChanges();
+        });
+
+        UISection settings = new UISection(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS);
+
+        settings.fields.add(
             this.enabled,
             this.target,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH).marginTop(UIConstants.SECTION_GAP),
-            this.chainLength,
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH, this.chainLength).marginTop(UIConstants.SECTION_GAP),
             this.pole,
             this.poleTarget,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE).marginTop(UIConstants.SECTION_GAP),
-            this.poleAngle,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SOFTNESS).marginTop(UIConstants.SECTION_GAP),
-            this.softness,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT).marginTop(UIConstants.SECTION_GAP),
-            this.weight,
-            this.tipRotation
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE, this.poleAngle).marginTop(UIConstants.SECTION_GAP),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_IK_SOFTNESS, this.softness).marginTop(UIConstants.SECTION_GAP),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT, this.weight).marginTop(UIConstants.SECTION_GAP),
+            this.tipRotation,
+            this.stretch
+        );
+
+        UIIcon debugSettings = new UIIcon(Icons.GEAR, (b) -> this.getContext().replaceContextMenu(new UIDebugOverlayContextMenu(BBSSettings.ikDebug)));
+
+        debugSettings.tooltip(UIKeys.MODEL_DEBUG_CONFIGURE);
+        debugSettings.wh(20, 14);
+
+        UIElement debugRow = new UIElement();
+
+        debugRow.row(0).preferred(0).height(14);
+        debugRow.add(this.debug, debugSettings);
+
+        this.options.add(
+            debugRow,
+            this.bones,
+            settings
         );
     }
 
@@ -226,6 +256,8 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public void startEdit(ModelForm form)
     {
         super.startEdit(form);
+
+        this.debug.setValue(BBSSettings.ikDebug.enabled.get());
 
         ModelInstance model = ModelFormRenderer.getModel(form);
         this.presetGroup = this.resolvePresetGroup(form, model);
@@ -242,7 +274,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         else
         {
             List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-            bones.removeIf(model.disabledBones::contains);
+            bones.removeIf(model.getDisabledBones()::contains);
 
             this.bones.setList(bones);
             this.setElementsEnabled(true);
@@ -266,6 +298,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.softness.setEnabled(enabled);
         this.weight.setEnabled(enabled);
         this.tipRotation.setEnabled(enabled);
+        this.stretch.setEnabled(enabled);
     }
 
     @Override
@@ -331,6 +364,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.softness.setValue(data == null ? ModelIKConfig.DEFAULT_SOFTNESS : data.softness);
             this.weight.setValue(data == null ? ModelIKConfig.DEFAULT_WEIGHT : data.weight);
             this.tipRotation.setValue(data != null && data.tipRotation);
+            this.stretch.setValue(data != null && data.stretch);
             this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
             this.enabled.setValue(active);
         }
@@ -347,6 +381,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.softness.setEnabled(canEdit);
         this.weight.setEnabled(canEdit);
         this.tipRotation.setEnabled(canEdit);
+        this.stretch.setEnabled(canEdit);
     }
 
     private IKData getOrCreateData(String bone)
@@ -404,6 +439,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.weight = chain.weight();
             data.enabled = chain.enabled();
             data.tipRotation = chain.tipRotation();
+            data.stretch = chain.stretch();
             this.ikData.put(chain.tip(), data);
         }
     }
@@ -434,7 +470,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 continue;
             }
 
-            out.add(new ModelIKConfig.Chain(tip, data.target, data.chainLength, data.pole, data.poleTarget, data.poleAngle, data.softness, data.weight, data.enabled, data.tipRotation));
+            out.add(new ModelIKConfig.Chain(tip, data.target, data.chainLength, data.pole, data.poleTarget, data.poleAngle, data.softness, data.weight, data.enabled, data.tipRotation, data.stretch));
         }
 
         if (out.isEmpty())
@@ -484,7 +520,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
     private String resolvePresetGroup(ModelForm form, ModelInstance model)
     {
-        String group = model != null ? model.poseGroup : "";
+        String group = model != null ? model.getPoseGroup() : "";
 
         if (group == null || group.isEmpty())
         {

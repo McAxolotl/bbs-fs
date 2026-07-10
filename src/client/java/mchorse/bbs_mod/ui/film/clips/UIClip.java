@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.ui.film.clips;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.DamageActionClip;
@@ -48,23 +51,18 @@ import mchorse.bbs_mod.ui.film.clips.actions.UISwipeActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIUseBlockItemActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIUseItemActionClip;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIEnvelope;
-import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
-import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.TimeUtilsClient;
 import mchorse.bbs_mod.utils.clips.Clip;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.undo.IUndo;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public abstract class UIClip <T extends Clip> extends UIElement
 {
@@ -146,11 +144,6 @@ public abstract class UIClip <T extends Clip> extends UIElement
         return factory == null ? null : factory.create(clip, delegate);
     }
 
-    public static UILabel label(IKey key)
-    {
-        return UI.label(key).background(() -> BBSSettings.primaryColor(Colors.A50));
-    }
-
     public UIClip(T clip, IUIClipsDelegate editor)
     {
         this.clip = clip;
@@ -200,14 +193,28 @@ public abstract class UIClip <T extends Clip> extends UIElement
 
     protected void registerPanels()
     {
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TITLE), UI.row(this.title, this.enabled.label(IKey.EMPTY).w(26)));
+        this.panels.add(UI.row(this.title, this.enabled.label(IKey.EMPTY).w(26)));
+        this.panels.add(UI.row(this.layer, this.tick, this.duration));
 
         this.addEnvelopes();
     }
 
     protected void addEnvelopes()
     {
-        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_ENVELOPES_TITLE), this.envelope).marginTop(UIConstants.SECTION_GAP));
+        this.panels.add(this.section(UIKeys.CAMERA_PANELS_ENVELOPES_TITLE, this.envelope));
+    }
+
+    /**
+     * Wrap a group of fields into a collapsible section. The shared way clip panels group
+     * their parameters, so every clip type stays consistent.
+     */
+    protected UISection section(IKey title, UIElement... fields)
+    {
+        UISection section = new UISection(title);
+
+        section.fields.add(fields);
+
+        return section;
     }
 
     public void handleUndo(IUndo<ValueGroup> undo, boolean redo)

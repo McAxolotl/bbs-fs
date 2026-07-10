@@ -6,6 +6,7 @@ import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
+import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -18,6 +19,7 @@ import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 public class CubicVAORenderer extends CubicCubeRenderer
@@ -25,6 +27,13 @@ public class CubicVAORenderer extends CubicCubeRenderer
     private ShaderProgram program;
     private ModelInstance model;
     private Function<String, Link> textureResolver;
+
+    /**
+     * Non-null puts the renderer in hybrid mode (a welded model): these groups — and any group with no baked VAO —
+     * fall through to the CPU immediate path so their welded cubes can deform against a live neighbour, while every
+     * other group still rides its VAO on the GPU. Null keeps the plain all-VAO behaviour for unwelded models.
+     */
+    private Set<ModelGroup> weldedGroups;
 
     public CubicVAORenderer(ShaderProgram program, ModelInstance model, int light, int overlay, StencilMap stencilMap, ShapeKeys shapeKeys, Function<String, Link> textureResolver)
     {
@@ -35,10 +44,27 @@ public class CubicVAORenderer extends CubicCubeRenderer
         this.textureResolver = textureResolver;
     }
 
+    public void setWeldedGroups(Set<ModelGroup> weldedGroups)
+    {
+        this.weldedGroups = weldedGroups;
+    }
+
     @Override
     public boolean renderGroup(BufferBuilder builder, MatrixStack stack, ModelGroup group, Model model)
     {
         Map<String, ModelVAO> groupVaos = this.model.getVaos().get(group);
+
+        if (this.weldedGroups != null)
+        {
+            /* A welded bone tessellates on the CPU only while its seam actually bends — at rest it rides
+             * its VAO like everything else. Groups with no VAO (shape-keyed meshes) always render immediate. */
+            boolean welded = this.weldedGroups.contains(group) && WeldBinding.hasActiveSeam(this.welds, group);
+
+            if (welded || groupVaos == null || groupVaos.isEmpty())
+            {
+                return super.renderGroup(builder, stack, group, model);
+            }
+        }
 
         if (groupVaos == null || groupVaos.isEmpty() || !group.visible)
         {

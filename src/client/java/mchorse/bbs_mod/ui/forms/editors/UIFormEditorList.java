@@ -4,7 +4,7 @@ import mchorse.bbs_mod.ui.forms.IUIFormList;
 import mchorse.bbs_mod.ui.forms.UIFormList;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
-import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.BBSSettings;
 import org.lwjgl.glfw.GLFW;
 
 public class UIFormEditorList extends UIFormList
@@ -31,7 +31,7 @@ public class UIFormEditorList extends UIFormList
     @Override
     public void render(UIContext context)
     {
-        this.area.render(context.batcher, Colors.A50);
+        this.area.render(context.batcher, BBSSettings.deepSurface());
 
         super.render(context);
     }

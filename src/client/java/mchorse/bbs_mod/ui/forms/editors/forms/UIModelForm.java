@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
+import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.ui.Keys;
@@ -51,6 +53,25 @@ public class UIModelForm extends UIForm<ModelForm>
     }
 
     @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        data.put("bones", DataStorageUtils.stringListToData(this.modelPanel.poseEditor.groups.list.getCurrent()));
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        if (data.has("bones"))
+        {
+            this.modelPanel.poseEditor.restoreSelection(DataStorageUtils.stringListFromData(data.get("bones")));
+        }
+    }
+
+    @Override
     public Matrix4f getOrigin(float transition)
     {
         return this.getOrigin(transition, this.bonePath(), this.modelPanel.poseEditor.transform.isLocal());
@@ -64,6 +85,19 @@ public class UIModelForm extends UIForm<ModelForm>
 
     private String bonePath()
     {
-        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.modelPanel.poseEditor.groups.getCurrentFirst());
+        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.modelPanel.poseEditor.groups.list.getCurrentFirst());
+    }
+
+    @Override
+    public boolean toggleBoneSelection(String bone)
+    {
+        if (!this.modelPanel.poseEditor.hasBone(bone))
+        {
+            return false;
+        }
+
+        this.modelPanel.poseEditor.selectBone(bone, true);
+
+        return true;
     }
 }

@@ -7,7 +7,7 @@ import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
-import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.BBSSettings;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -59,14 +59,9 @@ public class UIFormPalette extends UIElement implements IUIFormList
 
     public UIFormPalette(Consumer<Form> callback)
     {
-        this(callback, false);
-    }
-
-    public UIFormPalette(Consumer<Form> callback, boolean morphCategoryFilter)
-    {
         this.callback = callback;
 
-        this.list = new UIFormList(this, morphCategoryFilter);
+        this.list = new UIFormList(this);
         this.list.full(this);
 
         this.editor = new UIFormEditor(this);
@@ -228,10 +223,23 @@ public class UIFormPalette extends UIElement implements IUIFormList
         {
             if (!this.immersive || this.list.isVisible())
             {
-                this.area.render(context.batcher, Colors.A75);
+                this.area.render(context.batcher, BBSSettings.baseSurface());
             }
         }
 
-        super.render(context);
+        /* Panels are the deep surface, so inputs take the raised (lighter) surface to stand out -
+         * same as the film editor. Sections flip this back to false for their own inner inputs. */
+        boolean lightInputs = BBSSettings.lightInputs;
+
+        BBSSettings.lightInputs = true;
+
+        try
+        {
+            super.render(context);
+        }
+        finally
+        {
+            BBSSettings.lightInputs = lightInputs;
+        }
     }
 }

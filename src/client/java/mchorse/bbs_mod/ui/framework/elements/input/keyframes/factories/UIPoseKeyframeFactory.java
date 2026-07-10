@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
@@ -50,8 +51,8 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
             if (model != null)
             {
-                this.poseEditor.setPose(keyframe.getValue(), model.poseGroup);
-                this.poseEditor.fillGroups(model.model, model.flippedParts, false, model.disabledBones);
+                this.poseEditor.setPose(keyframe.getValue(), model.getPoseGroup());
+                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones());
             }
         }
         else if (FormUtils.getForm(sheet.property) instanceof MobForm mobForm)
@@ -73,13 +74,13 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         if (this.getFlex().getW() > 240)
         {
             this.poseEditor.add(UI.row(
-                UI.column(UI.label(UIKeys.POSE_CONTEXT_FIX), this.poseEditor.fix, UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
+                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
                 UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
             ));
         }
         else
         {
-            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.poseEditor.fix, UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform);
+            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform);
         }
 
         /* Ew... */
@@ -169,6 +170,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
+        protected boolean stretchesBoneList()
+        {
+            return true;
+        }
+
+        @Override
         protected UIPropTransform createTransformEditor()
         {
             return new UIPoseTransforms().enableHotkeys();
@@ -177,21 +184,21 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void pastePose(MapType data)
         {
-            List<String> current = new ArrayList<>(this.groups.getCurrent());
+            List<String> current = new ArrayList<>(this.groups.list.getCurrent());
 
             apply(this.editor, this.keyframe, (pose) -> pose.fromData(data));
-            this.groups.setCurrent(current);
-            this.pickBones(this.groups.getCurrent());
+            this.groups.list.setCurrent(current);
+            this.pickBones(this.groups.list.getCurrent());
         }
 
         @Override
         protected void flipPose()
         {
-            List<String> current = new ArrayList<>(this.groups.getCurrent());
+            List<String> current = new ArrayList<>(this.groups.list.getCurrent());
 
             apply(this.editor, this.keyframe, (pose) -> pose.flip(this.flippedParts));
-            this.groups.setCurrent(current);
-            this.pickBones(this.groups.getCurrent());
+            this.groups.list.setCurrent(current);
+            this.pickBones(this.groups.list.getCurrent());
         }
 
         @Override
@@ -306,7 +313,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void reset()
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.translate.set(0F, 0F, 0F);
                 poseT.scale.set(1F, 1F, 1F);
@@ -314,6 +321,15 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 poseT.rotate2.set(0F, 0F, 0F);
             });
             this.refillTransform();
+        }
+
+        @Override
+        public void endGesture()
+        {
+            /* Film pose edits land on the selected keyframe(s) (not via a notifier callback),
+             * so seal those to close the undo block — consecutive drags stay distinct. */
+            UIReplaysEditorUtils.forEachSelectedKeyframe(this.editor.editor, this.editor.keyframe,
+                (selected) -> selected.preNotify(IValueListener.FLAG_UNMERGEABLE));
         }
     }
 }

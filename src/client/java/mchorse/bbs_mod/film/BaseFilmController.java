@@ -9,6 +9,7 @@ import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.entity.ActorEntity;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -24,6 +25,7 @@ import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
+import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.graphics.Draw;
@@ -1019,15 +1021,21 @@ public abstract class BaseFilmController
                 continue;
             }
 
-            if (PerLimbService.isIKControlChannel(id))
+            if (FormControlKeys.isIKControlChannel(id))
             {
-                this.applyIKControls(root, PerLimbService.parseIKControlFormPath(id), channel, tick);
+                this.applyIKControls(root, FormControlKeys.parseIKControlFormPath(id), channel, tick);
                 continue;
             }
 
-            if (PerLimbService.isPhysicsControlChannel(id))
+            if (FormControlKeys.isPhysicsControlChannel(id))
             {
-                this.applyPhysicsControls(root, PerLimbService.parsePhysicsControlFormPath(id), channel, tick);
+                this.applyPhysicsControls(root, FormControlKeys.parsePhysicsControlFormPath(id), channel, tick);
+                continue;
+            }
+
+            if (FormControlKeys.isWindControlChannel(id))
+            {
+                this.applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
                 continue;
             }
 
@@ -1112,6 +1120,37 @@ public abstract class BaseFilmController
         {
             modelForm.physicsControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new PhysicsControl()).copy(entry.getValue());
         }
+    }
+
+    private void applyWindControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    {
+        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (!(form instanceof ModelForm modelForm))
+        {
+            return;
+        }
+
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return;
+        }
+
+        Object value = segment.createInterpolated();
+
+        if (!(value instanceof WindControl control))
+        {
+            return;
+        }
+
+        if (modelForm.windControlOverride == null)
+        {
+            modelForm.windControlOverride = new WindControl();
+        }
+
+        modelForm.windControlOverride.copy(control);
     }
 
     private enum TargetKind
@@ -1252,6 +1291,7 @@ public abstract class BaseFilmController
             modelForm.physicsTargetOverrides.clear();
             modelForm.physicsTargetWeights.clear();
             modelForm.physicsControlOverrides.clear();
+            modelForm.windControlOverride = null;
         }
 
         for (BodyPart part : form.parts.getAllTyped())

@@ -22,7 +22,9 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
+import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -232,7 +234,7 @@ public class UIReplaysEditorUtils
 
         for (String bone : bones)
         {
-            if (PoseBones.isHidden(model.disabledBones, bone))
+            if (PoseBones.isHidden(model.getDisabledBones(), bone))
             {
                 continue;
             }
@@ -313,7 +315,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toIKControlKey(path);
+        String id = FormControlKeys.toIKControlKey(path);
         String title = path.isEmpty() ? "ik" : path + "/ik";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
@@ -403,7 +405,7 @@ public class UIReplaysEditorUtils
         }
 
         String path = FormUtils.getPath(modelForm);
-        String id = PerLimbService.toPhysicsControlKey(path);
+        String id = FormControlKeys.toPhysicsControlKey(path);
         String title = path.isEmpty() ? "physics" : path + "/physics";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
@@ -443,6 +445,62 @@ public class UIReplaysEditorUtils
         }
 
         return controls;
+    }
+
+    /**
+     * One wind track per form that has physics chains: a single keyframe sheet whose value holds the
+     * global wind scalars (strength, direction, turbulence), layered over the form's physics wind config
+     * at playback. The wind is global, so — unlike the physics-controls track — it is not keyed by a chain.
+     */
+    public static void addWindControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = FormControlKeys.toWindControlKey(path);
+        String title = path.isEmpty() ? "wind" : path + "/wind";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.WIND);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.CYAN, false, channel, null)
+            .icon(Icons.ARROW_RIGHT).form(modelForm).seed(() -> buildWindControl(modelForm)));
+    }
+
+    /** A wind-control value seeded from the form's physics wind config, so a fresh keyframe matches the configured wind instead of drifting to defaults. */
+    private static WindControl buildWindControl(ModelForm modelForm)
+    {
+        WindControl control = new WindControl();
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null)
+            {
+                ModelPhysicsConfig.Wind wind = config.wind();
+
+                control.strength = wind.strength();
+                control.x = wind.x();
+                control.y = wind.y();
+                control.z = wind.z();
+                control.turbulence = wind.turbulence();
+                control.turbulenceSpeed = wind.turbulenceSpeed();
+                control.turbulenceScale = wind.turbulenceScale();
+                control.local = wind.local();
+            }
+        }
+
+        return control;
     }
 
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -519,7 +577,7 @@ public class UIReplaysEditorUtils
 
             if (materialDefault == null)
             {
-                materialDefault = model.getMaterialTexture(material, model.texture);
+                materialDefault = model.getMaterialTexture(material, model.getTexture());
             }
 
             ValueLink property = new ValueLink(id, materialDefault);
@@ -564,6 +622,7 @@ public class UIReplaysEditorUtils
         {
             addMaterialTextureSheets(modelForm, properties, sheets);
             addPhysicsControlSheet(modelForm, properties, sheets);
+            addWindControlSheet(modelForm, properties, sheets);
             addPhysicsTargetSheets(modelForm, properties, sheets);
             addBoneTrackSheets(modelForm, properties, sheets);
             addIKControlSheet(modelForm, properties, sheets);
@@ -828,6 +887,20 @@ public class UIReplaysEditorUtils
     {
         if (form == null || keyframeEditor == null || bone.isEmpty())
         {
+            return;
+        }
+
+        /* Ctrl multi-select: toggle the bone in the live pose editor without changing the
+         * selected keyframe. Selecting a keyframe recreates the factory (see
+         * UIKeyframeEditor#pickKeyframe), which resets the pose editor — so it caps the
+         * multi-selection. When a pose factory is already up and owns this bone, just
+         * toggle it and stop, so the selection accumulates. */
+        if (!insert && Window.isCtrlPressed()
+            && keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory
+            && poseFactory.poseEditor.hasBone(bone))
+        {
+            poseFactory.poseEditor.selectBone(bone, true);
+
             return;
         }
 
@@ -1193,7 +1266,7 @@ public class UIReplaysEditorUtils
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
 
-        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
+        bones.removeIf((bone) -> PoseBones.isHidden(model.getDisabledBones(), bone));
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
@@ -1285,11 +1358,11 @@ public class UIReplaysEditorUtils
     }
 
     /**
-     * Shared viewport bone-pick gesture for the film, replay and animation
-     * state editors: left / Ctrl+right select, middle inserts, Ctrl offers
-     * adjacent bones, Shift offers the hierarchy. The leaf {@code picker}
-     * supplies the editor-specific selection. Returns whether the click
-     * was consumed.
+     * Shared viewport bone-pick gesture for the film / replay editor: left / Ctrl+middle
+     * select, right inserts, Shift offers the hierarchy. Ctrl+click toggles the bone in
+     * the pose editor's multi-selection (handled at the leaf), so it no longer opens the
+     * adjacent-bones menu here. The leaf {@code picker} supplies the editor-specific
+     * selection. Returns whether the click was consumed.
      */
     public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker)
     {
@@ -1301,11 +1374,9 @@ public class UIReplaysEditorUtils
             return false;
         }
 
-        if (Window.isCtrlPressed())
-        {
-            offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
-        }
-        else if (Window.isShiftPressed())
+        /* Shift keeps the hierarchy menu; Ctrl now falls straight through to the pick,
+         * where the modifier turns the selection additive (multi-bone). */
+        if (Window.isShiftPressed())
         {
             offerHierarchy(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
         }
@@ -1337,7 +1408,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getAdjacentGroups(bone))
                 {
-                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
+                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
                     {
                         continue;
                     }
@@ -1370,7 +1441,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getHierarchyGroups(bone))
                 {
-                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
+                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
                     {
                         continue;
                     }
