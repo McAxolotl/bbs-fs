@@ -1,12 +1,12 @@
 package mchorse.bbs_mod.forms.forms;
 
-import mchorse.bbs_mod.settings.values.core.ValuePose;
-import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.pose.Pose;
 
-public class MobForm extends Form
+public class MobForm extends Form implements PoseForm
 {
     public final ValueString mobID = new ValueString("mobId", "minecraft:chicken");
     public final ValueString mobNBT = new ValueString("mobNbt", "");
@@ -16,6 +16,7 @@ public class MobForm extends Form
 
     public final ValuePose pose = new ValuePose("pose", new Pose());
     public final ValuePose poseOverlay = new ValuePose("pose_overlay", new Pose());
+    public final ValueBoolean boneTracks = new ValueBoolean("bone_tracks", true);
 
     public MobForm()
     {
@@ -25,8 +26,28 @@ public class MobForm extends Form
         this.add(this.mobNBT);
         this.add(this.pose);
         this.add(this.poseOverlay);
+        this.boneTracks.invisible();
+        this.add(this.boneTracks);
         this.add(this.texture);
         this.add(this.slim);
+    }
+
+    @Override
+    public ValuePose getPose()
+    {
+        return this.pose;
+    }
+
+    @Override
+    public ValuePose getPoseOverlay()
+    {
+        return this.poseOverlay;
+    }
+
+    @Override
+    public ValueBoolean getBoneTracks()
+    {
+        return this.boneTracks;
     }
 
     @Override
