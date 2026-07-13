@@ -676,6 +676,7 @@
 	"bbs.ui.film.replay.orbit.third_person_front": "Третье лицо (спереди)",
 	"bbs.ui.film.replay.pick_axes_preview": "Выберите кость для предпросмотра...",
 	"bbs.ui.film.replay.record": "Записать...",
+	"bbs.ui.film.replay.teleport_to_player": "Телепортировать к игроку",
 	"bbs.ui.film.replay.relative-tooltip": "Когда включена, эта запись будет отрисована относительно камеры",
 	"bbs.ui.film.replay.replay": "Запись",
 	"bbs.ui.film.replay.shadow": "Тень",

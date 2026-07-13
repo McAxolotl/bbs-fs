@@ -680,6 +680,7 @@
 	"bbs.ui.film.replay.orbit.third_person_front": "Third-person (front)",
 	"bbs.ui.film.replay.pick_axes_preview": "Pick preview bone...",
 	"bbs.ui.film.replay.record": "Record replay...",
+	"bbs.ui.film.replay.teleport_to_player": "Teleport to player",
 	"bbs.ui.film.replay.relative-tooltip": "When enabled, this replay will be rendered relative to the camera",
 	"bbs.ui.film.replay.replay": "Replay",
 	"bbs.ui.film.replay.shadow": "Shadow",
