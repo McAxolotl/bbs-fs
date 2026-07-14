@@ -9,13 +9,19 @@ import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.forms.BodyPart;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.OtherClientPlayerEntity;
@@ -35,6 +41,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
@@ -51,6 +58,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     public float prevHandSwing;
     private float prevYawHead;
     private float prevPitch;
+    private MatrixCache bones = new MatrixCache();
+    private List<String> pickedBoneIds = List.of();
 
     public MobFormRenderer(MobForm form)
     {
@@ -94,6 +103,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.lastNBT = nbt;
             this.lastSlim = slim;
             this.entity = null;
+            this.bones.clear();
+            this.pickedBoneIds = List.of();
         }
 
         if (this.entity != null)
@@ -192,6 +203,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void render3D(FormRenderingContext context)
     {
         this.ensureEntity();
+        this.bones.clear();
+        this.pickedBoneIds = List.of();
 
         if (this.entity != null)
         {
@@ -241,6 +254,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 context.world.push();
             }
 
+            Matrix4f captureBase = new Matrix4f(context.stack.peek().getPositionMatrix());
+
             if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
                 context.stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
@@ -259,11 +274,23 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             }
 
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
+            boolean incrementPicking = context.stencilMap != null && context.stencilMap.increment;
+            MobRenderContext mobContext = MobRenderContext.push(
+                renderer,
+                this.form.pose.get(),
+                this.form.poseOverlay.get(),
+                captureBase,
+                context.isPicking(),
+                incrementPicking
+            );
 
-            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get()))
+            try (mobContext)
             {
                 MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
             }
+
+            this.bones = mobContext.getMatrices();
+            this.pickedBoneIds = mobContext.getPickedBoneIds();
 
             consumers.draw();
             CustomVertexConsumerProvider.clearRunnables();
@@ -278,6 +305,118 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             RenderSystem.enableDepthTest();
             RenderSystem.getModelViewMatrix().identity();
         }
+    }
+
+    @Override
+    protected void updateStencilMap(FormRenderingContext context)
+    {
+        StencilMap stencilMap = context.stencilMap;
+
+        if (stencilMap == null)
+        {
+            return;
+        }
+
+        stencilMap.addPicking(this.form);
+
+        if (stencilMap.increment)
+        {
+            for (String bone : this.pickedBoneIds)
+            {
+                stencilMap.addPicking(this.form, bone);
+            }
+        }
+    }
+
+    @Override
+    public void renderBodyParts(FormRenderingContext context)
+    {
+        for (BodyPart part : this.form.parts.getAllTyped())
+        {
+            Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+
+            context.stack.push();
+            if (context.world != null)
+            {
+                context.world.push();
+            }
+
+            if (matrix != null)
+            {
+                MatrixStackUtils.multiply(context.stack, matrix);
+                if (context.world != null)
+                {
+                    MatrixStackUtils.multiply(context.world, matrix);
+                }
+            }
+
+            this.renderBodyPart(part, context);
+
+            context.stack.pop();
+            if (context.world != null)
+            {
+                context.world.pop();
+            }
+        }
+    }
+
+    @Override
+    public void collectMatrices(IEntity entity, MatrixStack stack, MatrixCache matrices, String prefix, float transition)
+    {
+        Matrix4f matrix = new Matrix4f();
+        Matrix4f origin = new Matrix4f();
+
+        stack.push();
+        this.applyTransforms(stack, true, transition);
+        origin.set(stack.peek().getPositionMatrix());
+        stack.pop();
+
+        stack.push();
+        this.applyTransforms(stack, false, transition);
+        matrix.set(stack.peek().getPositionMatrix());
+        matrices.put(prefix, matrix, origin);
+
+        for (Map.Entry<String, MatrixCacheEntry> entry : this.bones.entrySet())
+        {
+            Matrix4f boneMatrix = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().matrix());
+            Matrix4f boneOrigin = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().origin());
+
+            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin);
+        }
+
+        int i = 0;
+
+        for (BodyPart part : this.form.parts.getAllTyped())
+        {
+            Form form = part.getForm();
+
+            if (form != null)
+            {
+                Matrix4f boneMatrix = this.bones.get(part.bone.get()).matrix();
+
+                stack.push();
+
+                if (boneMatrix != null)
+                {
+                    MatrixStackUtils.multiply(stack, boneMatrix);
+                }
+
+                MatrixStackUtils.applyTransform(stack, part.transform.get());
+                FormUtilsClient.getRenderer(form).collectMatrices(
+                    part.useTarget.get() ? entity : part.getEntity(),
+                    stack,
+                    matrices,
+                    StringUtils.combinePaths(prefix, String.valueOf(i)),
+                    transition
+                );
+
+                stack.pop();
+            }
+
+            i += 1;
+        }
+
+        stack.pop();
     }
 
     @Override

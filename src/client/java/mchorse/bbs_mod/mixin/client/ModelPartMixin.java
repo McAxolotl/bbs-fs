@@ -29,7 +29,7 @@ public abstract class ModelPartMixin
         ModelPart part = (ModelPart) (Object) this;
         PoseTransform transform = MobRenderContext.getTransform(part);
 
-        if (transform == null)
+        if (!MobRenderContext.isTracked(part))
         {
             return;
         }
@@ -44,7 +44,7 @@ public abstract class ModelPartMixin
         float scaleY = part.yScale;
         float scaleZ = part.zScale;
 
-        if (transform.fix > 0F)
+        if (transform != null && transform.fix > 0F)
         {
             ModelTransform initial = part.getDefaultTransform();
 
@@ -59,24 +59,28 @@ public abstract class ModelPartMixin
             scaleZ = Lerps.lerp(scaleZ, 1F, transform.fix);
         }
 
-        pivotX += transform.translate.x;
-        pivotY += transform.translate.y;
-        pivotZ += transform.translate.z;
-        pitch += transform.rotate.x;
-        yaw += transform.rotate.y;
-        roll += transform.rotate.z;
-        scaleX += transform.scale.x - 1F;
-        scaleY += transform.scale.y - 1F;
-        scaleZ += transform.scale.z - 1F;
+        if (transform != null)
+        {
+            pivotX += transform.translate.x;
+            pivotY += transform.translate.y;
+            pivotZ += transform.translate.z;
+            pitch += transform.rotate.x;
+            yaw += transform.rotate.y;
+            roll += transform.rotate.z;
+            scaleX += transform.scale.x - 1F;
+            scaleY += transform.scale.y - 1F;
+            scaleZ += transform.scale.z - 1F;
+        }
 
         matrices.translate(pivotX / 16F, pivotY / 16F, pivotZ / 16F);
+        MobRenderContext.captureOrigin(part, matrices.peek().getPositionMatrix());
 
         if (pitch != 0F || yaw != 0F || roll != 0F)
         {
             matrices.multiply(new Quaternionf().rotationZYX(roll, yaw, pitch));
         }
 
-        if (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F)
+        if (transform != null && (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F))
         {
             matrices.multiply(new Quaternionf().rotationZYX(transform.rotate2.z, transform.rotate2.y, transform.rotate2.x));
         }
@@ -85,6 +89,8 @@ public abstract class ModelPartMixin
         {
             matrices.scale(scaleX, scaleY, scaleZ);
         }
+
+        MobRenderContext.captureMatrix(part, matrices.peek().getPositionMatrix());
 
         info.cancel();
     }
@@ -98,20 +104,31 @@ public abstract class ModelPartMixin
     )
     private void bbs$applyMobAppearance(Args args)
     {
-        PoseTransform transform = MobRenderContext.getTransform((ModelPart) (Object) this);
+        ModelPart part = (ModelPart) (Object) this;
+        PoseTransform transform = MobRenderContext.getTransform(part);
+        int pickingOffset = MobRenderContext.getPickingOffset(part);
+
+        if (pickingOffset >= 0)
+        {
+            args.set(2, pickingOffset);
+        }
 
         if (transform == null)
         {
             return;
         }
 
-        int light = args.get(2);
-        int u = light & '\uffff';
-        int v = light >> 16 & '\uffff';
+        if (pickingOffset < 0)
+        {
+            int light = args.get(2);
+            int u = light & '\uffff';
+            int v = light >> 16 & '\uffff';
 
-        u = (int) Lerps.lerp(u, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, MathUtils.clamp(transform.lighting, 0F, 1F));
+            u = (int) Lerps.lerp(u, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, MathUtils.clamp(transform.lighting, 0F, 1F));
 
-        args.set(2, u | v << 16);
+            args.set(2, u | v << 16);
+        }
+
         args.set(4, (float) args.get(4) * transform.color.r);
         args.set(5, (float) args.get(5) * transform.color.g);
         args.set(6, (float) args.get(6) * transform.color.b);
