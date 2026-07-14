@@ -536,7 +536,9 @@ public class UIPoseEditor extends UIElement
 
     private void forEachSelectedPose(Consumer<? super PoseTransform> consumer)
     {
-        for (String bone : this.groups.list.getCurrent())
+        List<String> selected = new ArrayList<>(this.groups.list.getCurrent());
+
+        for (String bone : selected)
         {
             consumer.accept(this.pose.get(bone));
         }

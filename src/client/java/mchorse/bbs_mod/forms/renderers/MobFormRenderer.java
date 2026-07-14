@@ -202,7 +202,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 }
 
                 RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
             });
 
             consumers.setUI(true);
@@ -275,7 +274,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     }
 
                     RenderSystem.enableBlend();
-                    RenderSystem.defaultBlendFunc();
                 });
             }
 

@@ -78,15 +78,16 @@ public final class BoneHierarchy
 
         for (Bone bone : this.bones)
         {
-            names.merge(bone.name(), 1, Integer::sum);
+            names.merge(getDisplayName(bone), 1, Integer::sum);
             layerNames.merge(this.getLayerNameKey(bone), 1, Integer::sum);
         }
 
         for (Bone bone : this.bones)
         {
-            String label = bone.name();
+            String name = getDisplayName(bone);
+            String label = name;
 
-            if (names.getOrDefault(bone.name(), 0) > 1)
+            if (names.getOrDefault(name, 0) > 1)
             {
                 String layer = getLayerName(bone.layerId());
 
@@ -216,9 +217,14 @@ public final class BoneHierarchy
         return name.replace("#", " / ").replace('_', ' ');
     }
 
+    private static String getDisplayName(Bone bone)
+    {
+        return bone.layerId().isEmpty() ? bone.name() : VanillaBoneHierarchy.toCamelCase(bone.name());
+    }
+
     private String getLayerNameKey(Bone bone)
     {
-        return bone.layerId() + '\u0000' + bone.name();
+        return bone.layerId() + '\u0000' + getDisplayName(bone);
     }
 
     private String getPath(Bone bone)
@@ -232,7 +238,7 @@ public final class BoneHierarchy
                 path.append('/');
             }
 
-            path.append(ancestor.name());
+            path.append(getDisplayName(ancestor));
         }
 
         return path.toString();

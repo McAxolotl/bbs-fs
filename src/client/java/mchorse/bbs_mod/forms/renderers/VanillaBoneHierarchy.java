@@ -8,7 +8,6 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -168,8 +167,6 @@ public final class VanillaBoneHierarchy
         }
 
         List<Map.Entry<String, ModelPart>> children = new ArrayList<>(((ModelPartAccessor) (Object) parent).bbs$getChildren().entrySet());
-
-        children.sort(Comparator.comparing(Map.Entry::getKey));
 
         for (Map.Entry<String, ModelPart> child : children)
         {

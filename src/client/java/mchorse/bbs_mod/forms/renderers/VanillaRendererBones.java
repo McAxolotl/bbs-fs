@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * Discovers the baked model hierarchies owned by a vanilla entity renderer.
@@ -276,7 +275,7 @@ public final class VanillaRendererBones
         private final IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
         private final IdentityHashMap<VanillaBoneHierarchy.Hierarchy, Boolean> visitedHierarchies = new IdentityHashMap<>();
         private final IdentityHashMap<VanillaBoneHierarchy.Hierarchy, Boolean> primaryHierarchies = new IdentityHashMap<>();
-        private final Map<String, List<VanillaBoneHierarchy.Hierarchy>> hierarchies = new TreeMap<>();
+        private final Map<String, List<VanillaBoneHierarchy.Hierarchy>> hierarchies = new LinkedHashMap<>();
 
         private void scanFields(Object owner, boolean primary)
         {
