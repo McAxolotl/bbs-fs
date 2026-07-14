@@ -44,6 +44,7 @@ public class BBSSettings {
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
 	public static ValueBoolean freezeModels;
+	public static ValueBoolean listModelPreview;
 	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
@@ -464,6 +465,7 @@ public class BBSSettings {
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		freezeModels = builder.getBoolean("freeze_models", false);
+		listModelPreview = builder.getBoolean("list_model_preview", true);
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
