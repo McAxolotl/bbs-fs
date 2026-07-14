@@ -28,6 +28,8 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.OtherClientPlayerEntity;
 import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
@@ -50,6 +52,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 {
     public static final GameProfile WIDE = new GameProfile(UUID.fromString("b99a2400-28a8-4288-92dc-924beafbf756"), "McHorseYT");
     public static final GameProfile SLIM = new GameProfile(UUID.fromString("5477bd28-e672-4f87-a209-c03cf75f3606"), "osmiq");
+    private static final VertexConsumer EMPTY_VERTEX_CONSUMER = new EmptyVertexConsumer();
+    private static final VertexConsumerProvider EMPTY_VERTEX_CONSUMERS = (layer) -> EMPTY_VERTEX_CONSUMER;
 
     private Entity entity;
 
@@ -78,8 +82,14 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         if (this.entity != null)
         {
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
+            BoneHierarchy hierarchy = VanillaRendererBones.discover(renderer).getBoneHierarchy();
 
-            return VanillaRendererBones.discover(renderer).getBoneHierarchy();
+            hierarchy.migratePose(this.form.pose.getOriginalValue());
+            hierarchy.migratePose(this.form.pose.getRuntimeValue());
+            hierarchy.migratePose(this.form.poseOverlay.getOriginalValue());
+            hierarchy.migratePose(this.form.poseOverlay.getRuntimeValue());
+
+            return hierarchy;
         }
 
         return super.getBoneHierarchy();
@@ -128,12 +138,16 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         catch (Exception e)
         {}
 
-        this.entity = Registries.ENTITY_TYPE.get(new Identifier(id)).create(MinecraftClient.getInstance().world);
-
-        if (this.entity == null && this.form.isPlayer())
+        if (this.form.isPlayer())
         {
             this.entity = new OtherClientPlayerEntity(MinecraftClient.getInstance().world, slim ? SLIM : WIDE);
             this.entity.getDataTracker().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
+        }
+        else
+        {
+            this.entity = Registries.ENTITY_TYPE.getOrEmpty(new Identifier(id))
+                .map((type) -> type.create(MinecraftClient.getInstance().world))
+                .orElse(null);
         }
 
         if (this.entity != null)
@@ -386,6 +400,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     @Override
     public void collectMatrices(IEntity entity, MatrixStack stack, MatrixCache matrices, String prefix, float transition)
     {
+        MatrixCache bones = this.collectBoneMatrices(transition);
         Matrix4f matrix = new Matrix4f();
         Matrix4f origin = new Matrix4f();
 
@@ -399,7 +414,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         matrix.set(stack.peek().getPositionMatrix());
         matrices.put(prefix, matrix, origin);
 
-        for (Map.Entry<String, MatrixCacheEntry> entry : this.bones.entrySet())
+        for (Map.Entry<String, MatrixCacheEntry> entry : bones.entrySet())
         {
             Matrix4f boneMatrix = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().matrix());
             Matrix4f boneOrigin = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().origin());
@@ -415,7 +430,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (form != null)
             {
-                Matrix4f boneMatrix = this.bones.get(part.bone.get()).matrix();
+                Matrix4f boneMatrix = bones.get(part.bone.get()).matrix();
 
                 stack.push();
 
@@ -440,6 +455,55 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         }
 
         stack.pop();
+    }
+
+    private MatrixCache collectBoneMatrices(float transition)
+    {
+        this.ensureEntity();
+
+        if (this.entity == null)
+        {
+            return new MatrixCache();
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        MatrixStack stack = new MatrixStack();
+        Matrix4f captureBase = new Matrix4f(stack.peek().getPositionMatrix());
+
+        if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+        {
+            stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+        }
+
+        Object renderer = client.getEntityRenderDispatcher().getRenderer(this.entity);
+        MobRenderContext context = MobRenderContext.push(
+            renderer,
+            this.form.pose.get(),
+            this.form.poseOverlay.get(),
+            Color.white(),
+            captureBase,
+            false,
+            false
+        );
+
+        try (context)
+        {
+            float animationTransition = this.form.action.get() ? transition : 0F;
+
+            client.getEntityRenderDispatcher().render(
+                this.entity,
+                0D,
+                0D,
+                0D,
+                0F,
+                animationTransition,
+                stack,
+                EMPTY_VERTEX_CONSUMERS,
+                LightmapTextureManager.MAX_LIGHT_COORDINATE
+            );
+        }
+
+        return context.getMatrices();
     }
 
     @Override
@@ -535,5 +599,56 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     private static class BooleanHolder
     {
         public boolean bool;
+    }
+
+    private static class EmptyVertexConsumer implements VertexConsumer
+    {
+        @Override
+        public VertexConsumer vertex(double x, double y, double z)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer color(int red, int green, int blue, int alpha)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer texture(float u, float v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer overlay(int u, int v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer light(int u, int v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer normal(float x, float y, float z)
+        {
+            return this;
+        }
+
+        @Override
+        public void next()
+        {}
+
+        @Override
+        public void fixedColor(int red, int green, int blue, int alpha)
+        {}
+
+        @Override
+        public void unfixColor()
+        {}
     }
 }

@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -16,8 +19,14 @@ public final class BoneHierarchy
     private final List<Bone> bones;
     private final List<String> boneIds;
     private final Map<String, Bone> bonesById;
+    private final Map<String, String> aliases;
 
     public BoneHierarchy(List<Bone> bones)
+    {
+        this(bones, Collections.emptyMap());
+    }
+
+    BoneHierarchy(List<Bone> bones, Map<String, String> aliases)
     {
         List<Bone> uniqueBones = new ArrayList<>(bones.size());
         List<String> boneIds = new ArrayList<>(bones.size());
@@ -37,6 +46,7 @@ public final class BoneHierarchy
         this.bones = Collections.unmodifiableList(uniqueBones);
         this.boneIds = Collections.unmodifiableList(boneIds);
         this.bonesById = Collections.unmodifiableMap(bonesById);
+        this.aliases = Collections.unmodifiableMap(new LinkedHashMap<>(aliases));
     }
 
     public List<Bone> getBones()
@@ -52,6 +62,29 @@ public final class BoneHierarchy
     public Bone getBone(String id)
     {
         return this.bonesById.get(id);
+    }
+
+    /** Replaces legacy bone names with their stable IDs, preserving an existing stable-ID edit. */
+    public void migratePose(Pose pose)
+    {
+        if (pose == null || this.aliases.isEmpty())
+        {
+            return;
+        }
+
+        for (String alias : new ArrayList<>(pose.transforms.keySet()))
+        {
+            String id = this.aliases.get(alias);
+
+            if (id == null || id.equals(alias))
+            {
+                continue;
+            }
+
+            PoseTransform transform = pose.transforms.remove(alias);
+
+            pose.transforms.putIfAbsent(id, transform);
+        }
     }
 
     public List<Bone> getAdjacent(String id)

@@ -57,13 +57,13 @@ public final class VanillaRendererBones
         {
             Scanner scanner = new Scanner();
 
-            scanner.scanFields(renderer);
+            scanner.scanFields(renderer, true);
 
             if (renderer instanceof LivingEntityRendererAccessor accessor)
             {
                 for (FeatureRenderer<?, ?> feature : accessor.bbs$getFeatures())
                 {
-                    scanner.scanFields(feature);
+                    scanner.scanFields(feature, false);
                 }
             }
 
@@ -94,23 +94,26 @@ public final class VanillaRendererBones
 
     public static final class Discovery
     {
-        private static final Discovery EMPTY = new Discovery(Collections.emptyList(), -1L);
+        private static final Discovery EMPTY = new Discovery(Collections.emptyList(), Collections.emptyList(), -1L);
 
         private final List<VanillaBoneHierarchy.Hierarchy> hierarchies;
         private final List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies;
+        private final List<VanillaBoneHierarchy.Hierarchy> legacyHierarchies;
         private final List<String> boneIds;
         private final Map<String, VanillaBoneHierarchy.Bone> bonesById;
         private final BoneHierarchy boneHierarchy;
         private final long hierarchyRevision;
 
-        private Discovery(List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies, long hierarchyRevision)
+        private Discovery(List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies, List<VanillaBoneHierarchy.Hierarchy> legacyHierarchies, long hierarchyRevision)
         {
             this.runtimeHierarchies = List.copyOf(runtimeHierarchies);
+            this.legacyHierarchies = List.copyOf(legacyHierarchies);
             this.hierarchyRevision = hierarchyRevision;
 
             List<String> boneIds = new ArrayList<>();
             Map<String, VanillaBoneHierarchy.Bone> bonesById = new LinkedHashMap<>();
             Map<String, VanillaBoneHierarchy.Hierarchy> hierarchiesByLayer = new LinkedHashMap<>();
+            Map<String, String> aliases = new LinkedHashMap<>();
 
             for (VanillaBoneHierarchy.Hierarchy hierarchy : this.runtimeHierarchies)
             {
@@ -146,7 +149,19 @@ public final class VanillaRendererBones
                 }
             }
 
-            this.boneHierarchy = new BoneHierarchy(hierarchyBones);
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.legacyHierarchies)
+            {
+                for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
+                {
+                    String path = bone.getId().substring(hierarchy.getLayerId().length() + 1);
+
+                    addAlias(hierarchy, bone, path, aliases);
+                    addAlias(hierarchy, bone, bone.getName(), aliases);
+                    addAlias(hierarchy, bone, VanillaBoneHierarchy.toCamelCase(bone.getName()), aliases);
+                }
+            }
+
+            this.boneHierarchy = new BoneHierarchy(hierarchyBones, aliases);
         }
 
         public List<String> getBoneIds()
@@ -170,7 +185,7 @@ public final class VanillaRendererBones
         }
 
         /**
-         * Resolves a stable ID or an unambiguous relative/legacy name across all discovered layers.
+         * Resolves a stable ID or a relative/legacy name, preferring the main renderer model.
          */
         public Optional<VanillaBoneHierarchy.Bone> resolve(String id)
         {
@@ -181,26 +196,17 @@ public final class VanillaRendererBones
                 return Optional.of(exact);
             }
 
-            VanillaBoneHierarchy.Bone resolved = null;
-
-            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.hierarchies)
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.legacyHierarchies)
             {
                 Optional<VanillaBoneHierarchy.Bone> candidate = hierarchy.resolve(id);
 
-                if (candidate.isEmpty())
+                if (candidate.isPresent())
                 {
-                    continue;
+                    return candidate;
                 }
-
-                if (resolved != null && !resolved.getId().equals(candidate.get().getId()))
-                {
-                    return Optional.empty();
-                }
-
-                resolved = candidate.get();
             }
 
-            return Optional.ofNullable(resolved);
+            return Optional.empty();
         }
 
         List<VanillaBoneHierarchy.Bone> resolveAll(String id)
@@ -240,15 +246,24 @@ public final class VanillaRendererBones
 
             return Collections.unmodifiableList(lines);
         }
+
+        private static void addAlias(VanillaBoneHierarchy.Hierarchy hierarchy, VanillaBoneHierarchy.Bone bone, String alias, Map<String, String> aliases)
+        {
+            if (!alias.equals(bone.getId()) && hierarchy.resolve(alias).orElse(null) == bone)
+            {
+                aliases.putIfAbsent(alias, bone.getId());
+            }
+        }
     }
 
     private static final class Scanner
     {
         private final IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
         private final IdentityHashMap<VanillaBoneHierarchy.Hierarchy, Boolean> visitedHierarchies = new IdentityHashMap<>();
+        private final IdentityHashMap<VanillaBoneHierarchy.Hierarchy, Boolean> primaryHierarchies = new IdentityHashMap<>();
         private final Map<String, List<VanillaBoneHierarchy.Hierarchy>> hierarchies = new TreeMap<>();
 
-        private void scanFields(Object owner)
+        private void scanFields(Object owner, boolean primary)
         {
             Class<?> type = owner.getClass();
 
@@ -264,7 +279,7 @@ public final class VanillaRendererBones
                     try
                     {
                         field.setAccessible(true);
-                        this.scan(field.get(owner), false);
+                        this.scan(field.get(owner), false, primary);
                     }
                     catch (ReflectiveOperationException | RuntimeException ignored)
                     {}
@@ -274,7 +289,7 @@ public final class VanillaRendererBones
             }
         }
 
-        private void scan(Object value, boolean mapValue)
+        private void scan(Object value, boolean mapValue, boolean primary)
         {
             if (value == null)
             {
@@ -288,6 +303,11 @@ public final class VanillaRendererBones
                     if (this.visitedHierarchies.put(hierarchy, Boolean.TRUE) == null)
                     {
                         this.hierarchies.computeIfAbsent(hierarchy.getLayerId(), (key) -> new ArrayList<>()).add(hierarchy);
+                    }
+
+                    if (primary)
+                    {
+                        this.primaryHierarchies.put(hierarchy, Boolean.TRUE);
                     }
                 });
 
@@ -303,15 +323,15 @@ public final class VanillaRendererBones
 
                 if (model instanceof SinglePartEntityModel<?> singlePartModel)
                 {
-                    this.scan(singlePartModel.getPart(), false);
+                    this.scan(singlePartModel.getPart(), false, primary);
                 }
                 else if (model instanceof CompositeEntityModel<?> compositeModel)
                 {
-                    this.scan(compositeModel.getParts(), false);
+                    this.scan(compositeModel.getParts(), false, primary);
                 }
 
                 /* Dragon and a few other vanilla models expose neither root API. */
-                this.scanFields(model);
+                this.scanFields(model, primary);
 
                 return;
             }
@@ -329,7 +349,7 @@ public final class VanillaRendererBones
 
                 for (int i = 0; i < length; i++)
                 {
-                    this.scan(Array.get(value, i), false);
+                    this.scan(Array.get(value, i), false, primary);
                 }
 
                 return;
@@ -344,7 +364,7 @@ public final class VanillaRendererBones
 
                 for (Object entryValue : map.values())
                 {
-                    this.scan(entryValue, true);
+                    this.scan(entryValue, true, primary);
                 }
 
                 return;
@@ -359,7 +379,7 @@ public final class VanillaRendererBones
 
                 for (Object element : iterable)
                 {
-                    this.scan(element, false);
+                    this.scan(element, false, primary);
                 }
 
                 return;
@@ -368,20 +388,37 @@ public final class VanillaRendererBones
             /* Boat/Raft renderer maps wrap each model with its texture in a DFU Pair. */
             if (mapValue && value instanceof Pair<?, ?> pair)
             {
-                this.scan(pair.getSecond(), false);
+                this.scan(pair.getSecond(), false, primary);
             }
         }
 
         private Discovery createDiscovery(long hierarchyRevision)
         {
             List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies = new ArrayList<>();
+            List<VanillaBoneHierarchy.Hierarchy> legacyHierarchies = new ArrayList<>();
 
             for (List<VanillaBoneHierarchy.Hierarchy> layerHierarchies : this.hierarchies.values())
             {
                 runtimeHierarchies.addAll(layerHierarchies);
             }
 
-            return new Discovery(runtimeHierarchies, hierarchyRevision);
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : runtimeHierarchies)
+            {
+                if (this.primaryHierarchies.containsKey(hierarchy))
+                {
+                    legacyHierarchies.add(hierarchy);
+                }
+            }
+
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : runtimeHierarchies)
+            {
+                if (!this.primaryHierarchies.containsKey(hierarchy))
+                {
+                    legacyHierarchies.add(hierarchy);
+                }
+            }
+
+            return new Discovery(runtimeHierarchies, legacyHierarchies, hierarchyRevision);
         }
 
         private static boolean isSupportedFieldType(Class<?> type)

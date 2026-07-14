@@ -46,10 +46,12 @@ public final class MobRenderContext implements AutoCloseable
     {
         this.previous = CURRENT.get();
         VanillaRendererBones.Discovery discovery = VanillaRendererBones.discover(renderer);
+        Pose mergedPose = mergePose(pose, overlay);
 
         this.hierarchies = discovery.getRuntimeHierarchies();
         this.bones = resolveBones(this.hierarchies);
-        this.transforms = resolveTransforms(discovery, mergePose(pose, overlay));
+        discovery.getBoneHierarchy().migratePose(mergedPose);
+        this.transforms = resolveTransforms(discovery, mergedPose);
         this.color = color == null ? Color.white() : color.copy();
         this.inverseBase = base == null || Math.abs(base.determinant()) < 1.0E-8F
             ? null

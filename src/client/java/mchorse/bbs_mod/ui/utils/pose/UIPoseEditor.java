@@ -250,6 +250,7 @@ public class UIPoseEditor extends UIElement
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
         this.flippedParts = this.createHierarchyFlipMap(this.hierarchy);
 
+        this.hierarchy.migratePose(this.pose);
         this.fillInGroups(this.hierarchy, reset);
     }
 
@@ -271,6 +272,7 @@ public class UIPoseEditor extends UIElement
 
         if (!this.hierarchy.getBones().isEmpty())
         {
+            this.hierarchy.migratePose(this.pose);
             this.fillInGroups(this.hierarchy, reset);
             return;
         }

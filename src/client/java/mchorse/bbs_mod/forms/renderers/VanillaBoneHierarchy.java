@@ -196,7 +196,7 @@ public final class VanillaBoneHierarchy
         return value.replace("%", "%25").replace("#", "%23").replace("/", "%2F");
     }
 
-    private static String toCamelCase(String value)
+    static String toCamelCase(String value)
     {
         StringBuilder builder = new StringBuilder(value.length());
         boolean uppercase = false;

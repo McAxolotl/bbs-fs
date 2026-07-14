@@ -1230,7 +1230,7 @@ public class UIReplaysEditor extends UIElement
     }
 
     /**
-     * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
+     * Picking an editable bone in the viewport is a pose edit, but the pose/bone tracks
      * only exist in the {@link ReplayCategory#POSE} category. So when another category
      * is open, jump to Pose first (and out of actions mode) before delegating to the
      * shared pick logic — otherwise the click finds no pose sheet in the current graph
@@ -1238,7 +1238,7 @@ public class UIReplaysEditor extends UIElement
      */
     private void pickFormBone(Form form, String bone, boolean insert)
     {
-        if (form instanceof ModelForm && bone != null && !bone.isEmpty())
+        if (form instanceof PoseForm && bone != null && !bone.isEmpty())
         {
             if (this.allMode)
             {

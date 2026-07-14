@@ -50,6 +50,14 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         Form form = FormUtils.getForm(sheet.property);
         BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
+        for (Object object : sheet.channel.getKeyframes())
+        {
+            if (object instanceof Keyframe<?> poseKeyframe && poseKeyframe.getValue() instanceof Pose pose)
+            {
+                hierarchy.migratePose(pose);
+            }
+        }
+
         if (form instanceof ModelForm modelForm)
         {
             ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(modelForm)).getModel();

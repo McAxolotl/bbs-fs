@@ -42,6 +42,11 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
             MOB_IDS.add(key.getValue().toString());
         }
 
+        if (!MOB_IDS.contains("minecraft:player"))
+        {
+            MOB_IDS.add("minecraft:player");
+        }
+
         MOB_IDS.sort(Comparator.naturalOrder());
     }
 
