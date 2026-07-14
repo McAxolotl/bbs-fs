@@ -577,6 +577,7 @@ public class UIKeys
     public static final IKey FORMS_EDITOR_MODEL_PICK_TEXTURE = L10n.lang("bbs.ui.forms.editor.model.pick_texture");
     public static final IKey FORMS_EDITOR_PICK_FORM = L10n.lang("bbs.ui.forms.editor.pick_form");
     public static final IKey FORMS_EDITOR_SLIM = L10n.lang("bbs.ui.forms.editor.slim");
+    public static final IKey FORMS_EDITOR_WIDE = L10n.lang("bbs.ui.forms.editor.wide");
     public static final IKey FORMS_EDITOR_SLIM_TOOLTIP = L10n.lang("bbs.ui.forms.editor.slim-tooltip");
     public static final IKey FORMS_EDITOR_STATES_MANAGER_CONTEXT_ADD = L10n.lang("bbs.ui.forms.editor.states.manager.context.add");
     public static final IKey FORMS_EDITOR_STATES_MANAGER_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editor.states.manager.context.copy");

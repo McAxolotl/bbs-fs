@@ -5,6 +5,7 @@ import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -30,7 +31,8 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
     public UIButton pick;
     public UIColor color;
     public UIToggle action;
-    public UIToggle slim;
+    public UIButton slim;
+    public UISection nbtSection;
     public UITextarea<TextLine> mobNBT;
 
     static
@@ -68,9 +70,10 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         });
         this.color = new UIColor((c) -> this.form.color.set(new Color().set(c))).withAlpha();
         this.action = new UIToggle(UIKeys.FORMS_EDITORS_MOB_ACTION, (b) -> this.form.action.set(b.getValue()));
-        this.slim = new UIToggle(UIKeys.FORMS_EDITOR_SLIM, (b) ->
+        this.slim = new UIButton(UIKeys.FORMS_EDITOR_WIDE, (b) ->
         {
-            this.form.slim.set(b.getValue());
+            this.form.slim.set(!this.form.slim.get());
+            this.updateSlimButton();
             this.refreshPoseEditor();
         });
         this.slim.tooltip(UIKeys.FORMS_EDITOR_SLIM_TOOLTIP);
@@ -82,8 +85,11 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         });
         this.mobNBT.background().h(160);
         this.mobNBT.wrap();
+        this.nbtSection = new UISection(UIKeys.SELECTORS_NBT);
+        this.nbtSection.fields.add(this.mobNBT);
+        this.nbtSection.setExpanded(false);
 
-        this.options.add(this.pickMob, this.pick, this.color, this.action, this.slim, this.mobNBT, this.poseEditor);
+        this.options.add(this.pickMob, this.pick, this.color, this.action, this.nbtSection, this.poseEditor);
     }
 
     @Override
@@ -93,9 +99,24 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
 
         this.color.setColor(this.form.color.get().getARGBColor());
         this.action.setValue(this.form.action.get());
-        this.slim.setValue(this.form.slim.get());
         this.mobNBT.setText(this.form.mobNBT.get());
+        this.updateSlimButton();
+        this.slim.removeFromParent();
+        this.poseEditor.removeFromParent();
+
+        if (this.form.isPlayer())
+        {
+            this.options.add(this.slim);
+        }
+
+        this.options.add(this.poseEditor);
+        this.options.resize();
         this.refreshPoseEditor();
+    }
+
+    private void updateSlimButton()
+    {
+        this.slim.label = this.form.slim.get() ? UIKeys.FORMS_EDITOR_SLIM : UIKeys.FORMS_EDITOR_WIDE;
     }
 
     private void refreshPoseEditor()
