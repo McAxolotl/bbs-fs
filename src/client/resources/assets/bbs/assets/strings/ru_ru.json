@@ -186,6 +186,8 @@
 	"bbs.config.editor.seconds-comment": "Когда включено, то показывает секунды вместо тиков в редакоре камеры",
 	"bbs.config.editor.timeline_grid": "Сетка таймлайна",
 	"bbs.config.editor.timeline_grid-comment": "Когда включено, линии линейки таймлайна продлеваются по трекам на всю высоту, образуя вертикальную сетку",
+	"bbs.config.editor.keyframe_default_interpolation": "Интерполяция по умолчанию",
+	"bbs.config.editor.keyframe_default_interpolation-comment": "Интерполяция, присваиваемая кейфрейму, создаваемому вручную на пустом месте — там, где раньше применялась linear. Кейфреймы, создаваемые рядом с существующими, по-прежнему наследуют интерполяцию соседа. Записанные и запечённые кейфреймы не затрагиваются.",
 	"bbs.config.editor.snap_to_markers": "Привязка к тикам",
 	"bbs.config.editor.snap_to_markers-comment": "Когда включено, клипы будут также привязываться к маркерам тиков",
 	"bbs.config.editor.speed": "Скорость",

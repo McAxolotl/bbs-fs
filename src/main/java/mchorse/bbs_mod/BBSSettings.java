@@ -20,6 +20,8 @@ import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 
 public class BBSSettings {
@@ -140,6 +142,7 @@ public class BBSSettings {
 	public static ValueBoolean editorResizablePanels;
 	public static ValueInt editorTrackWidth;
 	public static ValueInt keyframeDefaultShape;
+	public static ValueString keyframeDefaultInterpolation;
 	public static ValueInt editorPreviewSizeMode;
 	public static ValueInt editorPreviewCustomWidth;
 	public static ValueInt editorPreviewCustomHeight;
@@ -374,6 +377,25 @@ public class BBSSettings {
 		return index >= 0 && index < values.length ? values[index] : KeyframeShape.SQUARE;
 	}
 
+	/**
+	 * The interpolation given to a hand-created keyframe when it has no neighbour to inherit
+	 * from (see {@code IUIKeyframeGraph#addKeyframeManually}) - i.e. the replacement for the
+	 * hardcoded linear that used to apply in that "empty spot" case. Keyframes that do inherit
+	 * from a neighbour keep the neighbour's interpolation, and recorded/baked keyframes never
+	 * consult this. Falls back to linear before settings are registered or on an unknown key.
+	 */
+	public static IInterp getDefaultKeyframeInterpolation()
+	{
+		if (keyframeDefaultInterpolation == null)
+		{
+			return Interpolations.LINEAR;
+		}
+
+		IInterp interp = Interpolations.MAP.get(keyframeDefaultInterpolation.get());
+
+		return interp == null ? Interpolations.LINEAR : interp;
+	}
+
 	public static boolean migrateLegacySettings(MapType root)
 	{
 		MapType appearance = root.getMap("appearance");
@@ -552,6 +574,7 @@ public class BBSSettings {
 		editorCrosshair = builder.getBoolean("crosshair", false);
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
+		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
 		editorPeriodicSave = builder.getInt("periodic_save", 60, 0, 3600);
 		editorHorizontalFlight = builder.getBoolean("horizontal_flight", false);
 		editorOrbitMovementRequiresFlight = builder.getBoolean("orbit_movement_requires_flight", true);
