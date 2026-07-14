@@ -71,7 +71,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     }
 
     @Override
-    public List<String> getBones()
+    public BoneHierarchy getBoneHierarchy()
     {
         this.ensureEntity();
 
@@ -79,10 +79,10 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
-            return VanillaRendererBones.discover(renderer).getBoneIds();
+            return VanillaRendererBones.discover(renderer).getBoneHierarchy();
         }
 
-        return super.getBones();
+        return super.getBoneHierarchy();
     }
 
     private void bindTexture()

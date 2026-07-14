@@ -4,8 +4,10 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
-import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -45,22 +47,23 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         UIKeyframeSheet sheet = editor.getGraph().getSheet(keyframe);
 
-        if (FormUtils.getForm(sheet.property) instanceof ModelForm modelForm)
+        Form form = FormUtils.getForm(sheet.property);
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+
+        if (form instanceof ModelForm modelForm)
         {
             ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(modelForm)).getModel();
 
             if (model != null)
             {
                 this.poseEditor.setPose(keyframe.getValue(), model.getPoseGroup());
-                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones());
+                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones(), hierarchy);
             }
         }
-        else if (FormUtils.getForm(sheet.property) instanceof MobForm mobForm)
+        else if (form instanceof PoseForm)
         {
-            List<String> bones = FormUtilsClient.getRenderer(mobForm).getBones();
-
             this.poseEditor.setPose(keyframe.getValue(), "");
-            this.poseEditor.fillGroups(bones, false);
+            this.poseEditor.fillGroups(hierarchy, false);
         }
 
         this.scroll.add(this.poseEditor);

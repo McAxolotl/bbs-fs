@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.utils.pose;
 
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -233,12 +234,25 @@ public class UIPoseEditor extends UIElement
         this.fillInGroups(groups, reset, true);
     }
 
+    public void fillGroups(BoneHierarchy hierarchy, boolean reset)
+    {
+        this.model = null;
+        this.flippedParts = null;
+
+        this.fillInGroups(hierarchy, reset);
+    }
+
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
     {
         this.fillGroups(model, flippedParts, reset, null);
     }
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones)
+    {
+        this.fillGroups(model, flippedParts, reset, disabledBones, null);
+    }
+
+    public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones, BoneHierarchy hierarchy)
     {
         this.model = model;
         this.flippedParts = flippedParts;
@@ -249,10 +263,29 @@ public class UIPoseEditor extends UIElement
             return;
         }
 
+        if (hierarchy != null)
+        {
+            this.fillInGroups(hierarchy, reset);
+            return;
+        }
+
         List<String> bones = new ArrayList<>(model.getGroupKeysInHierarchyOrder());
 
         bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
         this.fillInGroups(bones, reset, false);
+    }
+
+    private void fillInGroups(BoneHierarchy hierarchy, boolean reset)
+    {
+        Map<String, String> labels = new LinkedHashMap<>();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            labels.put(bone.id(), "  ".repeat(bone.depth()) + bone.name());
+        }
+
+        this.groups.setSource(hierarchy.getBoneIds(), labels, false);
+        this.groups.filter(reset);
     }
 
     private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)

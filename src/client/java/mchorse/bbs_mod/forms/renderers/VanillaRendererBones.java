@@ -100,6 +100,7 @@ public final class VanillaRendererBones
         private final List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies;
         private final List<String> boneIds;
         private final Map<String, VanillaBoneHierarchy.Bone> bonesById;
+        private final BoneHierarchy boneHierarchy;
         private final long hierarchyRevision;
 
         private Discovery(List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies, long hierarchyRevision)
@@ -128,6 +129,24 @@ public final class VanillaRendererBones
             this.hierarchies = List.copyOf(hierarchiesByLayer.values());
             this.boneIds = Collections.unmodifiableList(boneIds);
             this.bonesById = Collections.unmodifiableMap(bonesById);
+
+            List<BoneHierarchy.Bone> hierarchyBones = new ArrayList<>();
+
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.hierarchies)
+            {
+                for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
+                {
+                    hierarchyBones.add(new BoneHierarchy.Bone(
+                        bone.getId(),
+                        bone.getName(),
+                        bone.getParentId(),
+                        bone.getDepth(),
+                        hierarchy.getLayerId()
+                    ));
+                }
+            }
+
+            this.boneHierarchy = new BoneHierarchy(hierarchyBones);
         }
 
         public List<String> getBoneIds()
@@ -138,6 +157,11 @@ public final class VanillaRendererBones
         public List<VanillaBoneHierarchy.Hierarchy> getHierarchies()
         {
             return this.hierarchies;
+        }
+
+        public BoneHierarchy getBoneHierarchy()
+        {
+            return this.boneHierarchy;
         }
 
         List<VanillaBoneHierarchy.Hierarchy> getRuntimeHierarchies()

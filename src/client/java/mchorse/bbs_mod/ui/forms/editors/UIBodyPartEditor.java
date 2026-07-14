@@ -5,6 +5,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
@@ -14,7 +15,11 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.pose.UIBoneHierarchyList;
 import mchorse.bbs_mod.utils.Pair;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class UIBodyPartEditor extends UIScrollView
 {
@@ -63,7 +68,7 @@ public class UIBodyPartEditor extends UIScrollView
             this.part.useTarget.set(b.getValue());
         });
 
-        this.bone = new UIStringList((l) -> this.part.bone.set(l.get(0)));
+        this.bone = new UIBoneHierarchyList((l) -> this.part.bone.set(l.get(0)));
         this.bone.background().h(UIConstants.LIST_ITEM_HEIGHT * 6);
 
         this.transform = new UIPropTransform().callbacks(() -> this.part.transform).barBackground();
@@ -84,8 +89,16 @@ public class UIBodyPartEditor extends UIScrollView
 
         this.useTarget.setValue(part.useTarget.get());
         this.bone.clear();
-        this.bone.add(FormUtilsClient.getBones(form));
-        this.bone.sort();
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+        Map<String, String> labels = new LinkedHashMap<>();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            labels.put(bone.id(), "  ".repeat(bone.depth()) + bone.name());
+        }
+
+        ((UIBoneHierarchyList) this.bone).setLabels(labels);
+        this.bone.add(hierarchy.getBoneIds());
         this.bone.setCurrentScroll(part.bone.get());
 
         if (!this.bone.getList().isEmpty())
