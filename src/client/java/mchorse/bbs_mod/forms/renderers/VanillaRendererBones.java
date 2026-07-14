@@ -97,20 +97,24 @@ public final class VanillaRendererBones
         private static final Discovery EMPTY = new Discovery(Collections.emptyList(), -1L);
 
         private final List<VanillaBoneHierarchy.Hierarchy> hierarchies;
+        private final List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies;
         private final List<String> boneIds;
         private final Map<String, VanillaBoneHierarchy.Bone> bonesById;
         private final long hierarchyRevision;
 
-        private Discovery(List<VanillaBoneHierarchy.Hierarchy> hierarchies, long hierarchyRevision)
+        private Discovery(List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies, long hierarchyRevision)
         {
-            this.hierarchies = List.copyOf(hierarchies);
+            this.runtimeHierarchies = List.copyOf(runtimeHierarchies);
             this.hierarchyRevision = hierarchyRevision;
 
             List<String> boneIds = new ArrayList<>();
             Map<String, VanillaBoneHierarchy.Bone> bonesById = new LinkedHashMap<>();
+            Map<String, VanillaBoneHierarchy.Hierarchy> hierarchiesByLayer = new LinkedHashMap<>();
 
-            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.hierarchies)
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.runtimeHierarchies)
             {
+                hierarchiesByLayer.putIfAbsent(hierarchy.getLayerId(), hierarchy);
+
                 for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
                 {
                     if (!bonesById.containsKey(bone.getId()))
@@ -121,6 +125,7 @@ public final class VanillaRendererBones
                 }
             }
 
+            this.hierarchies = List.copyOf(hierarchiesByLayer.values());
             this.boneIds = Collections.unmodifiableList(boneIds);
             this.bonesById = Collections.unmodifiableMap(bonesById);
         }
@@ -133,6 +138,11 @@ public final class VanillaRendererBones
         public List<VanillaBoneHierarchy.Hierarchy> getHierarchies()
         {
             return this.hierarchies;
+        }
+
+        List<VanillaBoneHierarchy.Hierarchy> getRuntimeHierarchies()
+        {
+            return this.runtimeHierarchies;
         }
 
         /**
@@ -169,6 +179,25 @@ public final class VanillaRendererBones
             return Optional.ofNullable(resolved);
         }
 
+        List<VanillaBoneHierarchy.Bone> resolveAll(String id)
+        {
+            VanillaBoneHierarchy.Bone resolved = this.resolve(id).orElse(null);
+
+            if (resolved == null)
+            {
+                return Collections.emptyList();
+            }
+
+            List<VanillaBoneHierarchy.Bone> bones = new ArrayList<>();
+
+            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.runtimeHierarchies)
+            {
+                hierarchy.resolve(resolved.getId()).ifPresent(bones::add);
+            }
+
+            return bones;
+        }
+
         /**
          * Produces mapping-independent lines suitable for comparing dev and remapped clients.
          */
@@ -192,7 +221,8 @@ public final class VanillaRendererBones
     private static final class Scanner
     {
         private final IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
-        private final Map<String, VanillaBoneHierarchy.Hierarchy> hierarchies = new TreeMap<>();
+        private final IdentityHashMap<VanillaBoneHierarchy.Hierarchy, Boolean> visitedHierarchies = new IdentityHashMap<>();
+        private final Map<String, List<VanillaBoneHierarchy.Hierarchy>> hierarchies = new TreeMap<>();
 
         private void scanFields(Object owner)
         {
@@ -230,7 +260,12 @@ public final class VanillaRendererBones
             if (value instanceof ModelPart part)
             {
                 VanillaBoneHierarchy.getHierarchy(part).ifPresent((hierarchy) ->
-                    this.hierarchies.putIfAbsent(hierarchy.getLayerId(), hierarchy));
+                {
+                    if (this.visitedHierarchies.put(hierarchy, Boolean.TRUE) == null)
+                    {
+                        this.hierarchies.computeIfAbsent(hierarchy.getLayerId(), (key) -> new ArrayList<>()).add(hierarchy);
+                    }
+                });
 
                 return;
             }
@@ -315,7 +350,14 @@ public final class VanillaRendererBones
 
         private Discovery createDiscovery(long hierarchyRevision)
         {
-            return new Discovery(new ArrayList<>(this.hierarchies.values()), hierarchyRevision);
+            List<VanillaBoneHierarchy.Hierarchy> runtimeHierarchies = new ArrayList<>();
+
+            for (List<VanillaBoneHierarchy.Hierarchy> layerHierarchies : this.hierarchies.values())
+            {
+                runtimeHierarchies.addAll(layerHierarchies);
+            }
+
+            return new Discovery(runtimeHierarchies, hierarchyRevision);
         }
 
         private static boolean isSupportedFieldType(Class<?> type)

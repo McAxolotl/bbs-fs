@@ -1,12 +1,16 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.model.ModelPart;
 import org.joml.Matrix4f;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,24 +27,30 @@ public final class MobRenderContext implements AutoCloseable
     private static final ThreadLocal<MobRenderContext> CURRENT = new ThreadLocal<>();
 
     private final MobRenderContext previous;
+    private final List<VanillaBoneHierarchy.Hierarchy> hierarchies;
     private final IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> bones;
     private final IdentityHashMap<ModelPart, PoseTransform> transforms;
     private final IdentityHashMap<ModelPart, Matrix4f> origins = new IdentityHashMap<>();
     private final IdentityHashMap<ModelPart, Integer> pickingOffsets = new IdentityHashMap<>();
+    private final Map<String, Integer> pickingIds = new HashMap<>();
+    private final Deque<ModelPart> renderingParts = new ArrayDeque<>();
     private final MatrixCache matrices = new MatrixCache();
     private final List<String> pickedBoneIds = new ArrayList<>();
+    private final Color color;
     private final Matrix4f inverseBase;
     private final boolean picking;
     private final boolean incrementPicking;
     private boolean closed;
 
-    private MobRenderContext(Object renderer, Pose pose, Pose overlay, Matrix4f base, boolean picking, boolean incrementPicking)
+    private MobRenderContext(Object renderer, Pose pose, Pose overlay, Color color, Matrix4f base, boolean picking, boolean incrementPicking)
     {
         this.previous = CURRENT.get();
         VanillaRendererBones.Discovery discovery = VanillaRendererBones.discover(renderer);
 
-        this.bones = resolveBones(discovery);
+        this.hierarchies = discovery.getRuntimeHierarchies();
+        this.bones = resolveBones(this.hierarchies);
         this.transforms = resolveTransforms(discovery, mergePose(pose, overlay));
+        this.color = color == null ? Color.white() : color.copy();
         this.inverseBase = base == null || Math.abs(base.determinant()) < 1.0E-8F
             ? null
             : new Matrix4f(base).invert();
@@ -52,12 +62,17 @@ public final class MobRenderContext implements AutoCloseable
 
     public static MobRenderContext push(Object renderer, Pose pose, Pose overlay)
     {
-        return new MobRenderContext(renderer, pose, overlay, null, false, false);
+        return push(renderer, pose, overlay, Color.white());
     }
 
-    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Matrix4f base, boolean picking, boolean incrementPicking)
+    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Color color)
     {
-        return new MobRenderContext(renderer, pose, overlay, base, picking, incrementPicking);
+        return new MobRenderContext(renderer, pose, overlay, color, null, false, false);
+    }
+
+    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Color color, Matrix4f base, boolean picking, boolean incrementPicking)
+    {
+        return new MobRenderContext(renderer, pose, overlay, color, base, picking, incrementPicking);
     }
 
     public static PoseTransform getTransform(ModelPart part)
@@ -67,6 +82,25 @@ public final class MobRenderContext implements AutoCloseable
         return context == null ? null : context.transforms.get(part);
     }
 
+    public static Color getColor(ModelPart part)
+    {
+        MobRenderContext context = CURRENT.get();
+
+        if (context == null)
+        {
+            return null;
+        }
+
+        if (context.bones.containsKey(part))
+        {
+            return context.color;
+        }
+
+        VanillaBoneHierarchy.Hierarchy hierarchy = VanillaBoneHierarchy.getHierarchy(part).orElse(null);
+
+        return hierarchy == null || !context.hierarchies.contains(hierarchy) ? null : context.color;
+    }
+
     public static boolean isTracked(ModelPart part)
     {
         MobRenderContext context = CURRENT.get();
@@ -74,11 +108,31 @@ public final class MobRenderContext implements AutoCloseable
         return context != null && context.bones.containsKey(part);
     }
 
+    public static void beginPartRender(ModelPart part)
+    {
+        MobRenderContext context = CURRENT.get();
+
+        if (context != null)
+        {
+            context.renderingParts.push(part);
+        }
+    }
+
+    public static void endPartRender(ModelPart part)
+    {
+        MobRenderContext context = CURRENT.get();
+
+        if (context != null && !context.renderingParts.isEmpty() && context.renderingParts.peek() == part)
+        {
+            context.renderingParts.pop();
+        }
+    }
+
     public static void captureOrigin(ModelPart part, Matrix4f matrix)
     {
         MobRenderContext context = CURRENT.get();
 
-        if (context != null && context.inverseBase != null && context.bones.containsKey(part))
+        if (context != null && context.inverseBase != null && context.isRendering(part) && context.bones.containsKey(part))
         {
             context.origins.put(part, context.toLocal(matrix));
         }
@@ -88,7 +142,7 @@ public final class MobRenderContext implements AutoCloseable
     {
         MobRenderContext context = CURRENT.get();
 
-        if (context == null || context.inverseBase == null)
+        if (context == null || context.inverseBase == null || !context.isRendering(part))
         {
             return;
         }
@@ -98,7 +152,10 @@ public final class MobRenderContext implements AutoCloseable
 
         if (bone != null && origin != null)
         {
-            context.matrices.put(bone.getId(), context.toLocal(matrix), origin);
+            if (!context.matrices.has(bone.getId()))
+            {
+                context.matrices.put(bone.getId(), context.toLocal(matrix), origin);
+            }
         }
     }
 
@@ -131,9 +188,16 @@ public final class MobRenderContext implements AutoCloseable
 
         if (offset == null)
         {
-            offset = context.pickedBoneIds.size() + 1;
+            offset = context.pickingIds.get(bone.getId());
+
+            if (offset == null)
+            {
+                offset = context.pickedBoneIds.size() + 1;
+                context.pickingIds.put(bone.getId(), offset);
+                context.pickedBoneIds.add(bone.getId());
+            }
+
             context.pickingOffsets.put(part, offset);
-            context.pickedBoneIds.add(bone.getId());
         }
 
         return offset;
@@ -152,6 +216,11 @@ public final class MobRenderContext implements AutoCloseable
     private Matrix4f toLocal(Matrix4f matrix)
     {
         return new Matrix4f(this.inverseBase).mul(matrix);
+    }
+
+    private boolean isRendering(ModelPart part)
+    {
+        return !this.renderingParts.isEmpty() && this.renderingParts.peek() == part;
     }
 
     private static Pose mergePose(Pose pose, Pose overlay)
@@ -182,11 +251,11 @@ public final class MobRenderContext implements AutoCloseable
         return result;
     }
 
-    private static IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> resolveBones(VanillaRendererBones.Discovery discovery)
+    private static IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> resolveBones(List<VanillaBoneHierarchy.Hierarchy> hierarchies)
     {
         IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> bones = new IdentityHashMap<>();
 
-        for (VanillaBoneHierarchy.Hierarchy hierarchy : discovery.getHierarchies())
+        for (VanillaBoneHierarchy.Hierarchy hierarchy : hierarchies)
         {
             for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
             {
@@ -208,13 +277,14 @@ public final class MobRenderContext implements AutoCloseable
 
         for (Map.Entry<String, PoseTransform> entry : pose.transforms.entrySet())
         {
-            ModelPart part = discovery.resolve(entry.getKey())
-                .map(VanillaBoneHierarchy.Bone::getPart)
-                .orElse(null);
-
-            if (part != null)
+            for (VanillaBoneHierarchy.Bone bone : discovery.resolveAll(entry.getKey()))
             {
-                transforms.put(part, entry.getValue());
+                ModelPart part = bone.getPart();
+
+                if (part != null)
+                {
+                    transforms.put(part, entry.getValue());
+                }
             }
         }
 

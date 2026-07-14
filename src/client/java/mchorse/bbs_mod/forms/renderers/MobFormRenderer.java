@@ -12,6 +12,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
@@ -22,6 +23,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.OtherClientPlayerEntity;
@@ -60,6 +62,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     private float prevPitch;
     private MatrixCache bones = new MatrixCache();
     private List<String> pickedBoneIds = List.of();
+    private boolean animationInitialized;
+    private boolean animationPlaying = true;
 
     public MobFormRenderer(MobForm form)
     {
@@ -105,6 +109,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.entity = null;
             this.bones.clear();
             this.pickedBoneIds = List.of();
+            this.animationInitialized = false;
+            this.animationPlaying = this.form.action.get();
+            this.prevHandSwing = 0F;
         }
 
         if (this.entity != null)
@@ -141,6 +148,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         this.ensureEntity();
+        this.animationPlaying = this.form.action.get();
 
         if (this.entity != null)
         {
@@ -183,9 +191,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             consumers.setUI(true);
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
-            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get()))
+            float transition = this.animationPlaying ? context.getTransition() : 0F;
+
+            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get(), this.getColor(0xffffffff)))
             {
-                MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
+                MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
             }
 
             consumers.draw();
@@ -203,6 +213,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void render3D(FormRenderingContext context)
     {
         this.ensureEntity();
+        this.animationPlaying = this.form.action.get();
         this.bones.clear();
         this.pickedBoneIds = List.of();
 
@@ -279,6 +290,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 renderer,
                 this.form.pose.get(),
                 this.form.poseOverlay.get(),
+                this.getColor(context.color),
                 captureBase,
                 context.isPicking(),
                 incrementPicking
@@ -286,7 +298,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             try (mobContext)
             {
-                MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
+                float transition = this.animationPlaying ? context.getTransition() : 0F;
+
+                MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, context.stack, consumers, light);
             }
 
             this.bones = mobContext.getMatrices();
@@ -305,6 +319,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             RenderSystem.enableDepthTest();
             RenderSystem.getModelViewMatrix().identity();
         }
+    }
+
+    private Color getColor(int contextColor)
+    {
+        Color color = new Color().set(contextColor, true);
+
+        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+
+        return color;
     }
 
     @Override
@@ -426,7 +449,19 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            this.entity.tick();
+            float limbPos = 0F;
+            float limbSpeed = 0F;
+
+            if (this.entity instanceof LivingEntity livingEntity && livingEntity.limbAnimator instanceof LimbAnimatorAccessor accessor)
+            {
+                limbPos = accessor.getPos();
+                limbSpeed = accessor.getSpeed();
+            }
+
+            if (this.animationPlaying)
+            {
+                this.entity.tick();
+            }
 
             this.entity.prevPitch = this.prevPitch;
             this.entity.prevYaw = 0F;
@@ -439,20 +474,29 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 /* Limb swing is so ugly */
                 if (livingEntity.limbAnimator instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
                 {
-                    a.setPrevSpeed(b.getPrevSpeed());
-                    a.setSpeed(b.getSpeed());
-                    a.setPos(b.getPos());
+                    if (!this.animationInitialized)
+                    {
+                        a.setPrevSpeed(b.getPrevSpeed());
+                        a.setSpeed(b.getSpeed());
+                        a.setPos(b.getPos());
+                    }
+                    else if (this.animationPlaying)
+                    {
+                        a.setPrevSpeed(limbSpeed);
+                        a.setSpeed(b.getSpeed());
+                        a.setPos(limbPos + b.getSpeed());
+                    }
                 }
 
                 /* Arm swing */
                 float handSwingProgress = entity.getHandSwingProgress(0F);
 
-                if (handSwingProgress < this.prevHandSwing)
+                if (this.animationPlaying && handSwingProgress < this.prevHandSwing)
                 {
                     this.prevHandSwing = 0;
                 }
 
-                if (handSwingProgress > 0 && this.prevHandSwing == 0)
+                if (this.animationPlaying && handSwingProgress > 0 && this.prevHandSwing == 0)
                 {
                     livingEntity.swingHand(Hand.MAIN_HAND);
                 }
@@ -476,7 +520,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.entity.equipStack(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
             this.entity.equipStack(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
             this.entity.equipStack(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
-            this.entity.age = entity.getAge();
+            if (!this.animationInitialized)
+            {
+                this.entity.age = entity.getAge();
+                this.animationInitialized = true;
+            }
             this.entity.noClip = true;
 
             this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();

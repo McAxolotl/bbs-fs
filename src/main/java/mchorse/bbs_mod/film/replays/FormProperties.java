@@ -301,11 +301,25 @@ public class FormProperties extends ValueGroup
 
         for (KeyframeChannel value : this.properties.values())
         {
+            PerLimbService.PoseBonePath poseBonePath = PerLimbService.parsePoseBonePath(value.getId());
+
+            if (poseBonePath != null)
+            {
+                Form targetForm = FormUtils.getForm(form, poseBonePath.formPath());
+
+                if (targetForm instanceof PoseForm poseForm)
+                {
+                    poseForm.getPose().setRuntimeValue(null);
+                }
+
+                continue;
+            }
+
             BaseValueBasic property = FormUtils.getProperty(form, value.getId());
 
             if (property == null)
             {
-                return;
+                continue;
             }
 
             property.setRuntimeValue(null);

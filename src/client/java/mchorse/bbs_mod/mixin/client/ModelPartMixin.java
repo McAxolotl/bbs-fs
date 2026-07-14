@@ -2,11 +2,13 @@ package mchorse.bbs_mod.mixin.client;
 
 import mchorse.bbs_mod.forms.renderers.MobRenderContext;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.model.ModelTransform;
 import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,6 +21,24 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 @Mixin(ModelPart.class)
 public abstract class ModelPartMixin
 {
+    @Inject(
+        method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
+        at = @At("HEAD")
+    )
+    private void bbs$beginMobPartRender(MatrixStack matrices, VertexConsumer vertices, int light, int overlay, float red, float green, float blue, float alpha, CallbackInfo info)
+    {
+        MobRenderContext.beginPartRender((ModelPart) (Object) this);
+    }
+
+    @Inject(
+        method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
+        at = @At("RETURN")
+    )
+    private void bbs$endMobPartRender(MatrixStack matrices, VertexConsumer vertices, int light, int overlay, float red, float green, float blue, float alpha, CallbackInfo info)
+    {
+        MobRenderContext.endPartRender((ModelPart) (Object) this);
+    }
+
     @Inject(
         method = "rotate(Lnet/minecraft/client/util/math/MatrixStack;)V",
         at = @At("HEAD"),
@@ -106,6 +126,7 @@ public abstract class ModelPartMixin
     {
         ModelPart part = (ModelPart) (Object) this;
         PoseTransform transform = MobRenderContext.getTransform(part);
+        Color color = MobRenderContext.getColor(part);
         int pickingOffset = MobRenderContext.getPickingOffset(part);
 
         if (pickingOffset >= 0)
@@ -113,12 +134,12 @@ public abstract class ModelPartMixin
             args.set(2, pickingOffset);
         }
 
-        if (transform == null)
+        if (transform == null && color == null)
         {
             return;
         }
 
-        if (pickingOffset < 0)
+        if (pickingOffset < 0 && transform != null)
         {
             int light = args.get(2);
             int u = light & '\uffff';
@@ -129,9 +150,22 @@ public abstract class ModelPartMixin
             args.set(2, u | v << 16);
         }
 
-        args.set(4, (float) args.get(4) * transform.color.r);
-        args.set(5, (float) args.get(5) * transform.color.g);
-        args.set(6, (float) args.get(6) * transform.color.b);
-        args.set(7, (float) args.get(7) * transform.color.a);
+        float r = color == null ? 1F : color.r;
+        float g = color == null ? 1F : color.g;
+        float b = color == null ? 1F : color.b;
+        float a = color == null ? 1F : color.a;
+
+        if (transform != null)
+        {
+            r *= transform.color.r;
+            g *= transform.color.g;
+            b *= transform.color.b;
+            a *= transform.color.a;
+        }
+
+        args.set(4, (float) args.get(4) * r);
+        args.set(5, (float) args.get(5) * g);
+        args.set(6, (float) args.get(6) * b);
+        args.set(7, (float) args.get(7) * a);
     }
 }

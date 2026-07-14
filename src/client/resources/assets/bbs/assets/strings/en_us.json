@@ -835,6 +835,7 @@
 	"bbs.ui.forms.editors.label.shadow_offset": "Shadow offset",
 	"bbs.ui.forms.editors.label.title": "Label options",
 	"bbs.ui.forms.editors.mob.title": "Mob",
+	"bbs.ui.forms.editors.mob.action": "Play vanilla animation",
 	"bbs.ui.forms.editors.model.actions": "Actions",
 	"bbs.ui.forms.editors.model.ik": "IK Chains",
 	"bbs.ui.forms.editors.model.ik.debug": "Show debug overlay",
