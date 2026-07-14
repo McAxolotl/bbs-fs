@@ -100,6 +100,7 @@ public class BBSSettings {
 	public static ValueInt videoFrameRate;
 	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
+	public static ValueString videoExportFilenameFormat;
 	public static ValueBoolean videoExportAudio;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
@@ -551,6 +552,7 @@ public class BBSSettings {
 		videoFrameRate = builder.getInt("frame_rate", 60, 10, 1000);
 		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
+		videoExportFilenameFormat = builder.getString("filename_format", "{datetime}");
 		videoExportAudio = builder.getBoolean("audio", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);

@@ -271,6 +271,8 @@
 	"bbs.config.video.limit_frame_rate-comment": "When enabled, recording is throttled so it never renders faster than the frame rate above in real time. Use it on powerful machines where recording otherwise runs too fast (e.g. when capturing live or with audio).",
 	"bbs.config.video.export_path": "Export path",
 	"bbs.config.video.export_path-comment": "Folder where exported videos will be saved. If empty, the default export folder is used.",
+	"bbs.config.video.filename_format": "Filename format",
+	"bbs.config.video.filename_format-comment": "File name template for the exported video. Words in curly braces are substituted:\n{name} - film name,\n{date} - date,\n{time} - time,\n{datetime} - date and time,\n{width} - width,\n{height} - height,\n{fps} - fps,\n{duration} - length in seconds",
 	"bbs.config.video.audio": "Export audio",
 	"bbs.config.video.audio-comment": "This option exports audio clips as audio and then pieces it together with the recorded video (no Minecraft sounds)",
 	"bbs.config.video.mute_audio_while_render": "Mute film audio while rendering",
