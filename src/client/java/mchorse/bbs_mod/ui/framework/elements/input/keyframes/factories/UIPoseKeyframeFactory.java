@@ -65,13 +65,13 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             if (model != null)
             {
                 this.poseEditor.setPose(keyframe.getValue(), model.getPoseGroup());
-                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones(), hierarchy);
+                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones(), hierarchy, false);
             }
         }
         else if (form instanceof PoseForm)
         {
             this.poseEditor.setPose(keyframe.getValue(), "");
-            this.poseEditor.fillGroups(hierarchy, false);
+            this.poseEditor.fillGroups(hierarchy, false, false);
         }
 
         this.scroll.add(this.poseEditor);

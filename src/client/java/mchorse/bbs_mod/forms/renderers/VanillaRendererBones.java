@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import mchorse.bbs_mod.mixin.client.LivingEntityRendererAccessor;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.feature.FeatureRenderer;
 import net.minecraft.client.render.entity.model.CompositeEntityModel;
 import net.minecraft.client.render.entity.model.SinglePartEntityModel;
@@ -16,11 +17,13 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -56,6 +59,11 @@ public final class VanillaRendererBones
         if (discovery == null || discovery.hierarchyRevision != hierarchyRevision)
         {
             Scanner scanner = new Scanner();
+
+            if (renderer instanceof LivingEntityRenderer<?, ?> livingRenderer)
+            {
+                scanner.scan(livingRenderer.getModel(), false, true);
+            }
 
             scanner.scanFields(renderer, true);
 
@@ -101,6 +109,7 @@ public final class VanillaRendererBones
         private final List<VanillaBoneHierarchy.Hierarchy> legacyHierarchies;
         private final List<String> boneIds;
         private final Map<String, VanillaBoneHierarchy.Bone> bonesById;
+        private final Map<String, String> aliases;
         private final BoneHierarchy boneHierarchy;
         private final long hierarchyRevision;
 
@@ -114,6 +123,7 @@ public final class VanillaRendererBones
             Map<String, VanillaBoneHierarchy.Bone> bonesById = new LinkedHashMap<>();
             Map<String, VanillaBoneHierarchy.Hierarchy> hierarchiesByLayer = new LinkedHashMap<>();
             Map<String, String> aliases = new LinkedHashMap<>();
+            Set<String> ambiguousAliases = new HashSet<>();
 
             for (VanillaBoneHierarchy.Hierarchy hierarchy : this.runtimeHierarchies)
             {
@@ -155,12 +165,13 @@ public final class VanillaRendererBones
                 {
                     String path = bone.getId().substring(hierarchy.getLayerId().length() + 1);
 
-                    addAlias(hierarchy, bone, path, aliases);
-                    addAlias(hierarchy, bone, bone.getName(), aliases);
-                    addAlias(hierarchy, bone, VanillaBoneHierarchy.toCamelCase(bone.getName()), aliases);
+                    addAlias(hierarchy, bone, path, aliases, ambiguousAliases);
+                    addAlias(hierarchy, bone, bone.getName(), aliases, ambiguousAliases);
+                    addAlias(hierarchy, bone, VanillaBoneHierarchy.toCamelCase(bone.getName()), aliases, ambiguousAliases);
                 }
             }
 
+            this.aliases = Collections.unmodifiableMap(aliases);
             this.boneHierarchy = new BoneHierarchy(hierarchyBones, aliases);
         }
 
@@ -185,7 +196,7 @@ public final class VanillaRendererBones
         }
 
         /**
-         * Resolves a stable ID or a relative/legacy name, preferring the main renderer model.
+         * Resolves a stable ID or an unambiguous relative/legacy name across all model layers.
          */
         public Optional<VanillaBoneHierarchy.Bone> resolve(String id)
         {
@@ -196,17 +207,7 @@ public final class VanillaRendererBones
                 return Optional.of(exact);
             }
 
-            for (VanillaBoneHierarchy.Hierarchy hierarchy : this.legacyHierarchies)
-            {
-                Optional<VanillaBoneHierarchy.Bone> candidate = hierarchy.resolve(id);
-
-                if (candidate.isPresent())
-                {
-                    return candidate;
-                }
-            }
-
-            return Optional.empty();
+            return Optional.ofNullable(this.bonesById.get(this.aliases.get(id)));
         }
 
         List<VanillaBoneHierarchy.Bone> resolveAll(String id)
@@ -247,11 +248,25 @@ public final class VanillaRendererBones
             return Collections.unmodifiableList(lines);
         }
 
-        private static void addAlias(VanillaBoneHierarchy.Hierarchy hierarchy, VanillaBoneHierarchy.Bone bone, String alias, Map<String, String> aliases)
+        private static void addAlias(
+            VanillaBoneHierarchy.Hierarchy hierarchy,
+            VanillaBoneHierarchy.Bone bone,
+            String alias,
+            Map<String, String> aliases,
+            Set<String> ambiguousAliases
+        )
         {
-            if (!alias.equals(bone.getId()) && hierarchy.resolve(alias).orElse(null) == bone)
+            if (alias.equals(bone.getId()) || hierarchy.resolve(alias).orElse(null) != bone || ambiguousAliases.contains(alias))
             {
-                aliases.putIfAbsent(alias, bone.getId());
+                return;
+            }
+
+            String previous = aliases.putIfAbsent(alias, bone.getId());
+
+            if (previous != null && !previous.equals(bone.getId()))
+            {
+                aliases.remove(alias);
+                ambiguousAliases.add(alias);
             }
         }
     }
@@ -271,7 +286,7 @@ public final class VanillaRendererBones
             {
                 for (Field field : type.getDeclaredFields())
                 {
-                    if (Modifier.isStatic(field.getModifiers()) || !isSupportedFieldType(field.getType()))
+                    if (Modifier.isStatic(field.getModifiers()))
                     {
                         continue;
                     }
@@ -419,15 +434,6 @@ public final class VanillaRendererBones
             }
 
             return new Discovery(runtimeHierarchies, legacyHierarchies, hierarchyRevision);
-        }
-
-        private static boolean isSupportedFieldType(Class<?> type)
-        {
-            return Model.class.isAssignableFrom(type) ||
-                ModelPart.class.isAssignableFrom(type) ||
-                type.isArray() ||
-                Iterable.class.isAssignableFrom(type) ||
-                Map.class.isAssignableFrom(type);
         }
     }
 

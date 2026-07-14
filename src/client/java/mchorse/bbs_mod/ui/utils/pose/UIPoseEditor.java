@@ -246,12 +246,17 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(BoneHierarchy hierarchy, boolean reset)
     {
+        this.fillGroups(hierarchy, reset, true);
+    }
+
+    public void fillGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
+    {
         this.model = null;
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
         this.flippedParts = this.createHierarchyFlipMap(this.hierarchy);
 
         this.hierarchy.migratePose(this.pose);
-        this.fillInGroups(this.hierarchy, reset);
+        this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
     }
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
@@ -266,6 +271,18 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones, BoneHierarchy hierarchy)
     {
+        this.fillGroups(model, flippedParts, reset, disabledBones, hierarchy, true);
+    }
+
+    public void fillGroups(
+        IModel model,
+        Map<String, String> flippedParts,
+        boolean reset,
+        Collection<String> disabledBones,
+        BoneHierarchy hierarchy,
+        boolean hierarchicalLabels
+    )
+    {
         this.model = model;
         this.flippedParts = flippedParts;
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
@@ -273,7 +290,7 @@ public class UIPoseEditor extends UIElement
         if (!this.hierarchy.getBones().isEmpty())
         {
             this.hierarchy.migratePose(this.pose);
-            this.fillInGroups(this.hierarchy, reset);
+            this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
             return;
         }
 
@@ -289,13 +306,15 @@ public class UIPoseEditor extends UIElement
         this.fillInGroups(bones, reset, false);
     }
 
-    private void fillInGroups(BoneHierarchy hierarchy, boolean reset)
+    private void fillInGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
     {
         Map<String, String> labels = new LinkedHashMap<>();
 
         for (BoneHierarchy.Bone bone : hierarchy.getBones())
         {
-            labels.put(bone.id(), "  ".repeat(bone.depth()) + bone.name());
+            String indent = hierarchicalLabels ? "  ".repeat(bone.depth()) : "";
+
+            labels.put(bone.id(), indent + bone.name());
         }
 
         this.groups.setSource(hierarchy.getBoneIds(), labels, false);

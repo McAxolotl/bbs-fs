@@ -200,6 +200,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                     first.bool = true;
                 }
+
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
             });
 
             consumers.setUI(true);
@@ -270,6 +273,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                         first.bool = true;
                     }
+
+                    RenderSystem.enableBlend();
+                    RenderSystem.defaultBlendFunc();
                 });
             }
 
@@ -513,15 +519,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            float limbPos = 0F;
-            float limbSpeed = 0F;
-
-            if (this.entity instanceof LivingEntity livingEntity && livingEntity.limbAnimator instanceof LimbAnimatorAccessor accessor)
-            {
-                limbPos = accessor.getPos();
-                limbSpeed = accessor.getSpeed();
-            }
-
             if (this.animationPlaying)
             {
                 this.entity.tick();
@@ -538,17 +535,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 /* Limb swing is so ugly */
                 if (livingEntity.limbAnimator instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
                 {
-                    if (!this.animationInitialized)
+                    if (!this.animationInitialized || this.animationPlaying)
                     {
                         a.setPrevSpeed(b.getPrevSpeed());
                         a.setSpeed(b.getSpeed());
                         a.setPos(b.getPos());
-                    }
-                    else if (this.animationPlaying)
-                    {
-                        a.setPrevSpeed(limbSpeed);
-                        a.setSpeed(b.getSpeed());
-                        a.setPos(limbPos + b.getSpeed());
                     }
                 }
 
@@ -584,7 +575,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.entity.equipStack(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
             this.entity.equipStack(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
             this.entity.equipStack(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
-            if (!this.animationInitialized)
+            if (!this.animationInitialized || this.animationPlaying)
             {
                 this.entity.age = entity.getAge();
                 this.animationInitialized = true;
