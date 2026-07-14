@@ -7,9 +7,7 @@ import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.model.ModelPart;
 import org.joml.Matrix4f;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -33,7 +31,6 @@ public final class MobRenderContext implements AutoCloseable
     private final IdentityHashMap<ModelPart, Matrix4f> origins = new IdentityHashMap<>();
     private final IdentityHashMap<ModelPart, Integer> pickingOffsets = new IdentityHashMap<>();
     private final Map<String, Integer> pickingIds = new HashMap<>();
-    private final Deque<ModelPart> renderingParts = new ArrayDeque<>();
     private final MatrixCache matrices = new MatrixCache();
     private final List<String> pickedBoneIds = new ArrayList<>();
     private final Color color;
@@ -84,6 +81,11 @@ public final class MobRenderContext implements AutoCloseable
         return context == null ? null : context.transforms.get(part);
     }
 
+    public static boolean isActive()
+    {
+        return CURRENT.get() != null;
+    }
+
     public static Color getColor(ModelPart part)
     {
         MobRenderContext context = CURRENT.get();
@@ -110,31 +112,11 @@ public final class MobRenderContext implements AutoCloseable
         return context != null && context.bones.containsKey(part);
     }
 
-    public static void beginPartRender(ModelPart part)
-    {
-        MobRenderContext context = CURRENT.get();
-
-        if (context != null)
-        {
-            context.renderingParts.push(part);
-        }
-    }
-
-    public static void endPartRender(ModelPart part)
-    {
-        MobRenderContext context = CURRENT.get();
-
-        if (context != null && !context.renderingParts.isEmpty() && context.renderingParts.peek() == part)
-        {
-            context.renderingParts.pop();
-        }
-    }
-
     public static void captureOrigin(ModelPart part, Matrix4f matrix)
     {
         MobRenderContext context = CURRENT.get();
 
-        if (context != null && context.inverseBase != null && context.isRendering(part) && context.bones.containsKey(part))
+        if (context != null && context.inverseBase != null && context.bones.containsKey(part))
         {
             context.origins.put(part, context.toLocal(matrix));
         }
@@ -144,7 +126,7 @@ public final class MobRenderContext implements AutoCloseable
     {
         MobRenderContext context = CURRENT.get();
 
-        if (context == null || context.inverseBase == null || !context.isRendering(part))
+        if (context == null || context.inverseBase == null)
         {
             return;
         }
@@ -218,11 +200,6 @@ public final class MobRenderContext implements AutoCloseable
     private Matrix4f toLocal(Matrix4f matrix)
     {
         return new Matrix4f(this.inverseBase).mul(matrix);
-    }
-
-    private boolean isRendering(ModelPart part)
-    {
-        return !this.renderingParts.isEmpty() && this.renderingParts.peek() == part;
     }
 
     private static Pose mergePose(Pose pose, Pose overlay)

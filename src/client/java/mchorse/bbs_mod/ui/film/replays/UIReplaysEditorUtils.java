@@ -229,6 +229,7 @@ public class UIReplaysEditorUtils
         }
 
         Map<String, Integer> parentToColor = new HashMap<>();
+        Map<String, String> labels = hierarchy.getLabels(false);
         int[] hueIndex = {0};
 
         for (BoneHierarchy.Bone bone : hierarchy.getBones())
@@ -240,7 +241,8 @@ public class UIReplaysEditorUtils
 
             String path = FormUtils.getPath(form);
             String boneKey = PerLimbService.toPoseBoneKey(path, bone.id());
-            String title = path.isEmpty() ? bone.name() : path + "/" + bone.name();
+            String label = labels.getOrDefault(bone.id(), bone.name());
+            String title = path.isEmpty() ? label : path + "/" + label;
             KeyframeChannel channel = properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
             ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
 

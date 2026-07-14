@@ -18,9 +18,6 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIBoneHierarchyList;
 import mchorse.bbs_mod.utils.Pair;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 public class UIBodyPartEditor extends UIScrollView
 {
     public UIButton pick;
@@ -90,14 +87,8 @@ public class UIBodyPartEditor extends UIScrollView
         this.useTarget.setValue(part.useTarget.get());
         this.bone.clear();
         BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
-        Map<String, String> labels = new LinkedHashMap<>();
 
-        for (BoneHierarchy.Bone bone : hierarchy.getBones())
-        {
-            labels.put(bone.id(), "  ".repeat(bone.depth()) + bone.name());
-        }
-
-        ((UIBoneHierarchyList) this.bone).setLabels(labels);
+        ((UIBoneHierarchyList) this.bone).setLabels(hierarchy.getLabels(false));
         this.bone.add(hierarchy.getBoneIds());
         this.bone.setCurrentScroll(part.bone.get());
 

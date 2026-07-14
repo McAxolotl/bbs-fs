@@ -246,7 +246,7 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(BoneHierarchy hierarchy, boolean reset)
     {
-        this.fillGroups(hierarchy, reset, true);
+        this.fillGroups(hierarchy, reset, false);
     }
 
     public void fillGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
@@ -271,7 +271,7 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones, BoneHierarchy hierarchy)
     {
-        this.fillGroups(model, flippedParts, reset, disabledBones, hierarchy, true);
+        this.fillGroups(model, flippedParts, reset, disabledBones, hierarchy, false);
     }
 
     public void fillGroups(
@@ -308,16 +308,7 @@ public class UIPoseEditor extends UIElement
 
     private void fillInGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
     {
-        Map<String, String> labels = new LinkedHashMap<>();
-
-        for (BoneHierarchy.Bone bone : hierarchy.getBones())
-        {
-            String indent = hierarchicalLabels ? "  ".repeat(bone.depth()) : "";
-
-            labels.put(bone.id(), indent + bone.name());
-        }
-
-        this.groups.setSource(hierarchy.getBoneIds(), labels, false);
+        this.groups.setSource(hierarchy.getBoneIds(), hierarchy.getLabels(hierarchicalLabels), false);
         this.groups.filter(reset);
     }
 

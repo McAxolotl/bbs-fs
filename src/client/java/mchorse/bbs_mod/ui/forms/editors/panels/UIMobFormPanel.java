@@ -127,7 +127,7 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
 
     private void updateActionButton()
     {
-        this.action.label = this.form.action.get() ? UIKeys.FORMS_EDITORS_MOB_ACTION : UIKeys.FORMS_EDITORS_MOB_ACTION_NONE;
+        this.action.label = this.form.action.get() ? UIKeys.FORMS_EDITORS_MOB_ACTION : UIKeys.FORMS_EDITORS_MOB_ACTION_PAUSED;
     }
 
     private void updateSlimButton()

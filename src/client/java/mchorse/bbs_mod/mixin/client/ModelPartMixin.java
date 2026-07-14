@@ -15,30 +15,17 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
-@Mixin(ModelPart.class)
+/**
+ * Applies MobForm pose and appearance state to vanilla model parts. The lower priority makes the
+ * compatibility wrapper run before Iris' cancellable fast-render callback.
+ */
+@Mixin(value = ModelPart.class, priority = 500)
 public abstract class ModelPartMixin
 {
-    @Inject(
-        method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
-        at = @At("HEAD")
-    )
-    private void bbs$beginMobPartRender(MatrixStack matrices, VertexConsumer vertices, int light, int overlay, float red, float green, float blue, float alpha, CallbackInfo info)
-    {
-        MobRenderContext.beginPartRender((ModelPart) (Object) this);
-    }
-
-    @Inject(
-        method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
-        at = @At("RETURN")
-    )
-    private void bbs$endMobPartRender(MatrixStack matrices, VertexConsumer vertices, int light, int overlay, float red, float green, float blue, float alpha, CallbackInfo info)
-    {
-        MobRenderContext.endPartRender((ModelPart) (Object) this);
-    }
-
     @Inject(
         method = "rotate(Lnet/minecraft/client/util/math/MatrixStack;)V",
         at = @At("HEAD"),
@@ -115,6 +102,22 @@ public abstract class ModelPartMixin
         info.cancel();
     }
 
+    @ModifyVariable(
+        method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
+        at = @At("HEAD"),
+        argsOnly = true,
+        ordinal = 0
+    )
+    private VertexConsumer bbs$disableFastRendering(VertexConsumer vertices)
+    {
+        if (!MobRenderContext.isActive() || vertices instanceof DirectVertexConsumer)
+        {
+            return vertices;
+        }
+
+        return new DirectVertexConsumer(vertices);
+    }
+
     @ModifyArgs(
         method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V",
         at = @At(
@@ -167,5 +170,81 @@ public abstract class ModelPartMixin
         args.set(5, (float) args.get(5) * g);
         args.set(6, (float) args.get(6) * b);
         args.set(7, (float) args.get(7) * a);
+    }
+
+    private static final class DirectVertexConsumer implements VertexConsumer
+    {
+        private final VertexConsumer consumer;
+
+        private DirectVertexConsumer(VertexConsumer consumer)
+        {
+            this.consumer = consumer;
+        }
+
+        @Override
+        public VertexConsumer vertex(double x, double y, double z)
+        {
+            this.consumer.vertex(x, y, z);
+
+            return this;
+        }
+
+        @Override
+        public VertexConsumer color(int red, int green, int blue, int alpha)
+        {
+            this.consumer.color(red, green, blue, alpha);
+
+            return this;
+        }
+
+        @Override
+        public VertexConsumer texture(float u, float v)
+        {
+            this.consumer.texture(u, v);
+
+            return this;
+        }
+
+        @Override
+        public VertexConsumer overlay(int u, int v)
+        {
+            this.consumer.overlay(u, v);
+
+            return this;
+        }
+
+        @Override
+        public VertexConsumer light(int u, int v)
+        {
+            this.consumer.light(u, v);
+
+            return this;
+        }
+
+        @Override
+        public VertexConsumer normal(float x, float y, float z)
+        {
+            this.consumer.normal(x, y, z);
+
+            return this;
+        }
+
+        @Override
+        public void next()
+        {
+            this.consumer.next();
+        }
+
+        @Override
+        public void fixedColor(int red, int green, int blue, int alpha)
+        {
+            this.consumer.fixedColor(red, green, blue, alpha);
+        }
+
+        @Override
+        public void unfixColor()
+        {
+            this.consumer.unfixColor();
+        }
     }
 }

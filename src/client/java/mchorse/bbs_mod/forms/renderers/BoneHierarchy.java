@@ -5,6 +5,7 @@ import mchorse.bbs_mod.utils.pose.PoseTransform;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,54 @@ public final class BoneHierarchy
     public Bone getBone(String id)
     {
         return this.bonesById.get(id);
+    }
+
+    /**
+     * Builds readable labels while retaining stable IDs as list values. Repeated vanilla part
+     * names are qualified by model layer, and repeated names inside one layer also include their
+     * hierarchy path.
+     */
+    public Map<String, String> getLabels(boolean indent)
+    {
+        Map<String, Integer> names = new HashMap<>();
+        Map<String, Integer> layerNames = new HashMap<>();
+        Map<String, String> labels = new LinkedHashMap<>();
+
+        for (Bone bone : this.bones)
+        {
+            names.merge(bone.name(), 1, Integer::sum);
+            layerNames.merge(this.getLayerNameKey(bone), 1, Integer::sum);
+        }
+
+        for (Bone bone : this.bones)
+        {
+            String label = bone.name();
+
+            if (names.getOrDefault(bone.name(), 0) > 1)
+            {
+                String layer = getLayerName(bone.layerId());
+
+                if (layerNames.getOrDefault(this.getLayerNameKey(bone), 0) > 1)
+                {
+                    String path = this.getPath(bone);
+
+                    label += layer.isEmpty() ? " (" + path + ")" : " (" + layer + ": " + path + ")";
+                }
+                else if (!layer.isEmpty())
+                {
+                    label += " (" + layer + ")";
+                }
+            }
+
+            if (indent)
+            {
+                label = "  ".repeat(bone.depth()) + label;
+            }
+
+            labels.put(bone.id(), label);
+        }
+
+        return Collections.unmodifiableMap(labels);
     }
 
     /** Replaces legacy bone names with their stable IDs, preserving an existing stable-ID edit. */
@@ -158,6 +207,35 @@ public final class BoneHierarchy
     private static boolean sameParent(String a, String b)
     {
         return a == null ? b == null : a.equals(b);
+    }
+
+    private static String getLayerName(String layerId)
+    {
+        String name = layerId.startsWith("minecraft:") ? layerId.substring("minecraft:".length()) : layerId;
+
+        return name.replace("#", " / ").replace('_', ' ');
+    }
+
+    private String getLayerNameKey(Bone bone)
+    {
+        return bone.layerId() + '\u0000' + bone.name();
+    }
+
+    private String getPath(Bone bone)
+    {
+        StringBuilder path = new StringBuilder();
+
+        for (Bone ancestor : this.getAncestors(bone.id()))
+        {
+            if (!path.isEmpty())
+            {
+                path.append('/');
+            }
+
+            path.append(ancestor.name());
+        }
+
+        return path.toString();
     }
 
     public record Bone(String id, String name, String parentId, int depth, String layerId)
