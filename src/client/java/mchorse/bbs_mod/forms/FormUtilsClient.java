@@ -185,6 +185,19 @@ public class FormUtilsClient
         return renderer == null ? BoneHierarchy.EMPTY : renderer.getBoneHierarchy();
     }
 
+    public static String getBoneLabel(Form form, String bone)
+    {
+        if (bone == null || bone.isEmpty())
+        {
+            return "";
+        }
+
+        BoneHierarchy hierarchy = getBoneHierarchy(form);
+        String resolved = hierarchy.resolveId(bone);
+
+        return hierarchy.getLabels(false).getOrDefault(resolved, bone);
+    }
+
     public static interface IFormRendererFactory <T extends Form>
     {
         public FormRenderer<T> create(T form);

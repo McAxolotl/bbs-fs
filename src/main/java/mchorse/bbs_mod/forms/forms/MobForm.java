@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
@@ -15,7 +17,7 @@ public class MobForm extends Form implements PoseForm
 
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueColor color = new ValueColor("color", Color.white());
-    public final ValueBoolean action = new ValueBoolean("action", true);
+    public final ValueBoolean paused = new ValueBoolean("paused", false);
     public final ValueBoolean slim = new ValueBoolean("slim", false);
 
     public final ValuePose pose = new ValuePose("pose", new Pose());
@@ -34,7 +36,7 @@ public class MobForm extends Form implements PoseForm
         this.add(this.boneTracks);
         this.add(this.texture);
         this.add(this.color);
-        this.add(this.action);
+        this.add(this.paused);
         this.add(this.slim);
     }
 
@@ -54,6 +56,17 @@ public class MobForm extends Form implements PoseForm
     public ValueBoolean getBoneTracks()
     {
         return this.boneTracks;
+    }
+
+    @Override
+    public void fromData(BaseType data)
+    {
+        super.fromData(data);
+
+        if (data instanceof MapType map && !map.has("paused") && map.has("action"))
+        {
+            this.paused.set(!map.getBool("action", true));
+        }
     }
 
     @Override

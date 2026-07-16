@@ -466,6 +466,17 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                     return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
                 }
             ));
+            drag.setRotate2Axes(GizmoDrag.computeRotateAxes(
+                transform.getTransform(),
+                true,
+                () ->
+                {
+                    Matrix4f origin = this.getOriginMatrix(transition);
+
+                    return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+                }
+            ));
+            drag.setRotationOffset(this.isBodyPartGizmoMode() ? null : this.editor.getRotationOffset(transition));
         }
 
         return drag;

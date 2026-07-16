@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.StringUtils;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /** Shared selection, undo and gizmo behavior for form types with editable bone poses. */
 public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
@@ -65,7 +66,13 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
         return this.getOrigin(transition, this.bonePath(), true);
     }
 
-    private String bonePath()
+    @Override
+    public Vector3f getRotationOffset(float transition)
+    {
+        return this.getRotationOffset(transition, this.bonePath());
+    }
+
+    protected String bonePath()
     {
         return StringUtils.combinePaths(FormUtils.getPath(this.form), this.posePanel.poseEditor.groups.list.getCurrentFirst());
     }

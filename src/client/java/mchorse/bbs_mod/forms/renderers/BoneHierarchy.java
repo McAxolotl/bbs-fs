@@ -6,9 +6,11 @@ import mchorse.bbs_mod.utils.pose.PoseTransform;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A renderer-independent, string-only view of a form's editable bone hierarchy.
@@ -62,46 +64,48 @@ public final class BoneHierarchy
 
     public Bone getBone(String id)
     {
-        return this.bonesById.get(id);
+        String resolved = this.resolveId(id);
+
+        return resolved == null ? null : this.bonesById.get(resolved);
+    }
+
+    /** Resolves a stable ID or an unambiguous legacy alias without guessing. */
+    public String resolveId(String id)
+    {
+        if (id == null || id.isEmpty())
+        {
+            return null;
+        }
+
+        return this.bonesById.containsKey(id) ? id : this.aliases.get(id);
     }
 
     /**
-     * Builds readable labels while retaining stable IDs as list values. Repeated vanilla part
-     * names are qualified by model layer, and repeated names inside one layer also include their
-     * hierarchy path.
+     * Builds stable editor labels while retaining mapping-independent IDs as list values. Main
+     * model fields use lower camel case; feature model fields use a snake-case layer namespace and
+     * retain lower camel case for the Java-style field suffix (for example inner_armor_rightArm).
      */
     public Map<String, String> getLabels(boolean indent)
     {
-        Map<String, Integer> names = new HashMap<>();
-        Map<String, Integer> layerNames = new HashMap<>();
         Map<String, String> labels = new LinkedHashMap<>();
+        Map<String, Integer> suffixes = new HashMap<>();
+        Set<String> usedLabels = new HashSet<>();
 
         for (Bone bone : this.bones)
         {
-            names.merge(getDisplayName(bone), 1, Integer::sum);
-            layerNames.merge(this.getLayerNameKey(bone), 1, Integer::sum);
-        }
+            String label = getDisplayName(bone);
 
-        for (Bone bone : this.bones)
-        {
-            String name = getDisplayName(bone);
-            String label = name;
-
-            if (names.getOrDefault(name, 0) > 1)
+            if (usedLabels.contains(label))
             {
-                String layer = getLayerName(bone.layerId());
+                label = this.getQualifiedName(bone);
 
-                if (layerNames.getOrDefault(this.getLayerNameKey(bone), 0) > 1)
+                if (usedLabels.contains(label))
                 {
-                    String path = this.getPath(bone);
-
-                    label += layer.isEmpty() ? " (" + path + ")" : " (" + layer + ": " + path + ")";
-                }
-                else if (!layer.isEmpty())
-                {
-                    label += " (" + layer + ")";
+                    label = getLayerResource(bone.layerId()) + "_" + label;
                 }
             }
+
+            label = makeUnique(label, suffixes, usedLabels);
 
             if (indent)
             {
@@ -114,6 +118,28 @@ public final class BoneHierarchy
         return Collections.unmodifiableMap(labels);
     }
 
+    private static String makeUnique(String label, Map<String, Integer> suffixes, Set<String> usedLabels)
+    {
+        if (usedLabels.add(label))
+        {
+            return label;
+        }
+
+        int suffix = suffixes.getOrDefault(label, 2);
+        String candidate;
+
+        do
+        {
+            candidate = label + "_" + suffix;
+            suffix++;
+        }
+        while (!usedLabels.add(candidate));
+
+        suffixes.put(label, suffix);
+
+        return candidate;
+    }
+
     /** Replaces legacy bone names with their stable IDs, preserving an existing stable-ID edit. */
     public void migratePose(Pose pose)
     {
@@ -124,7 +150,7 @@ public final class BoneHierarchy
 
         for (String alias : new ArrayList<>(pose.transforms.keySet()))
         {
-            String id = this.aliases.get(alias);
+            String id = this.resolveId(alias);
 
             if (id == null || id.equals(alias))
             {
@@ -162,10 +188,14 @@ public final class BoneHierarchy
     /** Returns every descendant of the selected bone in hierarchy order, excluding itself. */
     public List<Bone> getDescendants(String id)
     {
-        if (this.getBone(id) == null)
+        Bone selected = this.getBone(id);
+
+        if (selected == null)
         {
             return Collections.emptyList();
         }
+
+        id = selected.id();
 
         List<Bone> descendants = new ArrayList<>();
 
@@ -210,42 +240,98 @@ public final class BoneHierarchy
         return a == null ? b == null : a.equals(b);
     }
 
-    private static String getLayerName(String layerId)
-    {
-        String name = layerId.startsWith("minecraft:") ? layerId.substring("minecraft:".length()) : layerId;
-
-        return name.replace("#", " / ").replace('_', ' ');
-    }
-
     private static String getDisplayName(Bone bone)
     {
-        return bone.layerId().isEmpty() ? bone.name() : VanillaBoneHierarchy.toCamelCase(bone.name());
+        if (bone.layerId().isEmpty())
+        {
+            return bone.name();
+        }
+
+        String namespace = getLayerNamespace(bone);
+        String name = VanillaBoneHierarchy.toCamelCase(bone.name());
+
+        return combineNamespace(namespace, name);
     }
 
-    private String getLayerNameKey(Bone bone)
+    private static String getLayerNamespace(Bone bone)
     {
-        return bone.layerId() + '\u0000' + getDisplayName(bone);
+        int separator = bone.layerId().indexOf('#');
+        String namespace = separator < 0 ? "" : bone.layerId().substring(separator + 1);
+
+        if (!namespace.equals("main"))
+        {
+            return namespace;
+        }
+
+        return bone.primary() ? "" : getLayerResource(bone.layerId());
     }
 
-    private String getPath(Bone bone)
+    private static String combineNamespace(String namespace, String name)
     {
-        StringBuilder path = new StringBuilder();
+        if (namespace.isEmpty())
+        {
+            return name;
+        }
+
+        return namespace.equals(name) || namespace.endsWith("_" + name) ? namespace : namespace + "_" + name;
+    }
+
+    private static String getLayerResource(String layerId)
+    {
+        int separator = layerId.indexOf('#');
+        String resource = separator < 0 ? layerId : layerId.substring(0, separator);
+
+        if (resource.startsWith("minecraft:"))
+        {
+            resource = resource.substring("minecraft:".length());
+        }
+
+        return resource.replace(':', '_').replace('/', '_');
+    }
+
+    private String getQualifiedName(Bone bone)
+    {
+        StringBuilder name = new StringBuilder();
+        String namespace = getLayerNamespace(bone);
+
+        if (!namespace.isEmpty())
+        {
+            name.append(namespace);
+        }
+
+        boolean first = true;
 
         for (Bone ancestor : this.getAncestors(bone.id()))
         {
-            if (!path.isEmpty())
+            String segment = ancestor.layerId().isEmpty()
+                ? ancestor.name()
+                : VanillaBoneHierarchy.toCamelCase(ancestor.name());
+
+            if (first && !name.isEmpty() && (name.toString().equals(segment) || name.toString().endsWith("_" + segment)))
             {
-                path.append('/');
+                first = false;
+                continue;
             }
 
-            path.append(getDisplayName(ancestor));
+            if (!name.isEmpty())
+            {
+                name.append('_');
+            }
+
+            name.append(segment);
+            first = false;
         }
 
-        return path.toString();
+        return name.toString();
     }
 
-    public record Bone(String id, String name, String parentId, int depth, String layerId)
+    public record Bone(String id, String name, String parentId, int depth, String layerId, boolean primary)
     {
+        public Bone(String id, String name, String parentId, int depth, String layerId)
+        {
+            this(id, name, parentId, depth, layerId, true);
+        }
+
         public Bone
         {
             name = name == null ? id : name;

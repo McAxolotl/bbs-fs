@@ -7,6 +7,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
@@ -29,8 +30,8 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
     public UIButton pickMob;
     public UIButton pick;
     public UIColor color;
-    public UIButton action;
-    public UIButton slim;
+    public UIToggle paused;
+    public UIToggle slim;
     public UISection nbtSection;
     public UITextarea<TextLine> mobNBT;
 
@@ -73,16 +74,10 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
             UITexturePicker.open(this.getContext(), link, (l) -> this.form.texture.set(l));
         });
         this.color = new UIColor((c) -> this.form.color.set(new Color().set(c))).withAlpha();
-        this.action = new UIButton(UIKeys.FORMS_EDITORS_MOB_ACTION, (b) ->
+        this.paused = new UIToggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_PAUSED, (b) -> this.form.paused.set(b.getValue()));
+        this.slim = new UIToggle(UIKeys.FORMS_EDITOR_SLIM, (b) ->
         {
-            this.form.action.set(!this.form.action.get());
-            this.updateActionButton();
-        });
-        this.action.tooltip(UIKeys.FORMS_EDITORS_MOB_ACTION_TOOLTIP);
-        this.slim = new UIButton(UIKeys.FORMS_EDITOR_WIDE, (b) ->
-        {
-            this.form.slim.set(!this.form.slim.get());
-            this.updateSlimButton();
+            this.form.slim.set(b.getValue());
             this.refreshPoseEditor();
         });
         this.slim.tooltip(UIKeys.FORMS_EDITOR_SLIM_TOOLTIP);
@@ -98,7 +93,7 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         this.nbtSection.fields.add(this.mobNBT);
         this.nbtSection.setExpanded(false);
 
-        this.options.add(this.pickMob, this.pick, this.color, this.action, this.poseEditor, this.nbtSection);
+        this.options.add(this.pickMob, this.pick, this.color, this.paused, this.poseEditor, this.nbtSection);
     }
 
     @Override
@@ -107,9 +102,9 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         super.startEdit(form);
 
         this.color.setColor(this.form.color.get().getARGBColor());
-        this.updateActionButton();
+        this.paused.setValue(this.form.paused.get());
         this.mobNBT.setText(this.form.mobNBT.get());
-        this.updateSlimButton();
+        this.slim.setValue(this.form.slim.get());
         this.slim.removeFromParent();
         this.poseEditor.removeFromParent();
         this.nbtSection.removeFromParent();
@@ -123,16 +118,6 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         this.options.add(this.nbtSection);
         this.options.resize();
         this.refreshPoseEditor();
-    }
-
-    private void updateActionButton()
-    {
-        this.action.label = this.form.action.get() ? UIKeys.FORMS_EDITORS_MOB_ACTION : UIKeys.FORMS_EDITORS_MOB_ACTION_PAUSED;
-    }
-
-    private void updateSlimButton()
-    {
-        this.slim.label = this.form.slim.get() ? UIKeys.FORMS_EDITOR_SLIM : UIKeys.FORMS_EDITOR_WIDE;
     }
 
     private void refreshPoseEditor()

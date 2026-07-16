@@ -782,6 +782,8 @@ public class UIReplaysEditorUtils
         };
 
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
+        drag.setRotationOffset(BaseFilmController.getGizmoBoneRotationOffset(entity, transition, bone.a));
         drag.setJacobian(GizmoDrag.computeTranslateJacobian(
             transform.getTransform(),
             () -> matrixSampler.get().getTranslation(new Vector3f())
@@ -841,6 +843,7 @@ public class UIReplaysEditorUtils
         };
 
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
         drag.setJacobian(GizmoDrag.computeTranslateJacobian(
             transform.getTransform(),
             () -> matrixSampler.get().getTranslation(new Vector3f())
@@ -961,15 +964,26 @@ public class UIReplaysEditorUtils
 
         if (sheet == null)
         {
-            /* Fallback: match by id ignoring case (stencil may return "head", sheet id may be "pose.bones.Head") */
+            /* Legacy IDs were occasionally written with different casing. Accept that form only
+             * when it resolves unambiguously; stable bone IDs are case-sensitive and two distinct
+             * model layers must never collapse to whichever sheet happens to be listed first. */
+            UIKeyframeSheet caseInsensitive = null;
+
             for (UIKeyframeSheet s : graph.getSheets())
             {
                 if (s.id != null && s.id.equalsIgnoreCase(boneKey))
                 {
-                    sheet = s;
-                    break;
+                    if (caseInsensitive != null)
+                    {
+                        caseInsensitive = null;
+                        break;
+                    }
+
+                    caseInsensitive = s;
                 }
             }
+
+            sheet = caseInsensitive;
         }
 
         if (sheet != null)
@@ -1376,9 +1390,11 @@ public class UIReplaysEditorUtils
 
             context.replaceContextMenu((menu) ->
             {
+                Map<String, String> labels = hierarchy.getLabels(false);
+
                 for (BoneHierarchy.Bone adjacent : hierarchy.getAdjacent(bone))
                 {
-                    menu.action(Icons.LIMB, IKey.constant(adjacent.name()), () -> consumer.accept(adjacent.id()));
+                    menu.action(Icons.LIMB, IKey.constant(labels.getOrDefault(adjacent.id(), adjacent.name())), () -> consumer.accept(adjacent.id()));
                 }
 
                 menu.autoKeys();
@@ -1404,9 +1420,11 @@ public class UIReplaysEditorUtils
 
             context.replaceContextMenu((menu) ->
             {
+                Map<String, String> labels = hierarchy.getLabels(false);
+
                 for (BoneHierarchy.Bone ancestor : hierarchy.getAncestors(bone))
                 {
-                    String label = "  ".repeat(ancestor.depth()) + ancestor.name();
+                    String label = "  ".repeat(ancestor.depth()) + labels.getOrDefault(ancestor.id(), ancestor.name());
 
                     menu.action(Icons.LIMB, IKey.constant(label), () -> consumer.accept(ancestor.id()));
                 }

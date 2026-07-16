@@ -66,6 +66,8 @@ public abstract class ModelPartMixin
             scaleZ = Lerps.lerp(scaleZ, 1F, transform.fix);
         }
 
+        MobRenderContext.captureRotationOffset(part, pitch, yaw, roll);
+
         if (transform != null)
         {
             pivotX += transform.translate.x;

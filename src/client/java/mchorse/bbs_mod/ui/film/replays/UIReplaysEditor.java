@@ -120,6 +120,8 @@ public class UIReplaysEditor extends UIElement
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
+    private final Map<String, Integer> keyToColor = new HashMap<>();
+    private final Map<String, String> keyToLabel = new HashMap<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
 
     public enum ReplayCategory
@@ -611,10 +613,16 @@ public class UIReplaysEditor extends UIElement
         this.collectPhysicsSheets(sheets);
 
         this.keys.clear();
+        this.keyToColor.clear();
+        this.keyToLabel.clear();
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            this.keys.add(getSheetFilterKey(sheet));
+            String filterKey = getSheetFilterKey(sheet);
+
+            this.keys.add(filterKey);
+            this.keyToColor.put(filterKey, sheet.color);
+            this.keyToLabel.put(filterKey, sheet.title.get());
         }
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
@@ -757,15 +765,11 @@ public class UIReplaysEditor extends UIElement
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () ->
                     {
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
-                        Map<String, Integer> keyToColor = new HashMap<>();
-                        for (UIKeyframeSheet filterSheet : this.keyframeEditor.view.getGraph().getSheets())
-                        {
-                            keyToColor.put(getSheetFilterKey(filterSheet), filterSheet.color);
-                        }
                         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
                                 disabledSet,
                                 this.keys,
-                                keyToColor
+                                this.keyToColor,
+                                this.keyToLabel
                         );
 
                         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);

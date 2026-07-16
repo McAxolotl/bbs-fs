@@ -190,6 +190,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         Set<String> disabled = this.form.disabledTracks.get();
         Set<String> keys = new LinkedHashSet<>();
         Map<String, Integer> keyToColor = new HashMap<>();
+        Map<String, String> keyToLabel = new HashMap<>();
 
         for (UIKeyframeSheet sheet : UIReplaysEditorUtils.collectFormTrackSheets(this.form))
         {
@@ -197,9 +198,10 @@ public class UIGeneralFormPanel extends UIFormPanel
 
             keys.add(key);
             keyToColor.put(key, sheet.color);
+            keyToLabel.put(key, sheet.title.get());
         }
 
-        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(disabled, keys, keyToColor);
+        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(disabled, keys, keyToColor, keyToLabel);
 
         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);
 

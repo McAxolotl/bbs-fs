@@ -1,11 +1,18 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.model.ModelTransform;
+import net.minecraft.client.render.block.entity.SkullBlockEntityModel;
+import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,15 +32,18 @@ public final class MobRenderContext implements AutoCloseable
     private static final ThreadLocal<MobRenderContext> CURRENT = new ThreadLocal<>();
 
     private final MobRenderContext previous;
+    private final VanillaRendererBones.Discovery discovery;
     private final List<VanillaBoneHierarchy.Hierarchy> hierarchies;
     private final IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> bones;
     private final IdentityHashMap<ModelPart, PoseTransform> transforms;
+    private final IdentityHashMap<ModelPart, Vector3f> rotationOffsets = new IdentityHashMap<>();
     private final IdentityHashMap<ModelPart, Matrix4f> origins = new IdentityHashMap<>();
     private final IdentityHashMap<ModelPart, Integer> pickingOffsets = new IdentityHashMap<>();
     private final Map<String, Integer> pickingIds = new HashMap<>();
     private final MatrixCache matrices = new MatrixCache();
     private final List<String> pickedBoneIds = new ArrayList<>();
     private final Color color;
+    private final Matrix4f base;
     private final Matrix4f inverseBase;
     private final boolean picking;
     private final boolean incrementPicking;
@@ -45,11 +55,13 @@ public final class MobRenderContext implements AutoCloseable
         VanillaRendererBones.Discovery discovery = VanillaRendererBones.discover(renderer);
         Pose mergedPose = mergePose(pose, overlay);
 
+        this.discovery = discovery;
         this.hierarchies = discovery.getRuntimeHierarchies();
-        this.bones = resolveBones(this.hierarchies);
+        this.bones = resolveBones(discovery, this.hierarchies);
         discovery.getBoneHierarchy().migratePose(mergedPose);
         this.transforms = resolveTransforms(discovery, mergedPose);
         this.color = color == null ? Color.white() : color.copy();
+        this.base = base == null ? null : new Matrix4f(base);
         this.inverseBase = base == null || Math.abs(base.determinant()) < 1.0E-8F
             ? null
             : new Matrix4f(base).invert();
@@ -122,6 +134,16 @@ public final class MobRenderContext implements AutoCloseable
         }
     }
 
+    public static void captureRotationOffset(ModelPart part, float pitch, float yaw, float roll)
+    {
+        MobRenderContext context = CURRENT.get();
+
+        if (context != null && context.bones.containsKey(part))
+        {
+            context.rotationOffsets.put(part, new Vector3f(pitch, yaw, roll));
+        }
+    }
+
     public static void captureMatrix(ModelPart part, Matrix4f matrix)
     {
         MobRenderContext context = CURRENT.get();
@@ -138,7 +160,7 @@ public final class MobRenderContext implements AutoCloseable
         {
             if (!context.matrices.has(bone.getId()))
             {
-                context.matrices.put(bone.getId(), context.toLocal(matrix), origin);
+                context.matrices.put(bone.getId(), context.toLocal(matrix), origin, context.rotationOffsets.get(part));
             }
         }
     }
@@ -197,6 +219,259 @@ public final class MobRenderContext implements AutoCloseable
         return List.copyOf(this.pickedBoneIds);
     }
 
+    /**
+     * Completes matrices for models which vanilla skipped because their variant, equipment or
+     * render condition was absent. Compatible feature parts and models in the same runtime variant
+     * container inherit the pose calculated by a rendered part, then MobForm's transform is applied
+     * through the regular ModelPart hook.
+     */
+    public void completeMatrices()
+    {
+        if (this.base == null)
+        {
+            return;
+        }
+
+        Map<String, CapturedBone> capturedByPath = new HashMap<>();
+        IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant = new IdentityHashMap<>();
+        Matrix4f modelRoot = null;
+
+        for (VanillaBoneHierarchy.Hierarchy hierarchy : this.hierarchies)
+        {
+            for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
+            {
+                ModelPart part = bone.getPart();
+                VanillaBoneHierarchy.Bone canonicalBone = this.discovery.getCanonicalBone(bone);
+
+                if (part != null && canonicalBone != null && this.origins.containsKey(part) && this.matrices.has(canonicalBone.getId()))
+                {
+                    CapturedBone captured = new CapturedBone(part, this.matrices.get(canonicalBone.getId()));
+
+                    this.putCaptured(hierarchy, bone, captured, capturedByPath, capturedByVariant);
+
+                    if (modelRoot == null && bone.getParentId() == null)
+                    {
+                        modelRoot = this.getCapturedParent(captured);
+                    }
+                }
+            }
+        }
+
+        for (VanillaBoneHierarchy.Hierarchy hierarchy : this.hierarchies)
+        {
+            for (VanillaBoneHierarchy.Bone bone : hierarchy.getBones())
+            {
+                VanillaBoneHierarchy.Bone canonicalBone = this.discovery.getCanonicalBone(bone);
+
+                if (canonicalBone == null || this.matrices.has(canonicalBone.getId()))
+                {
+                    continue;
+                }
+
+                ModelPart part = bone.getPart();
+                CapturedBone reference = this.getCapturedReference(hierarchy, bone, capturedByPath, capturedByVariant);
+                Matrix4f parent = this.getFallbackParent(hierarchy, bone, reference, modelRoot);
+
+                if (part == null || parent == null)
+                {
+                    continue;
+                }
+
+                PartTransform original = PartTransform.capture(part);
+
+                if (reference != null && reference.part() != part)
+                {
+                    part.copyTransform(reference.part());
+                }
+
+                MatrixStack stack = new MatrixStack();
+
+                stack.peek().getPositionMatrix().set(this.base).mul(parent);
+
+                try
+                {
+                    part.rotate(stack);
+                }
+                finally
+                {
+                    original.restore(part);
+                }
+
+                if (this.matrices.has(canonicalBone.getId()))
+                {
+                    CapturedBone captured = new CapturedBone(part, this.matrices.get(canonicalBone.getId()));
+
+                    this.putCaptured(hierarchy, bone, captured, capturedByPath, capturedByVariant);
+                }
+            }
+        }
+    }
+
+    private void putCaptured(
+        VanillaBoneHierarchy.Hierarchy hierarchy,
+        VanillaBoneHierarchy.Bone bone,
+        CapturedBone captured,
+        Map<String, CapturedBone> capturedByPath,
+        IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant
+    )
+    {
+        Object variantGroup = this.discovery.getVariantGroup(hierarchy);
+
+        if (variantGroup == null)
+        {
+            capturedByPath.putIfAbsent(bone.getPath(), captured);
+        }
+        else
+        {
+            capturedByVariant.computeIfAbsent(variantGroup, (key) -> new HashMap<>())
+                .putIfAbsent(bone.getPath(), captured);
+        }
+    }
+
+    private CapturedBone getCapturedReference(
+        VanillaBoneHierarchy.Hierarchy hierarchy,
+        VanillaBoneHierarchy.Bone bone,
+        Map<String, CapturedBone> capturedByPath,
+        IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant
+    )
+    {
+        Object variantGroup = this.discovery.getVariantGroup(hierarchy);
+
+        if (variantGroup == null)
+        {
+            return capturedByPath.get(bone.getPath());
+        }
+
+        Map<String, CapturedBone> variants = capturedByVariant.get(variantGroup);
+
+        return variants == null ? null : variants.get(bone.getPath());
+    }
+
+    private Matrix4f getFallbackParent(
+        VanillaBoneHierarchy.Hierarchy hierarchy,
+        VanillaBoneHierarchy.Bone bone,
+        CapturedBone reference,
+        Matrix4f modelRoot
+    )
+    {
+        if (bone.getParentId() != null)
+        {
+            VanillaBoneHierarchy.Bone parent = hierarchy.resolve(bone.getParentId()).orElse(null);
+            VanillaBoneHierarchy.Bone canonicalParent = this.discovery.getCanonicalBone(parent);
+
+            if (canonicalParent == null)
+            {
+                return null;
+            }
+
+            MatrixCacheEntry entry = this.matrices.get(canonicalParent.getId());
+
+            return entry.matrix() == null ? null : new Matrix4f(entry.matrix());
+        }
+
+        if (reference != null)
+        {
+            return this.getCapturedParent(reference);
+        }
+
+        Matrix4f featureParent = this.getFeatureParent(hierarchy, bone);
+
+        if (featureParent != null)
+        {
+            return featureParent;
+        }
+
+        /* A renderer variant can have an external attachment transform which is not represented by
+         * its ModelPart tree. Without a rendered sibling, the primary model root is not a valid
+         * substitute for that attachment frame. */
+        if (this.discovery.getVariantGroup(hierarchy) != null)
+        {
+            return null;
+        }
+
+        return modelRoot == null ? null : new Matrix4f(modelRoot);
+    }
+
+    private Matrix4f getFeatureParent(VanillaBoneHierarchy.Hierarchy hierarchy, VanillaBoneHierarchy.Bone bone)
+    {
+        String matchedId = null;
+        Matrix4f matched = null;
+
+        for (VanillaBoneHierarchy.Hierarchy contextHierarchy : this.discovery.getFeatureContexts(hierarchy))
+        {
+            VanillaBoneHierarchy.Bone contextBone = contextHierarchy.resolve(bone.getPath()).orElse(null);
+            VanillaBoneHierarchy.Bone canonicalBone = this.discovery.getCanonicalBone(contextBone);
+
+            if (canonicalBone == null)
+            {
+                continue;
+            }
+
+            Matrix4f matrix = this.matrices.get(canonicalBone.getId()).matrix();
+
+            if (matrix != null)
+            {
+                if (matchedId != null && !matchedId.equals(canonicalBone.getId()))
+                {
+                    return null;
+                }
+
+                matchedId = canonicalBone.getId();
+                matched = matrix;
+            }
+        }
+
+        if (matched == null)
+        {
+            return null;
+        }
+
+        Matrix4f parent = new Matrix4f(matched);
+        Class<?> modelType = this.discovery.getModelType(hierarchy);
+
+        /* SkullBlockEntityRenderer applies this model-space correction after the feature has
+         * attached the skull to its context model. Scale is intentionally omitted: gizmo matrices
+         * strip it, while retaining the rotation is required for correct X/Z directions. */
+        if (modelType != null && SkullBlockEntityModel.class.isAssignableFrom(modelType))
+        {
+            parent.rotateY(MathUtils.PI);
+        }
+
+        return parent;
+    }
+
+    private Matrix4f getCapturedParent(CapturedBone reference)
+    {
+        if (reference.entry().origin() == null)
+        {
+            return null;
+        }
+
+        ModelPart part = reference.part();
+        PoseTransform transform = this.transforms.get(part);
+        float pivotX = part.pivotX;
+        float pivotY = part.pivotY;
+        float pivotZ = part.pivotZ;
+
+        if (transform != null && transform.fix > 0F)
+        {
+            ModelTransform initial = part.getDefaultTransform();
+
+            pivotX = Lerps.lerp(pivotX, initial.pivotX, transform.fix);
+            pivotY = Lerps.lerp(pivotY, initial.pivotY, transform.fix);
+            pivotZ = Lerps.lerp(pivotZ, initial.pivotZ, transform.fix);
+        }
+
+        if (transform != null)
+        {
+            pivotX += transform.translate.x;
+            pivotY += transform.translate.y;
+            pivotZ += transform.translate.z;
+        }
+
+        return new Matrix4f(reference.entry().origin()).translate(-pivotX / 16F, -pivotY / 16F, -pivotZ / 16F);
+    }
+
     private Matrix4f toLocal(Matrix4f matrix)
     {
         return new Matrix4f(this.inverseBase).mul(matrix);
@@ -230,7 +505,10 @@ public final class MobRenderContext implements AutoCloseable
         return result;
     }
 
-    private static IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> resolveBones(List<VanillaBoneHierarchy.Hierarchy> hierarchies)
+    private static IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> resolveBones(
+        VanillaRendererBones.Discovery discovery,
+        List<VanillaBoneHierarchy.Hierarchy> hierarchies
+    )
     {
         IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> bones = new IdentityHashMap<>();
 
@@ -242,7 +520,12 @@ public final class MobRenderContext implements AutoCloseable
 
                 if (part != null)
                 {
-                    bones.put(part, bone);
+                    VanillaBoneHierarchy.Bone canonicalBone = discovery.getCanonicalBone(bone);
+
+                    if (canonicalBone != null)
+                    {
+                        bones.put(part, canonicalBone);
+                    }
                 }
             }
         }
@@ -290,6 +573,38 @@ public final class MobRenderContext implements AutoCloseable
             {
                 CURRENT.set(this.previous);
             }
+        }
+    }
+
+    private record CapturedBone(ModelPart part, MatrixCacheEntry entry)
+    {}
+
+    private record PartTransform(
+        float pivotX, float pivotY, float pivotZ,
+        float pitch, float yaw, float roll,
+        float scaleX, float scaleY, float scaleZ
+    )
+    {
+        private static PartTransform capture(ModelPart part)
+        {
+            return new PartTransform(
+                part.pivotX, part.pivotY, part.pivotZ,
+                part.pitch, part.yaw, part.roll,
+                part.xScale, part.yScale, part.zScale
+            );
+        }
+
+        private void restore(ModelPart part)
+        {
+            part.pivotX = this.pivotX;
+            part.pivotY = this.pivotY;
+            part.pivotZ = this.pivotZ;
+            part.pitch = this.pitch;
+            part.yaw = this.yaw;
+            part.roll = this.roll;
+            part.xScale = this.scaleX;
+            part.yScale = this.scaleY;
+            part.zScale = this.scaleZ;
         }
     }
 }

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.mixin.client.ModelPartAccessor;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.model.EntityModelLayer;
 
@@ -56,8 +57,21 @@ public final class VanillaBoneHierarchy
         List<PartDescriptor> descriptors = new ArrayList<>();
         IdentityHashMap<ModelPart, PartDescriptor> parts = new IdentityHashMap<>();
         IdentityHashMap<ModelPart, Boolean> visited = new IdentityHashMap<>();
+        String rootId = null;
+        int childDepth = 0;
 
-        collectChildren(layerId, root, "", null, 0, descriptors, parts, visited);
+        if (!root.isEmpty())
+        {
+            rootId = layerId + "/%root";
+            Descriptor descriptor = new Descriptor(rootId, "root", null, 0, "%root");
+            PartDescriptor partDescriptor = new PartDescriptor(root, descriptor);
+
+            descriptors.add(partDescriptor);
+            parts.put(root, partDescriptor);
+            childDepth = 1;
+        }
+
+        collectChildren(layerId, root, "", rootId, childDepth, descriptors, parts, visited);
 
         List<Descriptor> structureDescriptors = descriptors.stream()
             .map(PartDescriptor::descriptor)
@@ -168,6 +182,8 @@ public final class VanillaBoneHierarchy
 
         List<Map.Entry<String, ModelPart>> children = new ArrayList<>(((ModelPartAccessor) (Object) parent).bbs$getChildren().entrySet());
 
+        children.sort((a, b) -> compareNames(a.getKey(), b.getKey()));
+
         for (Map.Entry<String, ModelPart> child : children)
         {
             if (visited.containsKey(child.getValue()))
@@ -218,6 +234,13 @@ public final class VanillaBoneHierarchy
         }
 
         return builder.toString();
+    }
+
+    static int compareNames(String a, String b)
+    {
+        int result = NaturalOrderComparator.compare(true, a, b);
+
+        return result == 0 ? a.compareTo(b) : result;
     }
 
     private static void addLegacyAlias(String alias, Bone bone, Map<String, Bone> aliases, Set<String> ambiguousAliases)
@@ -285,6 +308,11 @@ public final class VanillaBoneHierarchy
             return this.bones;
         }
 
+        List<String> getStructureKey()
+        {
+            return this.structure.paths;
+        }
+
         /**
          * Resolves stable IDs first, then relative paths and unique legacy single-name aliases.
          */
@@ -342,6 +370,11 @@ public final class VanillaBoneHierarchy
             return this.descriptor.depth();
         }
 
+        public String getPath()
+        {
+            return this.descriptor.path();
+        }
+
         public ModelPart getPart()
         {
             return this.part.get();
@@ -352,10 +385,12 @@ public final class VanillaBoneHierarchy
     {
         private final String layerId;
         private final List<Descriptor> descriptors;
+        private final List<String> paths;
 
         private Structure(String layerId, List<Descriptor> descriptors)
         {
             this.descriptors = List.copyOf(descriptors);
+            this.paths = descriptors.stream().map(Descriptor::path).toList();
             this.layerId = layerId;
         }
     }

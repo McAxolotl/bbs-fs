@@ -90,7 +90,9 @@ public class UIBodyPartEditor extends UIScrollView
 
         ((UIBoneHierarchyList) this.bone).setLabels(hierarchy.getLabels(false));
         this.bone.add(hierarchy.getBoneIds());
-        this.bone.setCurrentScroll(part.bone.get());
+        String boneId = hierarchy.resolveId(part.bone.get());
+
+        this.bone.setCurrentScroll(boneId == null ? part.bone.get() : boneId);
 
         if (!this.bone.getList().isEmpty())
         {

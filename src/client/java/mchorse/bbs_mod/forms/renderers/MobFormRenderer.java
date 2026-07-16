@@ -40,6 +40,7 @@ import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -62,12 +63,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     private boolean lastSlim;
 
     public float prevHandSwing;
-    private float prevYawHead;
-    private float prevPitch;
     private MatrixCache bones = new MatrixCache();
     private List<String> pickedBoneIds = List.of();
     private boolean animationInitialized;
-    private boolean animationPlaying = true;
 
     public MobFormRenderer(MobForm form)
     {
@@ -120,7 +118,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.bones.clear();
             this.pickedBoneIds = List.of();
             this.animationInitialized = false;
-            this.animationPlaying = this.form.action.get();
             this.prevHandSwing = 0F;
         }
 
@@ -162,8 +159,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         this.ensureEntity();
-        this.animationPlaying = this.form.action.get();
-
         if (this.entity != null)
         {
             MatrixStack stack = context.batcher.getContext().getMatrices();
@@ -207,7 +202,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             consumers.setUI(true);
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
-            float transition = this.animationPlaying ? context.getTransition() : 0F;
+            float transition = this.form.paused.get() ? 0F : context.getTransition();
 
             try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get(), this.getColor(0xffffffff)))
             {
@@ -229,7 +224,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void render3D(FormRenderingContext context)
     {
         this.ensureEntity();
-        this.animationPlaying = this.form.action.get();
         this.bones.clear();
         this.pickedBoneIds = List.of();
 
@@ -316,9 +310,10 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             try (mobContext)
             {
-                float transition = this.animationPlaying ? context.getTransition() : 0F;
+                float transition = this.prepareRenderLook(context.entity, context.getTransition());
 
                 MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, context.stack, consumers, light);
+                mobContext.completeMatrices();
             }
 
             this.bones = mobContext.getMatrices();
@@ -374,7 +369,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     {
         for (BodyPart part : this.form.parts.getAllTyped())
         {
-            Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+            String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
+            Matrix4f matrix = this.bones.get(boneId == null ? part.bone.get() : boneId).matrix();
 
             context.stack.push();
             if (context.world != null)
@@ -404,7 +400,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     @Override
     public void collectMatrices(IEntity entity, MatrixStack stack, MatrixCache matrices, String prefix, float transition)
     {
-        MatrixCache bones = this.collectBoneMatrices(transition);
+        MatrixCache bones = this.collectBoneMatrices(entity, transition);
         Matrix4f matrix = new Matrix4f();
         Matrix4f origin = new Matrix4f();
 
@@ -423,7 +419,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             Matrix4f boneMatrix = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().matrix());
             Matrix4f boneOrigin = new Matrix4f(stack.peek().getPositionMatrix()).mul(entry.getValue().origin());
 
-            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin);
+            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin, entry.getValue().rotationOffset());
         }
 
         int i = 0;
@@ -434,7 +430,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (form != null)
             {
-                Matrix4f boneMatrix = bones.get(part.bone.get()).matrix();
+                String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
+                Matrix4f boneMatrix = bones.get(boneId == null ? part.bone.get() : boneId).matrix();
 
                 stack.push();
 
@@ -461,7 +458,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         stack.pop();
     }
 
-    private MatrixCache collectBoneMatrices(float transition)
+    private MatrixCache collectBoneMatrices(IEntity source, float transition)
     {
         this.ensureEntity();
 
@@ -492,7 +489,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         try (context)
         {
-            float animationTransition = this.form.action.get() ? transition : 0F;
+            float animationTransition = this.prepareRenderLook(source, transition);
 
             client.getEntityRenderDispatcher().render(
                 this.entity,
@@ -505,6 +502,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 EMPTY_VERTEX_CONSUMERS,
                 LightmapTextureManager.MAX_LIGHT_COORDINATE
             );
+            context.completeMatrices();
         }
 
         return context.getMatrices();
@@ -517,23 +515,25 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            if (this.animationPlaying)
+            boolean paused = this.form.paused.get();
+
+            if (!paused)
             {
                 this.entity.tick();
             }
 
-            this.entity.prevPitch = this.prevPitch;
+            this.entity.prevPitch = entity.getPrevPitch();
             this.entity.prevYaw = 0F;
 
             if (this.entity instanceof LivingEntity livingEntity)
             {
-                livingEntity.prevHeadYaw = this.prevYawHead;
+                livingEntity.prevHeadYaw = entity.getPrevHeadYaw() - entity.getPrevBodyYaw();
                 livingEntity.prevBodyYaw = 0F;
 
                 /* Limb swing is so ugly */
                 if (livingEntity.limbAnimator instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
                 {
-                    if (!this.animationInitialized || this.animationPlaying)
+                    if (!this.animationInitialized || !paused)
                     {
                         a.setPrevSpeed(b.getPrevSpeed());
                         a.setSpeed(b.getSpeed());
@@ -544,12 +544,12 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 /* Arm swing */
                 float handSwingProgress = entity.getHandSwingProgress(0F);
 
-                if (this.animationPlaying && handSwingProgress < this.prevHandSwing)
+                if (!paused && handSwingProgress < this.prevHandSwing)
                 {
                     this.prevHandSwing = 0;
                 }
 
-                if (this.animationPlaying && handSwingProgress > 0 && this.prevHandSwing == 0)
+                if (!paused && handSwingProgress > 0 && this.prevHandSwing == 0)
                 {
                     livingEntity.swingHand(Hand.MAIN_HAND);
                 }
@@ -573,16 +573,46 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.entity.equipStack(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
             this.entity.equipStack(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
             this.entity.equipStack(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
-            if (!this.animationInitialized || this.animationPlaying)
+            if (!this.animationInitialized || !paused)
             {
                 this.entity.age = entity.getAge();
                 this.animationInitialized = true;
             }
             this.entity.noClip = true;
-
-            this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();
-            this.prevPitch = entity.getPitch();
         }
+    }
+
+    /**
+     * Resolves look angles once per render from the source entity. Vanilla normally performs this
+     * interpolation inside LivingEntityRenderer, but MobForm keeps body yaw outside that renderer;
+     * synchronizing only tick endpoints would therefore interpolate the already-subtracted angle.
+     */
+    private float prepareRenderLook(IEntity source, float transition)
+    {
+        boolean paused = this.form.paused.get();
+
+        if (source == null)
+        {
+            return paused ? 0F : transition;
+        }
+
+        float interpolatedHeadYaw = MathHelper.lerpAngleDegrees(transition, source.getPrevHeadYaw(), source.getHeadYaw());
+        float interpolatedBodyYaw = MathHelper.lerpAngleDegrees(transition, source.getPrevBodyYaw(), source.getBodyYaw());
+        float relativeHeadYaw = interpolatedHeadYaw - interpolatedBodyYaw;
+        float interpolatedPitch = MathHelper.lerp(transition, source.getPrevPitch(), source.getPitch());
+
+        this.entity.prevPitch = interpolatedPitch;
+        this.entity.setPitch(interpolatedPitch);
+
+        if (this.entity instanceof LivingEntity livingEntity)
+        {
+            livingEntity.prevBodyYaw = 0F;
+            livingEntity.setBodyYaw(0F);
+            livingEntity.prevHeadYaw = relativeHeadYaw;
+            livingEntity.setHeadYaw(relativeHeadYaw);
+        }
+
+        return paused ? 0F : transition;
     }
 
     private static class BooleanHolder

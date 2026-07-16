@@ -11,6 +11,7 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -35,7 +36,6 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -175,10 +175,16 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         this.keys.clear();
+        Map<String, Integer> keyToColor = new HashMap<>();
+        Map<String, String> keyToLabel = new HashMap<>();
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            this.keys.add(sheet.isBoneTrack ? sheet.title.get() : StringUtils.fileName(sheet.id));
+            String filterKey = UIReplaysEditor.getSheetFilterKey(sheet);
+
+            this.keys.add(filterKey);
+            keyToColor.put(filterKey, sheet.color);
+            keyToLabel.put(filterKey, sheet.title.get());
         }
 
         sheets.removeIf((v) ->
@@ -277,7 +283,12 @@ public class UIAnimationStateEditor extends UIElement
                 {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () ->
                     {
-                        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(BBSSettings.disabledSheets.get(), this.keys);
+                        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
+                            BBSSettings.disabledSheets.get(),
+                            this.keys,
+                            keyToColor,
+                            keyToLabel
+                        );
 
                         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);
 
@@ -445,10 +456,25 @@ public class UIAnimationStateEditor extends UIElement
                     return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
                 }
             ));
+            drag.setRotate2Axes(GizmoDrag.computeRotateAxes(
+                transform.getTransform(),
+                true,
+                () ->
+                {
+                    this.editor.applyStateForSampling(tick);
+
+                    Matrix4f origin = this.getOriginMatrix(transition);
+
+                    return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+                }
+            ));
 
             /* Restore the previewed form to the unperturbed pose: the compute* helpers above have
              * already reverted the transform, so re-applying now poses it with the original values. */
             this.editor.applyStateForSampling(tick);
+            Vector3f rotationOffset = this.getMatrixEntry(transition).rotationOffset();
+
+            drag.setRotationOffset(rotationOffset);
         }
 
         return drag;
@@ -471,23 +497,36 @@ public class UIAnimationStateEditor extends UIElement
 
     private Matrix4f getOriginInternal(float transition, boolean forceMatrix)
     {
-        if (this.keyframeEditor == null)
-        {
-            return Matrices.EMPTY_4F;
-        }
-
-        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+        MatrixCacheEntry entry = this.getMatrixEntry(transition);
+        Pair<String, Boolean> bone = this.keyframeEditor == null ? null : this.keyframeEditor.getBone();
 
         if (bone == null)
         {
             return Matrices.EMPTY_4F;
         }
 
-        Form root = FormUtils.getRoot(this.editor.form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(this.editor.renderer.getTargetEntity(), transition);
-        Matrix4f matrix = (!forceMatrix && bone.b) ? map.get(bone.a).origin() : map.get(bone.a).matrix();
+        Matrix4f matrix = (!forceMatrix && bone.b) ? entry.origin() : entry.matrix();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
+    }
+
+    private MatrixCacheEntry getMatrixEntry(float transition)
+    {
+        if (this.keyframeEditor == null)
+        {
+            return new MatrixCacheEntry(null, null);
+        }
+
+        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+
+        if (bone == null)
+        {
+            return new MatrixCacheEntry(null, null);
+        }
+
+        Form root = FormUtils.getRoot(this.editor.form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(this.editor.renderer.getTargetEntity(), transition);
+        return map.get(bone.a);
     }
 
     @Override
