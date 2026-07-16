@@ -248,7 +248,7 @@ public abstract class FormRenderer <T extends Form>
     {
         IEntity oldEntity = context.entity;
 
-        context.entity = part.useTarget.get() ? oldEntity : part.getEntity();
+        context.entity = part.getRenderEntity(oldEntity);
 
         if (part.getForm() != null)
         {

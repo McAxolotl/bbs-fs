@@ -342,7 +342,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
 
-        Matrix4f baseTransform = ui ? null : new Matrix4f((world != null ? world : stack).peek().getPositionMatrix());
+        /* Strictly the world frame: it's what places the model in the world for the simulating subsystems
+         * (bone physics resolves gravity, wind and its collisions against it), so falling back to the render
+         * stack when there is no world stack — the first person arm — resolved them against the camera
+         * instead, and gravity pulled toward the bottom of the screen. Without a world frame there is no
+         * honest answer, so they run model-local, as they do in the UI. */
+        Matrix4f baseTransform = ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix());
 
         this.applyIKOnce(model, baseTransform);
         this.applyPhysicsOnce(target, model, transition, baseTransform);
@@ -873,7 +878,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());
 
-                FormUtilsClient.getRenderer(form).collectMatrices(part.useTarget.get() ? entity : part.getEntity(), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
+                FormUtilsClient.getRenderer(form).collectMatrices(part.getRenderEntity(entity), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
 
                 stack.pop();
             }
