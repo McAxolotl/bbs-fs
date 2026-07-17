@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
@@ -128,6 +129,9 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         }
 
         this.bindPose(this.form, "");
-        this.poseEditor.fillGroups(FormUtilsClient.getBoneHierarchy(this.form), true);
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(this.form);
+
+        this.poseEditor.migratePose(hierarchy);
+        this.poseEditor.fillGroups(hierarchy, true);
     }
 }

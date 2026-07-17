@@ -53,12 +53,17 @@ public final class MobRenderContext implements AutoCloseable
     {
         this.previous = CURRENT.get();
         VanillaRendererBones.Discovery discovery = VanillaRendererBones.discover(renderer);
-        Pose mergedPose = mergePose(pose, overlay);
+        BoneHierarchy hierarchy = discovery.getBoneHierarchy();
+        Pose mergedPose = pose.copy();
+        Pose mergedOverlay = overlay.copy();
+
+        hierarchy.migratePose(mergedPose);
+        hierarchy.migratePose(mergedOverlay);
+        mergedPose = mergePose(mergedPose, mergedOverlay);
 
         this.discovery = discovery;
         this.hierarchies = discovery.getRuntimeHierarchies();
         this.bones = resolveBones(discovery, this.hierarchies);
-        discovery.getBoneHierarchy().migratePose(mergedPose);
         this.transforms = resolveTransforms(discovery, mergedPose);
         this.color = color == null ? Color.white() : color.copy();
         this.base = base == null ? null : new Matrix4f(base);
@@ -69,11 +74,6 @@ public final class MobRenderContext implements AutoCloseable
         this.incrementPicking = incrementPicking;
 
         CURRENT.set(this);
-    }
-
-    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay)
-    {
-        return push(renderer, pose, overlay, Color.white());
     }
 
     public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Color color)
@@ -232,7 +232,7 @@ public final class MobRenderContext implements AutoCloseable
             return;
         }
 
-        Map<String, CapturedBone> capturedByPath = new HashMap<>();
+        Map<List<String>, Map<String, CapturedBone>> capturedByStructure = new HashMap<>();
         IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant = new IdentityHashMap<>();
         Matrix4f modelRoot = null;
 
@@ -247,7 +247,7 @@ public final class MobRenderContext implements AutoCloseable
                 {
                     CapturedBone captured = new CapturedBone(part, this.matrices.get(canonicalBone.getId()));
 
-                    this.putCaptured(hierarchy, bone, captured, capturedByPath, capturedByVariant);
+                    this.putCaptured(hierarchy, bone, captured, capturedByStructure, capturedByVariant);
 
                     if (modelRoot == null && bone.getParentId() == null)
                     {
@@ -269,7 +269,7 @@ public final class MobRenderContext implements AutoCloseable
                 }
 
                 ModelPart part = bone.getPart();
-                CapturedBone reference = this.getCapturedReference(hierarchy, bone, capturedByPath, capturedByVariant);
+                CapturedBone reference = this.getCapturedReference(hierarchy, bone, capturedByStructure, capturedByVariant);
                 Matrix4f parent = this.getFallbackParent(hierarchy, bone, reference, modelRoot);
 
                 if (part == null || parent == null)
@@ -301,7 +301,7 @@ public final class MobRenderContext implements AutoCloseable
                 {
                     CapturedBone captured = new CapturedBone(part, this.matrices.get(canonicalBone.getId()));
 
-                    this.putCaptured(hierarchy, bone, captured, capturedByPath, capturedByVariant);
+                    this.putCaptured(hierarchy, bone, captured, capturedByStructure, capturedByVariant);
                 }
             }
         }
@@ -311,17 +311,18 @@ public final class MobRenderContext implements AutoCloseable
         VanillaBoneHierarchy.Hierarchy hierarchy,
         VanillaBoneHierarchy.Bone bone,
         CapturedBone captured,
-        Map<String, CapturedBone> capturedByPath,
+        Map<List<String>, Map<String, CapturedBone>> capturedByStructure,
         IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant
     )
     {
         Object variantGroup = this.discovery.getVariantGroup(hierarchy);
 
-        if (variantGroup == null)
+        if (variantGroup == null && this.discovery.getFeatureContexts(hierarchy).isEmpty())
         {
-            capturedByPath.putIfAbsent(bone.getPath(), captured);
+            capturedByStructure.computeIfAbsent(hierarchy.getStructureKey(), (key) -> new HashMap<>())
+                .putIfAbsent(bone.getPath(), captured);
         }
-        else
+        else if (variantGroup != null)
         {
             capturedByVariant.computeIfAbsent(variantGroup, (key) -> new HashMap<>())
                 .putIfAbsent(bone.getPath(), captured);
@@ -331,7 +332,7 @@ public final class MobRenderContext implements AutoCloseable
     private CapturedBone getCapturedReference(
         VanillaBoneHierarchy.Hierarchy hierarchy,
         VanillaBoneHierarchy.Bone bone,
-        Map<String, CapturedBone> capturedByPath,
+        Map<List<String>, Map<String, CapturedBone>> capturedByStructure,
         IdentityHashMap<Object, Map<String, CapturedBone>> capturedByVariant
     )
     {
@@ -339,7 +340,9 @@ public final class MobRenderContext implements AutoCloseable
 
         if (variantGroup == null)
         {
-            return capturedByPath.get(bone.getPath());
+            Map<String, CapturedBone> captured = capturedByStructure.get(hierarchy.getStructureKey());
+
+            return captured == null ? null : captured.get(bone.getPath());
         }
 
         Map<String, CapturedBone> variants = capturedByVariant.get(variantGroup);
@@ -389,6 +392,11 @@ public final class MobRenderContext implements AutoCloseable
             return null;
         }
 
+        if (!this.discovery.getFeatureContexts(hierarchy).isEmpty())
+        {
+            return null;
+        }
+
         return modelRoot == null ? null : new Matrix4f(modelRoot);
     }
 
@@ -396,9 +404,16 @@ public final class MobRenderContext implements AutoCloseable
     {
         String matchedId = null;
         Matrix4f matched = null;
+        Class<?> modelType = this.discovery.getModelType(hierarchy);
+        boolean skull = modelType != null && SkullBlockEntityModel.class.isAssignableFrom(modelType);
 
         for (VanillaBoneHierarchy.Hierarchy contextHierarchy : this.discovery.getFeatureContexts(hierarchy))
         {
+            if (!skull && !hierarchy.getStructureKey().equals(contextHierarchy.getStructureKey()))
+            {
+                continue;
+            }
+
             VanillaBoneHierarchy.Bone contextBone = contextHierarchy.resolve(bone.getPath()).orElse(null);
             VanillaBoneHierarchy.Bone canonicalBone = this.discovery.getCanonicalBone(contextBone);
 
@@ -427,12 +442,11 @@ public final class MobRenderContext implements AutoCloseable
         }
 
         Matrix4f parent = new Matrix4f(matched);
-        Class<?> modelType = this.discovery.getModelType(hierarchy);
 
         /* SkullBlockEntityRenderer applies this model-space correction after the feature has
          * attached the skull to its context model. Scale is intentionally omitted: gizmo matrices
          * strip it, while retaining the rotation is required for correct X/Z directions. */
-        if (modelType != null && SkullBlockEntityModel.class.isAssignableFrom(modelType))
+        if (skull)
         {
             parent.rotateY(MathUtils.PI);
         }

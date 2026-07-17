@@ -11,7 +11,6 @@ import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -208,13 +207,6 @@ public class FormProperties extends ValueGroup
                     }
 
                     PoseTransform transform = pose.get().get(bone);
-                    boolean isNew = transform == null;
-
-                    if (isNew)
-                    {
-                        transform = new PoseTransform();
-                        pose.get().transforms.put(bone, transform);
-                    }
 
                     Transform interpolated = (Transform) this.interpolateValue(value, new PoseTransform(), segment, blend);
 
@@ -370,33 +362,6 @@ public class FormProperties extends ValueGroup
             KeyframeChannel property = new KeyframeChannel(key, null);
 
             property.fromData(mapType);
-
-            /* Compatibility with MobForm's former positive animation toggle. */
-            if (StringUtils.fileName(key).equals("action") && property.getFactory() == KeyframeFactories.BOOLEAN)
-            {
-                String parent = StringUtils.parentPath(key);
-                String pausedKey = StringUtils.combinePaths(parent, "paused");
-
-                if (map.has(pausedKey))
-                {
-                    continue;
-                }
-
-                KeyframeChannel<Boolean> paused = new KeyframeChannel<>(pausedKey, KeyframeFactories.BOOLEAN);
-
-                for (Object object : property.getKeyframes())
-                {
-                    Keyframe<Boolean> oldKeyframe = (Keyframe<Boolean>) object;
-                    Keyframe<Boolean> newKeyframe = new Keyframe<>(oldKeyframe.getId(), KeyframeFactories.BOOLEAN);
-
-                    newKeyframe.copy(oldKeyframe);
-                    newKeyframe.setValue(!oldKeyframe.getValue());
-                    paused.add(newKeyframe);
-                }
-
-                key = paused.getId();
-                property = paused;
-            }
 
             /* Patch 1.1.1 changes to lighting property */
             if (key.endsWith("lighting") && property.getFactory() == KeyframeFactories.BOOLEAN)

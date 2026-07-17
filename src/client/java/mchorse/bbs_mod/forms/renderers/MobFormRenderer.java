@@ -80,14 +80,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         if (this.entity != null)
         {
             Object renderer = MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
-            BoneHierarchy hierarchy = VanillaRendererBones.discover(renderer).getBoneHierarchy();
 
-            hierarchy.migratePose(this.form.pose.getOriginalValue());
-            hierarchy.migratePose(this.form.pose.getRuntimeValue());
-            hierarchy.migratePose(this.form.poseOverlay.getOriginalValue());
-            hierarchy.migratePose(this.form.poseOverlay.getRuntimeValue());
-
-            return hierarchy;
+            return VanillaRendererBones.discover(renderer).getBoneHierarchy();
         }
 
         return super.getBoneHierarchy();

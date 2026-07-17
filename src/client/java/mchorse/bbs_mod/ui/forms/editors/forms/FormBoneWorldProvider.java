@@ -1,7 +1,9 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.IWorldTransformProvider;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Matrix4f;
 
 /**
@@ -32,9 +34,10 @@ public class FormBoneWorldProvider implements IWorldTransformProvider
             return false;
         }
 
-        Matrix4f matrix = this.form.getOriginMatrix(editor.getSamplingTick());
+        UIContext context = editor.getContext();
+        Matrix4f matrix = this.form.getOriginMatrix(context == null ? 0F : context.getTransition());
 
-        if (matrix == null)
+        if (matrix == Matrices.EMPTY_4F)
         {
             return false;
         }

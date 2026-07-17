@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.forms.forms;
 
-import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
@@ -56,17 +54,6 @@ public class MobForm extends Form implements PoseForm
     public ValueBoolean getBoneTracks()
     {
         return this.boneTracks;
-    }
-
-    @Override
-    public void fromData(BaseType data)
-    {
-        super.fromData(data);
-
-        if (data instanceof MapType map && !map.has("paused") && map.has("action"))
-        {
-            this.paused.set(!map.getBool("action", true));
-        }
     }
 
     @Override

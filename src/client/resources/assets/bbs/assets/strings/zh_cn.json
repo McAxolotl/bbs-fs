@@ -566,7 +566,6 @@
     "bbs.ui.forms.editor.model.pick_texture": "选择纹理...",
     "bbs.ui.forms.editor.pick_form": "选择形态...",
     "bbs.ui.forms.editor.slim": "纤细",
-    "bbs.ui.forms.editor.wide": "宽臂",
     "bbs.ui.forms.editor.slim-tooltip": "适用于玩家生物形态，选项可用于切换默认 / 纤细手臂的模型",
     "bbs.ui.forms.editor.states.manager-title": "动画状态",
     "bbs.ui.forms.editor.states.manager.context.add": "添加动画状态",

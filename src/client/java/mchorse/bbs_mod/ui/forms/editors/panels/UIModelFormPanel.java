@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -148,14 +149,16 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
         super.startEdit(form);
 
         ModelInstance model = ModelFormRenderer.getModel(this.form);
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
         this.bindPose(form, model == null ? this.form.model.get() : model.getPoseGroup());
+        this.poseEditor.migratePose(hierarchy);
         this.poseEditor.fillGroups(
             model == null ? null : model.model,
             model == null ? null : model.getFlippedParts(),
             true,
             model == null ? null : model.getDisabledBones(),
-            FormUtilsClient.getBoneHierarchy(form)
+            hierarchy
         );
         this.color.setColor(form.color.get().getARGBColor());
 

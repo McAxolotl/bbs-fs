@@ -163,6 +163,26 @@ public final class BoneHierarchy
         }
     }
 
+    public boolean needsMigration(Pose pose)
+    {
+        if (pose == null || this.aliases.isEmpty())
+        {
+            return false;
+        }
+
+        for (String alias : pose.transforms.keySet())
+        {
+            String id = this.resolveId(alias);
+
+            if (id != null && !id.equals(alias))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public List<Bone> getAdjacent(String id)
     {
         Bone selected = this.getBone(id);

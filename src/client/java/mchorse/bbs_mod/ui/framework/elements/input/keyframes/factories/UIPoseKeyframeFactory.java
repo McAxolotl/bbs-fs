@@ -54,7 +54,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         {
             if (object instanceof Keyframe<?> poseKeyframe && poseKeyframe.getValue() instanceof Pose pose)
             {
-                hierarchy.migratePose(pose);
+                if (hierarchy.needsMigration(pose))
+                {
+                    poseKeyframe.preNotify(IValueListener.FLAG_UNMERGEABLE);
+                    hierarchy.migratePose(pose);
+                    poseKeyframe.postNotify(IValueListener.FLAG_UNMERGEABLE);
+                }
             }
         }
 

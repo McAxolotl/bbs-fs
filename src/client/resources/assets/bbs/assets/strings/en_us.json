@@ -763,7 +763,6 @@
 	"bbs.ui.forms.editor.model.pick_texture": "Pick a texture...",
 	"bbs.ui.forms.editor.pick_form": "Pick form...",
 	"bbs.ui.forms.editor.slim": "Slim",
-	"bbs.ui.forms.editor.wide": "Wide",
 	"bbs.ui.forms.editor.slim-tooltip": "For player mob forms, this toggle lets you switch between slim and wide model formats",
 	"bbs.ui.forms.editor.states.manager-title": "Animation states",
 	"bbs.ui.forms.editor.states.manager.context.add": "Add an animation state",
