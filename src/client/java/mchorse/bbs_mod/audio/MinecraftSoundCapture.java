@@ -2,15 +2,16 @@ package mchorse.bbs_mod.audio;
 
 import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.sound.Sound;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.sound.SoundInstanceListener;
-import net.minecraft.client.sound.SoundListenerTransform;
 import net.minecraft.client.sound.TickableSoundInstance;
 import net.minecraft.client.sound.WeightedSoundSet;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -143,11 +144,16 @@ public class MinecraftSoundCapture implements SoundInstanceListener
             it.remove();
         }
 
-        SoundListenerTransform transform = soundManager.getListenerTransform();
-        Vec3d position = transform.position();
-        Vec3d right = transform.right();
+        /* 1.20.1 has no SoundManager#getListenerTransform - vanilla feeds the camera
+         * straight to the sound listener (SoundSystem#updateListenerPosition), so sampling
+         * the camera here gives the exact same transform the OpenAL listener is using.
+         * The listener's right axis is at x up (what OpenAL derives from the orientation),
+         * i.e. forward x up = getHorizontalPlane() x getVerticalPlane(). */
+        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        Vec3d position = camera.getPos();
+        Vector3f right = new Vector3f(camera.getHorizontalPlane()).cross(camera.getVerticalPlane()).normalize();
 
-        this.frames.add(new ListenerFrame(position.x, position.y, position.z, right.x, right.y, right.z));
+        this.frames.add(new ListenerFrame(position.x, position.y, position.z, right.x(), right.y(), right.z()));
     }
 
     /**
@@ -175,7 +181,7 @@ public class MinecraftSoundCapture implements SoundInstanceListener
     }
 
     @Override
-    public void onSoundPlayed(SoundInstance instance, WeightedSoundSet soundSet, float range)
+    public void onSoundPlayed(SoundInstance instance, WeightedSoundSet soundSet)
     {
         if (!this.active)
         {
@@ -185,7 +191,7 @@ public class MinecraftSoundCapture implements SoundInstanceListener
         /* Broken third-party sound instances must never break the recording */
         try
         {
-            this.capture(instance, range);
+            this.capture(instance);
         }
         catch (Exception e)
         {
@@ -193,7 +199,7 @@ public class MinecraftSoundCapture implements SoundInstanceListener
         }
     }
 
-    private void capture(SoundInstance instance, float range)
+    private void capture(SoundInstance instance)
     {
         SoundCategory category = instance.getCategory();
 
@@ -219,6 +225,10 @@ public class MinecraftSoundCapture implements SoundInstanceListener
         {
             return;
         }
+
+        /* Attenuation distance in blocks. Newer MC hands this to onSoundPlayed directly;
+         * on 1.20.1 we reproduce vanilla's SoundSystem#play formula (raw volume, not clamped). */
+        float range = Math.max(instance.getVolume(), 1F) * sound.getAttenuation();
 
         /* Match vanilla's clamps. The player's category/master sliders are deliberately
          * not applied, so the exported mix doesn't depend on personal volume settings. */
