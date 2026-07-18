@@ -473,7 +473,7 @@ public class BBSSettings {
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
 		favoriteColors = new ValueColors("favorite_colors");
-		recentColors = new ValueColors("recent_colors").limit(30);
+		recentColors = new ValueColors("recent_colors").limit(33);
 		disabledSheets = new ValueStringKeys("disabled_sheets");
 		disabledSheets.set(defaultFilters);
 		builder.register(favoriteColors);
