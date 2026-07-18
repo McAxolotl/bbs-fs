@@ -23,6 +23,8 @@ import java.util.Set;
  */
 public final class VanillaBoneHierarchy
 {
+    private static final String PLAYER_LAYER = "minecraft:player";
+    private static final String PLAYER_SLIM_LAYER = "minecraft:player_slim";
     private static final ReferenceQueue<ModelPart> STALE_PARTS = new ReferenceQueue<>();
     private static final Map<IdentityWeakReference, RegisteredNode> NODES = new HashMap<>();
     private static final Map<String, Structure> STRUCTURES = new HashMap<>();
@@ -161,7 +163,26 @@ public final class VanillaBoneHierarchy
 
     public static String toLayerId(EntityModelLayer layer)
     {
-        return layer.getId() + "#" + escapeSegment(layer.getName());
+        String resource = canonicalizeLayerResource(layer.getId().toString());
+
+        return resource + "#" + escapeSegment(layer.getName());
+    }
+
+    private static String canonicalizeLayerResource(String resource)
+    {
+        return PLAYER_SLIM_LAYER.equals(resource) ? PLAYER_LAYER : resource;
+    }
+
+    static String getLegacyPlayerSlimBoneId(String boneId)
+    {
+        String playerPrefix = PLAYER_LAYER + "#";
+
+        if (boneId == null || !boneId.startsWith(playerPrefix))
+        {
+            return null;
+        }
+
+        return PLAYER_SLIM_LAYER + boneId.substring(PLAYER_LAYER.length());
     }
 
     private static void collectChildren(

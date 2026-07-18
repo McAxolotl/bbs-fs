@@ -319,6 +319,7 @@ public class UIPoseEditor extends UIElement
     {
         Map<String, String> idsByPath = new LinkedHashMap<>();
         Map<String, String> flipped = new LinkedHashMap<>();
+        LinkedHashSet<String> paired = new LinkedHashSet<>();
 
         for (BoneHierarchy.Bone bone : hierarchy.getBones())
         {
@@ -331,9 +332,17 @@ public class UIPoseEditor extends UIElement
             String mirroredPath = this.hierarchyPathKey(hierarchy, bone, true);
             String partner = idsByPath.get(mirroredPath);
 
-            if (!path.equals(mirroredPath) && partner != null && !partner.equals(bone.id()))
+            if (
+                !path.equals(mirroredPath)
+                    && partner != null
+                    && !partner.equals(bone.id())
+                    && !paired.contains(bone.id())
+                    && !paired.contains(partner)
+            )
             {
                 flipped.put(bone.id(), partner);
+                paired.add(bone.id());
+                paired.add(partner);
             }
         }
 

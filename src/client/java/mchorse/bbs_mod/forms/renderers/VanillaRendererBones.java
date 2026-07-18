@@ -322,6 +322,20 @@ public final class VanillaRendererBones
                     {
                         addAlias(bone.getId(), canonicalBone.getId(), false, aliases, primaryAliases, ambiguousAliases);
                     }
+
+                    String legacyPlayerSlimId = VanillaBoneHierarchy.getLegacyPlayerSlimBoneId(canonicalBone.getId());
+
+                    if (legacyPlayerSlimId != null)
+                    {
+                        addAlias(
+                            legacyPlayerSlimId,
+                            canonicalBone.getId(),
+                            primaryHierarchies.containsKey(hierarchy),
+                            aliases,
+                            primaryAliases,
+                            ambiguousAliases
+                        );
+                    }
                 }
             }
 
