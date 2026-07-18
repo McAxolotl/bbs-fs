@@ -66,10 +66,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     private MatrixCache bones = new MatrixCache();
     private List<String> pickedBoneIds = List.of();
     private boolean animationInitialized;
+    private boolean animationPaused;
 
     public MobFormRenderer(MobForm form)
     {
         super(form);
+
+        this.animationPaused = form.paused.get();
     }
 
     @Override
@@ -112,6 +115,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.bones.clear();
             this.pickedBoneIds = List.of();
             this.animationInitialized = false;
+            this.animationPaused = this.form.paused.get();
             this.prevHandSwing = 0F;
         }
 
@@ -218,6 +222,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void render3D(FormRenderingContext context)
     {
         this.ensureEntity();
+        /* Animation-state values are applied only for the render call and reset afterwards. */
+        this.animationPaused = this.form.paused.get();
         this.bones.clear();
         this.pickedBoneIds = List.of();
 
@@ -436,7 +442,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());
                 FormUtilsClient.getRenderer(form).collectMatrices(
-                    part.useTarget.get() ? entity : part.getEntity(),
+                    part.getRenderEntity(entity),
                     stack,
                     matrices,
                     StringUtils.combinePaths(prefix, String.valueOf(i)),
@@ -509,7 +515,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            boolean paused = this.form.paused.get();
+            boolean paused = this.animationPaused;
 
             if (!paused)
             {
