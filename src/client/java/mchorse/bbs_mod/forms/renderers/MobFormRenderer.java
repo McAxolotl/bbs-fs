@@ -349,6 +349,12 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 context.world.pop();
             }
 
+            /* Restore the shared model-view matrix captured at entry instead of zeroing it.
+             * The old identity() leaked into the 2D UI batch when a MobForm is rendered as a
+             * body part inside a list/preview (through this 3D path) — the GUI transform was
+             * dropped, so every UI element drawn afterwards landed off-screen ("half the UI
+             * disappears" when a MobForm is nested under a ModelForm). Restoring is correct for
+             * the 3D viewport too. */
             RenderSystem.enableDepthTest();
             RenderSystem.getModelViewMatrix().set(cached);
         }

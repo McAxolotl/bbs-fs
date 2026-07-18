@@ -791,10 +791,12 @@ public abstract class BaseFilmController
 
             if (replay != null)
             {
-                ticks = replay.getTick(ticks);
+                /* Replay-local: a looping replay wraps the film tick to its own window, and that must not
+                 * carry over to the next replay in the loop (which would then wrap an already wrapped tick). */
+                int replayTicks = replay.getTick(ticks);
 
-                this.updateEntityAndForm(entity, ticks);
-                this.applyReplay(replay, ticks, entity);
+                this.updateEntityAndForm(entity, replayTicks);
+                this.applyReplay(replay, replayTicks, entity);
 
                 Map<String, Integer> actors = this.getActors();
 
@@ -809,20 +811,20 @@ public abstract class BaseFilmController
                         if (anEntity instanceof ActorEntity actor)
                         {
                             /* Force synchronize entity angles */
-                            actor.setYaw(replay.keyframes.yaw.interpolate(ticks).floatValue());
-                            actor.setHeadYaw(replay.keyframes.headYaw.interpolate(ticks).floatValue());
-                            actor.setBodyYaw(replay.keyframes.bodyYaw.interpolate(ticks).floatValue());
-                            actor.setPitch(replay.keyframes.pitch.interpolate(ticks).floatValue());
-                            replay.applyClientActions(ticks, new MCEntity(anEntity), this.film);
+                            actor.setYaw(replay.keyframes.yaw.interpolate(replayTicks).floatValue());
+                            actor.setHeadYaw(replay.keyframes.headYaw.interpolate(replayTicks).floatValue());
+                            actor.setBodyYaw(replay.keyframes.bodyYaw.interpolate(replayTicks).floatValue());
+                            actor.setPitch(replay.keyframes.pitch.interpolate(replayTicks).floatValue());
+                            replay.applyClientActions(replayTicks, new MCEntity(anEntity), this.film);
                         }
                         else if (anEntity instanceof PlayerEntity player)
                         {
-                            double x = replay.keyframes.x.interpolate(ticks);
-                            double y = replay.keyframes.y.interpolate(ticks);
-                            double z = replay.keyframes.z.interpolate(ticks);
-                            double prevX = replay.keyframes.x.interpolate(ticks - 1);
-                            double prevY = replay.keyframes.y.interpolate(ticks - 1);
-                            double prevZ = replay.keyframes.z.interpolate(ticks - 1);
+                            double x = replay.keyframes.x.interpolate(replayTicks);
+                            double y = replay.keyframes.y.interpolate(replayTicks);
+                            double z = replay.keyframes.z.interpolate(replayTicks);
+                            double prevX = replay.keyframes.x.interpolate(replayTicks - 1);
+                            double prevY = replay.keyframes.y.interpolate(replayTicks - 1);
+                            double prevZ = replay.keyframes.z.interpolate(replayTicks - 1);
 
                             player.setVelocity(x - prevX, y - prevY, z - prevZ);
                         }
