@@ -1427,7 +1427,7 @@ public class UIReplaysEditorUtils
 
                 for (BoneHierarchy.Bone ancestor : hierarchy.getAncestors(bone))
                 {
-                    String label = "  ".repeat(ancestor.depth()) + labels.getOrDefault(ancestor.id(), ancestor.name());
+                    String label = labels.getOrDefault(ancestor.id(), ancestor.name());
 
                     menu.action(Icons.LIMB, IKey.constant(label), () -> consumer.accept(ancestor.id()));
                 }
