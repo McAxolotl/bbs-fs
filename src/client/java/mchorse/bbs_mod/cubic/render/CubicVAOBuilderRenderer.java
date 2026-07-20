@@ -191,7 +191,7 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
         stack.pop();
     }
 
-    /** Write a cube vertex with its own normal (bevel strips shade smooth), transformed per vertex. */
+    /** Write a cube vertex with its own normal, transformed per vertex. */
     private void writeVertex(MaterialBucket bucket, MatrixStack stack, ModelGroup group, ModelVertex vertex)
     {
         this.normal.set(vertex.normal.x, vertex.normal.y, vertex.normal.z);

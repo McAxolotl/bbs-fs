@@ -10,10 +10,8 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A {@link ModelWeld} resolved against a concrete model. The weld seals a bending joint by pulling both
@@ -97,39 +95,6 @@ public class WeldBinding
         }
 
         return false;
-    }
-
-    /**
-     * Welded face quads per cube, so the bevel can leave those faces (and their edges) sharp — the seam
-     * lives on them — while the rest of the cube still rounds.
-     */
-    public static Map<ModelCube, Set<ModelQuad>> weldedFaces(Model model, List<ModelWeld> welds)
-    {
-        Map<ModelCube, Set<ModelQuad>> faces = new HashMap<>();
-
-        for (ModelWeld weld : welds)
-        {
-            collectFaces(model, weld.sourceBone, weld.sourceFace, faces);
-            collectFaces(model, weld.targetBone, weld.targetFace, faces);
-        }
-
-        return faces;
-    }
-
-    private static void collectFaces(Model model, String bone, String faceName, Map<ModelCube, Set<ModelQuad>> faces)
-    {
-        CubeFace face = CubeFace.fromName(faceName);
-        ModelGroup group = model.getGroup(bone);
-
-        if (face == null || group == null)
-        {
-            return;
-        }
-
-        for (ModelCube cube : facedCubes(group, face))
-        {
-            faces.computeIfAbsent(cube, (k) -> new HashSet<>()).add(faceQuad(cube, face));
-        }
     }
 
     /** The group's cubes that carry the welded face, in model order; {@link #pairByCrossSection} pairs them up. */
@@ -528,7 +493,7 @@ public class WeldBinding
 
         /**
          * Seam position for a point on the target cube's welded plane — bilinear over the face rect, so
-         * inset (beveled) geometry at the joint rides the seam too, not only the four exact corners.
+         * inset geometry at the joint rides the seam too, not only the four exact corners.
          */
         public Vector3f seamAtTarget(Vector3f local, Vector3f dest)
         {
@@ -557,7 +522,7 @@ public class WeldBinding
             float l1 = e1x * e1x + e1y * e1y + e1z * e1z;
             float l2 = e2x * e2x + e2y * e2y + e2z * e2z;
 
-            /* A face inset to a line by a large bevel has a degenerate edge — park that param mid-seam. */
+            /* A face inset to a line has a degenerate edge — park that param mid-seam. */
             float s = l1 > EPS_SQ ? (dx * e1x + dy * e1y + dz * e1z) / l1 : 0.5F;
             float t = l2 > EPS_SQ ? (dx * e2x + dy * e2y + dz * e2z) / l2 : 0.5F;
 
