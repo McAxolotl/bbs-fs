@@ -17,6 +17,7 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -25,6 +26,8 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.OtherClientPlayerEntity;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -88,6 +91,39 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         }
 
         return super.getBoneHierarchy();
+    }
+
+    private Pose mergeOverlays()
+    {
+        Pose overlay = this.form.poseOverlay.get().copy();
+
+        for (ValuePose additional : this.form.additionalOverlays)
+        {
+            Pose additionalPose = additional.get();
+
+            for (Map.Entry<String, PoseTransform> entry : additionalPose.transforms.entrySet())
+            {
+                PoseTransform target = overlay.get(entry.getKey());
+                PoseTransform value = entry.getValue();
+
+                if (value.fix != 0F)
+                {
+                    target.translate.lerp(value.translate, value.fix);
+                    target.scale.lerp(value.scale, value.fix);
+                    target.rotate.lerp(value.rotate, value.fix);
+                    target.rotate2.lerp(value.rotate2, value.fix);
+                }
+                else
+                {
+                    target.translate.add(value.translate);
+                    target.scale.add(value.scale).sub(1F, 1F, 1F);
+                    target.rotate.add(value.rotate);
+                    target.rotate2.add(value.rotate2);
+                }
+            }
+        }
+
+        return overlay;
     }
 
     private void bindTexture()
@@ -202,7 +238,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             float transition = this.form.paused.get() ? 0F : context.getTransition();
 
-            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get(), this.getColor(0xffffffff)))
+            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.mergeOverlays(), this.getColor(0xffffffff)))
             {
                 MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
             }
@@ -301,7 +337,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             MobRenderContext mobContext = MobRenderContext.push(
                 renderer,
                 this.form.pose.get(),
-                this.form.poseOverlay.get(),
+                this.mergeOverlays(),
                 this.getColor(context.color),
                 captureBase,
                 context.isPicking(),
@@ -480,7 +516,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         MobRenderContext context = MobRenderContext.push(
             renderer,
             this.form.pose.get(),
-            this.form.poseOverlay.get(),
+            this.mergeOverlays(),
             Color.white(),
             captureBase,
             false,

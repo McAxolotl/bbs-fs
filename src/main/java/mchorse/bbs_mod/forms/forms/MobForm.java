@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
@@ -7,6 +8,9 @@ import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MobForm extends Form implements PoseForm
 {
@@ -22,6 +26,8 @@ public class MobForm extends Form implements PoseForm
     public final ValuePose poseOverlay = new ValuePose("pose_overlay", new Pose());
     public final ValueBoolean boneTracks = new ValueBoolean("bone_tracks", true);
 
+    public final List<ValuePose> additionalOverlays = new ArrayList<>();
+
     public MobForm()
     {
         this.slim.invisible();
@@ -30,6 +36,15 @@ public class MobForm extends Form implements PoseForm
         this.add(this.mobNBT);
         this.add(this.pose);
         this.add(this.poseOverlay);
+
+        for (int i = 0; i < BBSSettings.recordingPoseTransformOverlays.get(); i++)
+        {
+            ValuePose valuePose = new ValuePose("pose_overlay" + i, new Pose());
+
+            this.additionalOverlays.add(valuePose);
+            this.add(valuePose);
+        }
+
         this.boneTracks.invisible();
         this.add(this.boneTracks);
         this.add(this.texture);
