@@ -57,6 +57,7 @@ import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
+import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -177,7 +178,6 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private boolean preserveUndo;
 
     /* Clipboards for the sub-list entries — copy/paste/presets, like every other editor's lists. */
-    private final EntryClipboard slots = new EntryClipboard(PresetManager.MODEL_SLOTS, "_CopyModelSlot");
     private final EntryClipboard welds = new EntryClipboard(PresetManager.MODEL_WELDS, "_CopyModelWeld");
 
     public UIModelEditorPanel(UIDashboard dashboard)
@@ -575,10 +575,10 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.itemsOffBody = this.body();
         this.itemsSection.fields.add(
             this.listHeader(UIKeys.MODEL_EDITOR_ITEMS_MAIN, UIKeys.MODEL_EDITOR_ITEM_ADD,
-                () -> this.addItem(this.itemsMainList()), this.slots, (data) -> this.pasteNewItem(this.itemsMainList(), data)),
+                () -> this.addItem(this.itemsMainList()), null),
             this.itemsMainBody,
             this.listHeader(UIKeys.MODEL_EDITOR_ITEMS_OFF, UIKeys.MODEL_EDITOR_ITEM_ADD,
-                () -> this.addItem(this.itemsOffList()), this.slots, (data) -> this.pasteNewItem(this.itemsOffList(), data)),
+                () -> this.addItem(this.itemsOffList()), null),
             this.itemsOffBody
         );
 
@@ -615,16 +615,17 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.flippedBody = this.body();
         this.pickingBody = this.body();
         this.mapsSection.fields.add(
-            this.listHeader(UIKeys.MODEL_EDITOR_FLIPPED_PARTS, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.flippedEntries), null, null),
+            this.listHeader(UIKeys.MODEL_EDITOR_FLIPPED_PARTS, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.flippedEntries), null),
             this.flippedBody,
-            this.listHeader(UIKeys.MODEL_EDITOR_PICKING_OVERRIDES, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.pickingEntries), null, null),
+            this.listHeader(UIKeys.MODEL_EDITOR_PICKING_OVERRIDES, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.pickingEntries), null),
             this.pickingBody
         );
 
         this.weldsSection = this.section(UIKeys.MODEL_EDITOR_WELDS, false);
         this.weldsBody = this.body();
         this.weldsSection.fields.add(
-            this.listHeader(IKey.EMPTY, UIKeys.MODEL_EDITOR_WELD_ADD, this::addWeld, this.welds, this::pasteNewWeld),
+            this.listHeader(IKey.EMPTY, UIKeys.MODEL_EDITOR_WELD_ADD, this::addWeld,
+                (menu) -> this.fillWeldMenu(menu, null, this::pasteNewWeld, null, null)),
             this.weldsBody
         );
 
@@ -675,20 +676,20 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     /**
-     * A sub-list header: a label on the left and a compact "+" add button pinned to the right. Both the
-     * header and the button open the list's clipboard menu on right click, so a copied entry can be
-     * pasted in as a new one — the same copy/paste/presets trio the other editors' list toolbars have.
+     * A sub-list header: a label on the left and a compact "+" add button pinned to the right. When the
+     * list has a clipboard, the button also carries its menu on right click, so a copied entry can be
+     * pasted straight in as a new one.
      */
-    private UIElement listHeader(IKey label, IKey tooltip, Runnable add, EntryClipboard clipboard, Consumer<MapType> pasteNew)
+    private UIElement listHeader(IKey label, IKey tooltip, Runnable add, Consumer<ContextMenuManager> menu)
     {
         UIIcon plus = new UIIcon(Icons.ADD, (b) -> add.run());
 
         plus.tooltip(tooltip, Direction.LEFT);
         plus.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
 
-        if (clipboard != null)
+        if (menu != null)
         {
-            plus.context((menu) -> this.fillEntryMenu(menu, clipboard, null, pasteNew, null, null));
+            plus.context(menu);
         }
 
         return UI.row(UIConstants.MARGIN, 0, UIConstants.CONTROL_HEIGHT,
@@ -892,12 +893,11 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         UIElement entry = UI.column(head, this.slotTransform(this.data, slot));
 
         entry.marginBottom(6);
-        entry.context((menu) -> this.fillEntryMenu(menu, this.slots,
-            () -> this.slotData(slot),
-            (data) -> this.applySlot(slot, data),
-            () -> this.duplicateItem(list, slot),
-            () -> this.removeItem(list, slot)
-        ));
+        entry.context((menu) ->
+        {
+            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_ITEM_DUPLICATE, () -> this.duplicateItem(list, slot));
+            menu.action(Icons.REMOVE, UIKeys.MODEL_EDITOR_ITEM_REMOVE, () -> this.removeItem(list, slot));
+        });
 
         return entry;
     }
@@ -928,7 +928,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
     private void duplicateItem(ModelConfig.ItemSlotList list, ArmorSlotValue slot)
     {
-        MapType data = this.slotData(slot);
+        MapType data = this.presetData(slot);
 
         BaseValue.edit(list, (v) ->
         {
@@ -943,49 +943,12 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.fillItems();
     }
 
-    private void pasteNewItem(ModelConfig.ItemSlotList list, MapType data)
-    {
-        BaseValue.edit(list, (v) ->
-        {
-            ArmorSlotValue slot = new ArmorSlotValue("");
-
-            slot.fromData(data);
-            list.add(slot);
-            list.sync();
-        });
-
-        this.data.rebuild();
-        this.fillItems();
-    }
-
-    /** A slot's value tree as a preset — the config stores its rotations in degrees, {@code toData} converts. */
-    private MapType slotData(ArmorSlotValue slot)
-    {
-        return this.presetData(slot);
-    }
-
-    /** A value group as preset data, or null if it doesn't serialise to a map (nothing to copy then). */
+    /** A value group as copyable data, or null if it doesn't serialise to a map (nothing to copy then). */
     private MapType presetData(BaseValue value)
     {
         BaseType data = value.toData();
 
         return data.isMap() ? data.asMap() : null;
-    }
-
-    private void applySlot(ArmorSlotValue slot, MapType data)
-    {
-        BaseValue.edit(slot, (v) -> slot.fromData(data));
-
-        this.data.rebuild();
-        this.fillSlotSections();
-    }
-
-    /** A pasted slot could sit in any of the three slot sections, so refresh all of them. */
-    private void fillSlotSections()
-    {
-        this.fillItems();
-        this.fillArmor();
-        this.fillFirstPerson();
     }
 
     private int activeCount(ModelConfig.ItemSlotList list)
@@ -1058,11 +1021,6 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
 
         column.marginBottom(6);
-        column.context((menu) -> this.fillEntryMenu(menu, this.slots,
-            () -> this.slotData(slot),
-            (data) -> this.applySlot(slot, data),
-            null, null
-        ));
 
         return column;
     }
@@ -1114,11 +1072,6 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
 
         column.marginBottom(6);
-        column.context((menu) -> this.fillEntryMenu(menu, this.slots,
-            () -> this.slotData(slot),
-            (data) -> this.applySlot(slot, data),
-            null, null
-        ));
 
         return column;
     }
@@ -1371,7 +1324,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         );
 
         entry.marginBottom(6);
-        entry.context((menu) -> this.fillEntryMenu(menu, this.welds,
+        entry.context((menu) -> this.fillWeldMenu(menu,
             () -> this.presetData(weld),
             (data) -> this.applyWeld(weld, data),
             () -> this.duplicateWeld(weld),
@@ -1551,36 +1504,28 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     /**
-     * The shared entry menu: duplicate, copy, paste and presets, then remove. {@code source} being null
-     * means the menu hangs off an "add" button (nothing to copy from), {@code duplicate}/{@code remove}
-     * being null mean the entry is a fixed slot rather than a list row.
+     * A weld's context menu: the copy/paste/presets icon row on top, then the text actions — the same
+     * shape the replay and clip lists use. {@code source} being null means the menu hangs off the "add"
+     * button (nothing to copy from, so the row's copy icon disables itself), and {@code duplicate} /
+     * {@code remove} are null there for the same reason.
      */
-    private void fillEntryMenu(ContextMenuManager menu, EntryClipboard clipboard, Supplier<MapType> source, Consumer<MapType> target, Runnable duplicate, Runnable remove)
+    private void fillWeldMenu(ContextMenuManager menu, Supplier<MapType> source, Consumer<MapType> target, Runnable duplicate, Runnable remove)
     {
-        clipboard.aim(source, target);
+        this.welds.aim(source, target);
 
         UIContext context = this.getContext();
 
+        menu.custom(new UIPresetContextMenu(this.welds.controller, context.mouseX, context.mouseY)
+            .labels(UIKeys.GENERAL_COPY, UIKeys.GENERAL_PASTE));
+
         if (duplicate != null)
         {
-            menu.action(Icons.DUPE, UIKeys.GENERAL_DUPE, duplicate);
+            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_WELD_DUPLICATE, duplicate);
         }
-
-        if (source != null)
-        {
-            menu.action(Icons.COPY, UIKeys.GENERAL_COPY, clipboard.controller::copy);
-        }
-
-        if (clipboard.controller.canPaste())
-        {
-            menu.action(Icons.PASTE, UIKeys.GENERAL_PASTE, () -> clipboard.controller.paste(context.mouseX, context.mouseY));
-        }
-
-        menu.action(Icons.MORE, UIKeys.GENERAL_PRESETS, () -> clipboard.controller.openPresets(context, context.mouseX, context.mouseY));
 
         if (remove != null)
         {
-            menu.action(Icons.REMOVE, UIKeys.GENERAL_REMOVE, remove);
+            menu.action(Icons.REMOVE, UIKeys.MODEL_EDITOR_WELD_REMOVE, remove);
         }
     }
 
