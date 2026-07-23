@@ -39,7 +39,7 @@ public class BBSSettings {
 	public static ValueInt stencilHighlightColor;
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
-	public static ValueInt userIntefaceScale;
+	public static ValueFloat userIntefaceScale;
 	public static ValueInt theme;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
@@ -463,7 +463,7 @@ public class BBSSettings {
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
-		userIntefaceScale = builder.getInt("ui_scale", 2, 0, 4);
+		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
@@ -494,11 +494,11 @@ public class BBSSettings {
 
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);
-		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
-		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
+		axesScale = builder.getFloat("axes_scale", 2F, 0F, 10F);
+		axesThickness = builder.getFloat("axes_thickness", 0.35F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 1);
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);

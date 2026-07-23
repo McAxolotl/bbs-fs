@@ -211,7 +211,7 @@ public class CubicCubeRenderer implements ICubicRenderer
             }
 
             /* Only quads within a seam's bend band tessellate — everything further is rigid anyway, so it
-             * takes the plain path (a beveled cube is mostly far quads). */
+             * takes the plain path (most of a cube's quads are far ones). */
             if (subdivide && this.nearSeam(quad))
             {
                 this.renderQuadSubdivided(builder, stack, group, quad);
@@ -366,7 +366,7 @@ public class CubicCubeRenderer implements ICubicRenderer
         }
     }
 
-    /** Write a cube vertex with its own normal (bevel strips shade smooth), transformed per vertex. */
+    /** Write a cube vertex with its own normal, transformed per vertex. */
     protected void writeVertex(BufferBuilder builder, MatrixStack stack, ModelGroup group, ModelVertex vertex)
     {
         this.normal.set(vertex.normal.x, vertex.normal.y, vertex.normal.z);
@@ -417,7 +417,7 @@ public class CubicCubeRenderer implements ICubicRenderer
      * weight is evaluated per sub-vertex (not interpolated from the corners, which only ever sit at distance 0
      * or the full length) so the band actually shapes the bend. Fine sub-quads are each nearly affine, so the
      * texture warps smoothly across that band instead of kinking along the diagonal of a flat trapezoid.
-     * Normals interpolate from the corners' own normals, so beveled strips keep their smooth shading.
+     * Normals interpolate from the corners' own normals, so curved strips keep their smooth shading.
      */
     private void renderQuadSubdivided(BufferBuilder builder, MatrixStack stack, ModelGroup group, ModelQuad quad)
     {
@@ -427,7 +427,7 @@ public class CubicCubeRenderer implements ICubicRenderer
 
         for (int i = 0; i < 4; i++)
         {
-            /* A triangle (beveled corner) rides through as a quad with its last corner doubled. */
+            /* A triangle rides through as a quad with its last corner doubled. */
             ModelVertex corner = quad.vertices.get(Math.min(i, count - 1));
 
             this.vertex.set(corner.vertex.x, corner.vertex.y, corner.vertex.z, 1);
@@ -628,7 +628,7 @@ public class CubicCubeRenderer implements ICubicRenderer
 
     /**
      * Draw pass: pull a vertex lying on a welded plane onto the layer's seam — bilinear over the welded
-     * face's rect, so inset bevel geometry at the joint rides the seam too, not only the four exact corners.
+     * face's rect, so inset geometry at the joint rides the seam too, not only the four exact corners.
      */
     private void snapWeldCorner(Vector3f local)
     {
