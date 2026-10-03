@@ -103,6 +103,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     public boolean subMouseReleased(UIContext context)
     {
+        if (this.formEditor.shapeControllerOverlay.release()) return true;
         if (this.gizmo.mouseReleased(context))
         {
             return true;
@@ -294,6 +295,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         super.render(context);
 
         this.formEditor.renderSplineOverlay(context);
+        this.formEditor.renderShapeControllers(context);
 
         this.gizmo.renderSphereHighlight(context);
         this.gizmo.renderReadout(context);

@@ -70,6 +70,7 @@ public final class AddonApiCheck implements net.fabricmc.loader.api.entrypoint.P
         SplineIKDataTest.main(new String[]{"client"});
         SplineFormCheck.run();
         mchorse.bbs_mod.film.ReplayAnchorCheck.run();
+        mchorse.bbs_mod.cubic.ShapeControllerCheck.run();
         System.out.println("AddonApiCheck: " + checks + " checks passed");
     }
 

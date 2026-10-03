@@ -104,6 +104,7 @@ public class UIModelConfigEditor extends UIElement
         ITEMS(Icons.HOTBAR, UIKeys.MODEL_EDITOR_ITEMS),
         FIRST_PERSON(Icons.LOOKING, UIKeys.MODEL_EDITOR_FIRST_PERSON),
         PROCEDURAL(Icons.PLAY, L10n.lang("bbs.ui.model_editor.procedural_tab")),
+        SHAPES(Icons.SHAPES, mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers.key("title")),
         POSES(Icons.POSE, UIKeys.MODEL_EDITOR_POSES);
 
         public final Icon icon;
@@ -182,6 +183,12 @@ public class UIModelConfigEditor extends UIElement
     /** The poses page: the config's two poses picked by a tab strip, the editor of the picked one under it. */
     private UITabStrip poseTabs;
     private UIModelPoseEditor poseEditor;
+    private UIModelShapeControllers shapeControllers;
+
+    public mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers activeShapeControllers()
+    {
+        return lastTab == Tab.SHAPES ? this.shapeControllers.controls : null;
+    }
 
     /** Which pose the poses page shows: the default one, or the sneaking one. */
     private boolean defaultPose;
@@ -353,6 +360,8 @@ public class UIModelConfigEditor extends UIElement
 
     private void createPages()
     {
+        this.shapeControllers = new UIModelShapeControllers(this.modelPanel);
+        this.page(Tab.SHAPES).add(this.shapeControllers);
         /* General: what the loader had to work around, first and only when there is any; then the
          * plain settings in a few folded sections. */
         this.warningsSection = this.section(UIKeys.MODEL_EDITOR_WARNINGS, true);
@@ -565,6 +574,7 @@ public class UIModelConfigEditor extends UIElement
     public void fill(ModelConfig config)
     {
         this.data = config;
+        this.shapeControllers.fill(config == null ? null : this.instance());
 
         if (config == null)
         {
@@ -961,6 +971,7 @@ public class UIModelConfigEditor extends UIElement
      */
     public ModelSlotTarget shownTarget()
     {
+        if (lastTab == Tab.SHAPES) return this.shapeControllers.target();
         if (lastTab == Tab.POSES)
         {
             return this.poseTarget();

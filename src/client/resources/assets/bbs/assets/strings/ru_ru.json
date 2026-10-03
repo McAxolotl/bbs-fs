@@ -1,4 +1,16 @@
 {
+	"bbs.ui.shape_controllers.title": "Контроллеры ключевых форм",
+	"bbs.ui.shape_controllers.height": "Высота",
+	"bbs.ui.shape_controllers.tilt": "Наклон",
+	"bbs.ui.shape_controllers.name": "Имя",
+	"bbs.ui.shape_controllers.bone": "Кость",
+	"bbs.ui.shape_controllers.place": "Разместить контроллер",
+	"bbs.ui.shape_controllers.bindings": "Привязки ключевых форм",
+	"bbs.ui.shape_controllers.bone_hint": "Ручка следует за этой костью",
+	"bbs.ui.shape_controllers.preview": "Предпросмотр ключевых форм",
+	"bbs.ui.shape_controllers.height_gain": "Влияние высоты",
+	"bbs.ui.shape_controllers.tilt_gain": "Влияние наклона",
+
 	"bbs.ui.keyframes.mode.keys": "Ключи",
 	"bbs.ui.keyframes.mode.graph": "Граф",
 	"bbs.ui.keyframes.graph.empty": "Выберите числовые дорожки",

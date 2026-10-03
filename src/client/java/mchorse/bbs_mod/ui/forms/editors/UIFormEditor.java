@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.ui.utils.shapes.ShapeControllerOverlay;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIShapeKeysKeyframeFactory;
 import mchorse.bbs_mod.ui.utils.SplineKeyframeEditor;
 import mchorse.bbs_mod.cubic.spline.SplineIK;
 import mchorse.bbs_mod.forms.forms.SplineForm;
@@ -105,6 +107,24 @@ import java.util.function.Supplier;
 public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBoneSelectionHost
 {
     private final BoneSelection boneSelection = new BoneSelection();
+    public final ShapeControllerOverlay shapeControllerOverlay = new ShapeControllerOverlay();
+
+    public void renderShapeControllers(UIContext context)
+    {
+        if (this.statesEditor.isVisible())
+        {
+            if (this.statesKeyframes.keyframeEditor.editor instanceof UIShapeKeysKeyframeFactory keys)
+                this.shapeControllerOverlay.preview(context, this.renderer, keys.form, keys.controls, keys::beginControllerGesture, keys::endControllerGesture);
+            else this.shapeControllerOverlay.clear();
+        }
+        else if (this.editor != null && this.editor.view instanceof mchorse.bbs_mod.ui.forms.editors.panels.UIModelFormPanel panel)
+        {
+            this.shapeControllerOverlay.preview(context, this.renderer, (mchorse.bbs_mod.forms.forms.ModelForm) this.editor.form,
+                panel.shapeControllers, panel.shapeControllers::endGesture, panel.shapeControllers::endGesture);
+        }
+        else this.shapeControllerOverlay.clear();
+    }
+
     private final SplineOverlay splineOverlay = new SplineOverlay();
     private static final Gizmo.HandleMask NO_GIZMO_HANDLES = Gizmo.HandleMask.of(
         java.util.EnumSet.noneOf(Gizmo.Op.class), java.util.EnumSet.noneOf(mchorse.bbs_mod.utils.Axis.class));
@@ -508,6 +528,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
                 }
             }
         }
+
+        if (this.shapeControllerOverlay.click(context)) return true;
 
         if (!this.statesEditor.isVisible() && !context.isFocused() && context.mouseButton == 0 && Window.isCtrlPressed()
             && this.renderer.area.isInside(context) && this.editor != null

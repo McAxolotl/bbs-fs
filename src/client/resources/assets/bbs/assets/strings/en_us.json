@@ -1,4 +1,16 @@
 {
+	"bbs.ui.shape_controllers.title": "Shape key controllers",
+	"bbs.ui.shape_controllers.height": "Height",
+	"bbs.ui.shape_controllers.tilt": "Tilt",
+	"bbs.ui.shape_controllers.name": "Name",
+	"bbs.ui.shape_controllers.bone": "Bone",
+	"bbs.ui.shape_controllers.place": "Place controller",
+	"bbs.ui.shape_controllers.bindings": "Shape bindings",
+	"bbs.ui.shape_controllers.bone_hint": "The handle follows this bone",
+	"bbs.ui.shape_controllers.preview": "Shape key preview",
+	"bbs.ui.shape_controllers.height_gain": "Height influence",
+	"bbs.ui.shape_controllers.tilt_gain": "Tilt influence",
+
 	"bbs.ui.keyframes.mode.keys": "Keys",
 	"bbs.ui.keyframes.mode.graph": "Graph",
 	"bbs.ui.keyframes.graph.empty": "Select numeric tracks",

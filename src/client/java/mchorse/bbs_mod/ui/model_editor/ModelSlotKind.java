@@ -11,6 +11,7 @@ public enum ModelSlotKind
     ITEM_MAIN(false, false),
     ITEM_OFF(false, true),
     ARMOR(false, false),
+    SHAPE_CONTROLLER(false, false),
     FIRST_PERSON_MAIN(true, false),
     FIRST_PERSON_OFF(true, true),
 

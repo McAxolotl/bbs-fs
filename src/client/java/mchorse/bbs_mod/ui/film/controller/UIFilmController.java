@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.film.controller;
 
 
+import mchorse.bbs_mod.ui.utils.shapes.ShapeControllerOverlay;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIShapeKeysKeyframeFactory;
 import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.ui.utils.SplineKeyframeEditor;
@@ -85,6 +87,32 @@ import net.minecraft.world.World;
 
 public class UIFilmController extends UIElement implements GizmoViewport
 {
+    private final ShapeControllerOverlay shapeOverlay = new ShapeControllerOverlay();
+
+    public boolean pickShapeController(UIContext context)
+    {
+        return !this.isCovered() && !this.isRecording() && !this.panel.isFlying() && this.shapeOverlay.click(context);
+    }
+
+    private void renderShapeControllers(UIContext context)
+    {
+        if (this.isCovered() || this.isRecording() || this.panel.isFlying()
+            || this.panel.replayEditor.keyframeEditor == null
+            || !(this.panel.replayEditor.keyframeEditor.editor instanceof UIShapeKeysKeyframeFactory keys))
+        { this.shapeOverlay.clear(); return; }
+        IEntity entity = this.getCurrentEntity();
+        Replay replay = this.panel.replayEditor.getReplay();
+        if (entity == null || replay == null) { this.shapeOverlay.clear(); return; }
+        var camera = this.panel.getCamera();
+        this.shapeOverlay.draw(context, keys.controls, this.panel.preview.getViewport(), camera.projection, c ->
+        {
+            String path = mchorse.bbs_mod.utils.StringUtils.combinePaths(FormUtils.getPath(keys.form), c.bone.get());
+            Matrix4f matrix = mchorse.bbs_mod.film.FilmMatrices.getBoneCompositeMatrix(this.getEntities(), entity, replay,
+                camera.position.x, camera.position.y, camera.position.z, this.getCurrentTransition(), path, true);
+            return matrix == null ? null : new Matrix4f(camera.view).mul(matrix);
+        }, keys::beginControllerGesture, keys::endControllerGesture);
+    }
+
     private final SplineOverlay splineOverlay = new SplineOverlay();
 
     public boolean pickSplinePoint(UIContext context)
@@ -677,6 +705,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.pickShapeController(context)) return true;
         for (var tool : this.addonTools) if (tool.click(context)) return true;
 
         if (this.canControl())
@@ -777,6 +806,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (this.shapeOverlay.release()) return true;
         for (var tool : this.addonTools) if (tool.release(context)) return true;
 
         if (this.canControl())
@@ -1052,6 +1082,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     public void renderHUD(UIContext context, PreviewHud hud, Area navBlock)
     {
         this.renderSplineOverlay(context);
+        this.renderShapeControllers(context);
         for (var tool : this.addonTools) tool.updateTool(context);
         this.hud.render(context, hud, navBlock);
     }

@@ -1134,6 +1134,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
     public boolean clickViewport(UIContext context, Area area)
     {
+        if (!this.filmPanel.isFlying() && this.filmPanel.getController().pickShapeController(context)) return true;
         if (!this.filmPanel.isFlying() && this.filmPanel.getController().pickSplinePoint(context)) return true;
         /* In flight the buttons are the flight camera's, so the left one is left for it to
          * pick up as free look; only the middle one has to be handed over by hand. */

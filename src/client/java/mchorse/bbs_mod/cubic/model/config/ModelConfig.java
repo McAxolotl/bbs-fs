@@ -47,6 +47,7 @@ public class ModelConfig extends ValueGroup
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueFloat uiScale = new ValueFloat("ui_scale", 1F);
     public final ValueVector3f scale = new ValueVector3f("scale", new Vector3f(1F));
+    public final ShapeController.Controllers shapeControllers = new ShapeController.Controllers("shape_controllers");
     public final WeldList welds = new WeldList("welds");
     public final ValueStringKeys disabledBones = new ValueStringKeys("disabledBones");
 
@@ -91,6 +92,7 @@ public class ModelConfig extends ValueGroup
         this.add(this.uiScale);
         this.add(this.scale);
         this.add(this.welds);
+        this.add(this.shapeControllers);
         this.add(this.disabledBones);
         this.add(this.lookAt);
         this.add(this.sneakingPose);
@@ -116,6 +118,8 @@ public class ModelConfig extends ValueGroup
             this.proceduralBones.fromData(new MapType());
         }
 
+        if (data.isMap() && !data.asMap().has("shape_controllers")) this.shapeControllers.fromData(new ListType());
+
         super.fromData(data);
 
         this.rebuild();
@@ -125,6 +129,7 @@ public class ModelConfig extends ValueGroup
     protected boolean canPersist(BaseValue value)
     {
         /* Optional blocks stay absent from the file when empty, matching how they were authored. */
+        if (value == this.shapeControllers) return !this.shapeControllers.getAllTyped().isEmpty();
         if (value == this.proceduralBones) return !this.proceduralBones.get().isEmpty();
         if (value == this.lookAt) return this.lookAt.isActive();
         if (value == this.fpMain) return this.fpMain.isActive();
@@ -268,6 +273,9 @@ public class ModelConfig extends ValueGroup
     private static void renameBone(MapType data, String from, String to)
     {
         renameString(data, "anchor", from, to);
+        ListType controllers = list(data, "shape_controllers");
+        if (controllers != null) for (BaseType controller : controllers)
+            if (controller.isMap()) renameString(controller.asMap(), "bone", from, to);
         MapType procedural = map(data, "procedural_bones");
 
         if (procedural != null)
