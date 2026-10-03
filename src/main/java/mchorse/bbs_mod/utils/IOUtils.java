@@ -53,12 +53,10 @@ public class IOUtils
      */
     public static String readText(InputStream in)
     {
-        Scanner scanner = new Scanner(new InputStreamReader(in, StandardCharsets.UTF_8));
-        String result = scanner.useDelimiter("\\A").next();
-
-        scanner.close();
-
-        return result;
+        try (Scanner scanner = new Scanner(new InputStreamReader(in, StandardCharsets.UTF_8)))
+        {
+            return scanner.useDelimiter("\\A").next();
+        }
     }
 
     public static void writeText(File file, String string) throws IOException

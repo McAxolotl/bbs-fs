@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.utils.watchdog;
 
+import com.sun.nio.file.ExtendedWatchEventModifier;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -30,12 +32,17 @@ public class WatchDog implements Runnable
     private volatile boolean stopThread;
 
     private boolean onlyTop;
+    private final boolean watchTree;
 
     public WatchDog(File folder, boolean onlyTop, Consumer<Runnable> spawner)
     {
         this.folder = folder.toPath();
         this.spawner = spawner;
         this.onlyTop = onlyTop;
+
+        /* Separate handles for descendants prevent renaming their parent on Windows.
+         * Its native recursive watch only needs to keep the asset root open. */
+        this.watchTree = !onlyTop && System.getProperty("os.name").startsWith("Windows");
     }
 
     public WatchDogProxy getProxy()
@@ -47,11 +54,14 @@ public class WatchDog implements Runnable
     {
         try
         {
-            WatchKey key = path.register(this.service,
+            WatchEvent.Kind<?>[] events = {
                 StandardWatchEventKinds.ENTRY_CREATE,
                 StandardWatchEventKinds.ENTRY_MODIFY,
                 StandardWatchEventKinds.ENTRY_DELETE
-            );
+            };
+            WatchKey key = this.watchTree
+                ? path.register(this.service, events, ExtendedWatchEventModifier.FILE_TREE)
+                : path.register(this.service, events);
 
             this.keys.put(key, path);
         }
@@ -63,7 +73,7 @@ public class WatchDog implements Runnable
 
     private void registerFolderRecursive(final Path path) throws IOException
     {
-        if (this.onlyTop)
+        if (this.onlyTop || this.watchTree)
         {
             this.registerFolder(path);
         }
@@ -178,7 +188,8 @@ public class WatchDog implements Runnable
                 continue;
             }
 
-            if (kind == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) && !this.onlyTop)
+            if (kind == StandardWatchEventKinds.ENTRY_CREATE && !this.onlyTop && !this.watchTree
+                && Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS))
             {
                 try
                 {
