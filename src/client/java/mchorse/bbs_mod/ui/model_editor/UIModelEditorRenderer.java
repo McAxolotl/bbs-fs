@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.model_editor;
 
+import mchorse.bbs_mod.ui.utils.shapes.ShapeControllerOverlay;
+import mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
@@ -107,6 +109,9 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     /** A cube to outline in the viewport, and in what colour. */
     public record Outline(ModelNode node, int color)
     {}
+
+    private final ShapeControllerOverlay shapeOverlay = new ShapeControllerOverlay();
+    public Supplier<UIShapeControllers> shapeControls = () -> null;
 
     private final StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private final StencilMap stencilMap = new StencilMap();
@@ -529,7 +534,8 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             return null;
         }
 
-        return this.boneMatrix(target) == null ? null : target;
+        return target.kind() == ModelSlotKind.SHAPE_CONTROLLER && target.bone().isEmpty() ? target
+            : this.boneMatrix(target) == null ? null : target;
     }
 
     private Matrix4f boneMatrix(ModelSlotTarget target)
@@ -628,7 +634,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
                     frame.set(bone).rotateX(MathUtils.PI / 2F).rotateY(MathUtils.PI).translate(0F, 0.125F, 0F);
                 }
             }
-            case ARMOR ->
+            case ARMOR, SHAPE_CONTROLLER ->
             {
                 Matrix4f bone = this.boneMatrix(target);
 
@@ -1024,6 +1030,10 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     {
         super.render(context);
 
+        UIShapeControllers controllers = this.shapeControls.get();
+        this.shapeOverlay.preview(context, this, (mchorse.bbs_mod.forms.forms.ModelForm) this.form, controllers,
+            () -> { if (controllers != null) controllers.endGesture(); },
+            () -> { if (controllers != null) controllers.endGesture(); });
         this.gizmo.renderSphereHighlight(context);
         this.gizmo.renderReadout(context);
 
@@ -1112,10 +1122,14 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             }
         }
 
-        if (this.gizmo.mouseClicked(context))
+        if (this.gizmo.mouseClickedHandle(context))
         {
             return true;
         }
+
+        ModelSlotTarget target = this.shownTarget();
+        if (this.shapeOverlay.click(context, target != null && target.kind() == ModelSlotKind.SHAPE_CONTROLLER)) return true;
+        if (this.gizmo.mouseClickedSphere(context)) return true;
 
         /* A left click on a bone picks it in the panel's tree, the way the form editor picks a bone —
          * with cube picking on, the cube of the bone under the cursor, on the geometry itself; when
@@ -1153,6 +1167,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     @Override
     public boolean subMouseReleased(UIContext context)
     {
+        if (this.shapeOverlay.release()) return true;
         if (this.gizmo.mouseReleased(context))
         {
             return true;

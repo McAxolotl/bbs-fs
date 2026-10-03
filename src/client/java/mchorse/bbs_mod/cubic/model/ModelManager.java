@@ -431,7 +431,9 @@ public class ModelManager implements IWatchDogListener
             return false;
         }
 
-        if (link.path.contains("/animations/") || link.path.contains("/shapes/"))
+        if (link.path.contains("/shapes/")) return link.path.endsWith(".obj");
+
+        if (link.path.contains("/animations/"))
         {
             return false;
         }
@@ -468,10 +470,17 @@ public class ModelManager implements IWatchDogListener
 
         String modelPath = link.path.substring(MODELS_PREFIX.length());
 
+        if (modelPath.endsWith("/shapes"))
+        {
+            this.forget(StringUtils.parentPath(modelPath));
+            return;
+        }
+
         if (this.isRelodable(link))
         {
             /* A model is the folder the file sits in. */
-            this.forget(StringUtils.parentPath(modelPath));
+            int shapes = modelPath.indexOf("/shapes/");
+            this.forget(shapes < 0 ? StringUtils.parentPath(modelPath) : modelPath.substring(0, shapes));
 
             return;
         }

@@ -17,15 +17,33 @@ public class UIShapeKeysKeyframeFactory extends UIKeyframeFactory<ShapeKeys>
 {
     private UIShapeKeys shapeKeys;
     private ShapeKeys displayed;
+    private ModelInstance displayedModel;
+    public final ModelForm form;
+    public final mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers controls;
+
+    public void beginControllerGesture() { this.editor.beginValueGesture(); }
+    public void endControllerGesture() { this.editor.endValueGesture(); }
 
     public UIShapeKeysKeyframeFactory(UITrackValue<ShapeKeys> track, UIKeyframes editor)
     {
         super(track, editor);
 
         UIKeyframeSheet sheet = track.sheet;
-        ModelForm form = (ModelForm) FormUtils.getForm(sheet.property);
+        this.form = (ModelForm) FormUtils.getForm(sheet.property);
         ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(form)).getModel();
-        Set<String> shapeKeys = model.model.getShapeKeys();
+        this.displayedModel = model;
+        Set<String> shapeKeys = model == null ? java.util.Set.of() : model.model.getShapeKeys();
+        this.displayed = track.getValue();
+        this.controls = new mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers(edit ->
+        {
+            this.track.edit(edit);
+            this.displayed = this.getDisplayValue();
+            this.controlsRefresh();
+        });
+        this.controls.fill(model == null ? java.util.List.of() : model.config.shapeControllers.getAllTyped(), this.displayed);
+        this.controls.boundary(this::endControllerGesture);
+        this.controls.presets(() -> this.displayedModel == null ? "" : this.displayedModel.getPoseGroup());
+        if (model != null && !model.config.shapeControllers.getAllTyped().isEmpty()) this.scroll.add(this.controls);
 
         this.shapeKeys = new UIShapeKeysEditor(this);
 
@@ -37,13 +55,29 @@ public class UIShapeKeysKeyframeFactory extends UIKeyframeFactory<ShapeKeys>
         }
     }
 
+    private void controlsRefresh() { this.controls.refresh(this.displayed); }
+
     @Override
     public void update()
     {
-        if (this.displayed != null && !this.shapeKeys.value.isUserEditing())
+        ModelInstance model = ModelFormRenderer.getModel(this.form);
+        if (model != this.displayedModel)
+        {
+            this.endControllerGesture();
+            this.displayedModel = model;
+            this.controls.fill(model == null ? java.util.List.of() : model.config.shapeControllers.getAllTyped(), this.displayed);
+            this.shapeKeys.setShapeKeys(model == null ? "" : model.getPoseGroup(), model == null ? java.util.Set.of() : model.model.getShapeKeys(), this.displayed);
+            this.controls.removeFromParent();
+            this.shapeKeys.removeFromParent();
+            if (model != null && !model.config.shapeControllers.getAllTyped().isEmpty()) this.scroll.add(this.controls);
+            if (model != null && !model.model.getShapeKeys().isEmpty()) this.scroll.add(this.shapeKeys);
+            this.scroll.resize();
+        }
+        if (this.displayed != null && !this.shapeKeys.value.isUserEditing() && !this.controls.isEditing())
         {
             this.displayed = this.getDisplayValue();
             this.shapeKeys.refreshValue(this.displayed);
+            this.controlsRefresh();
         }
     }
 

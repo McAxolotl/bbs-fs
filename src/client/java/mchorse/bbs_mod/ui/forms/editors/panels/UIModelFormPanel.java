@@ -26,7 +26,10 @@ import java.util.function.Consumer;
 
 public class UIModelFormPanel extends UIFormPanel<ModelForm>
 {
+    private ModelInstance displayedModel;
     public UIModelPoseEditor poseEditor;
+    public mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers shapeControllers;
+    private UISection shapeControllersSection;
     public UIShapeKeys shapeKeys;
     public UISection shapeKeysSection;
 
@@ -61,7 +64,29 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         });
         this.poseEditor = new UIModelPoseEditor();
         this.poseEditor.transform.barBackground();
-        this.shapeKeys = new UIShapeKeys();
+        this.shapeKeys = new UIShapeKeys()
+        {
+            @Override protected void changedShapeKeys(Runnable edit)
+            {
+                UIModelFormPanel.this.form.shapeKeys.preNotify();
+                super.changedShapeKeys(edit);
+                UIModelFormPanel.this.form.shapeKeys.postNotify();
+            }
+        };
+        this.shapeControllers = new mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers(edit ->
+        {
+            this.form.shapeKeys.preNotify();
+            edit.accept(this.form.shapeKeys.get());
+            this.form.shapeKeys.postNotify();
+        });
+        this.shapeControllers.boundary(() -> this.form.shapeKeys.preNotify(mchorse.bbs_mod.settings.values.IValueListener.FLAG_UNMERGEABLE));
+        this.shapeControllers.presets(() ->
+        {
+            ModelInstance model = ModelFormRenderer.getModel(this.form);
+            return model == null ? "" : model.getPoseGroup();
+        });
+        this.shapeControllersSection = this.section(mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers.key("title"), "model.shape_controllers", true);
+        this.shapeControllersSection.fields.add(this.shapeControllers);
         this.shapeKeys.title.removeFromParent();
         this.shapeKeysSection = this.section(UIKeys.SHAPE_KEYS_TITLE, "model.shape_keys", false);
         this.shapeKeysSection.fields.add(this.shapeKeys);
@@ -175,6 +200,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         super.startEdit(form);
 
         ModelInstance model = ModelFormRenderer.getModel(this.form);
+        this.displayedModel = model;
 
         this.poseEditor.setValuePose(form.pose);
         this.poseEditor.setPose(form.pose.get(), model == null ? this.form.model.get() : model.getPoseGroup());
@@ -182,6 +208,9 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
 
         Set<String> modelShapeKeys = model == null ? Collections.emptySet() : model.model.getShapeKeys();
 
+        this.shapeControllersSection.removeFromParent();
+        this.shapeControllers.fill(model == null ? List.of() : model.config.shapeControllers.getAllTyped(), this.form.shapeKeys.get());
+        if (model != null && !model.config.shapeControllers.getAllTyped().isEmpty()) this.options.add(this.shapeControllersSection);
         this.shapeKeysSection.removeFromParent();
         this.shapeKeys.setShapeKeys(model == null ? "" : model.getPoseGroup(), modelShapeKeys, this.form.shapeKeys.get());
 
@@ -199,6 +228,18 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         }
 
         this.options.resize();
+    }
+
+    @Override
+    public void render(mchorse.bbs_mod.ui.framework.UIContext context)
+    {
+        if (this.form != null)
+        {
+            if (ModelFormRenderer.getModel(this.form) != this.displayedModel) this.startEdit(this.form);
+            this.shapeControllers.refresh(this.form.shapeKeys.get());
+            if (!this.shapeKeys.value.isUserEditing()) this.shapeKeys.refreshValue(this.form.shapeKeys.get());
+        }
+        super.render(context);
     }
 
     @Override

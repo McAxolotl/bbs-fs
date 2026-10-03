@@ -149,6 +149,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
             .onPick(this::selectPick)
             .outlines(() -> lastEditor == Editor.MODEL ? this.modelEditor.outlines() : List.of());
         this.renderer.form = this.form;
+        this.renderer.shapeControls = this::activeShapeControllers;
 
         /* Two panes: the preview and, to its right, the settings — each keeping at least 160px. */
         /* The unwrap pane's grip measures from the left edge, and may not eat the preview: the two
@@ -347,7 +348,12 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     /** What the viewport gizmo is on: the open editor's. */
-    private ModelSlotTarget shownTarget()
+    public mchorse.bbs_mod.ui.utils.shapes.UIShapeControllers activeShapeControllers()
+    {
+        return lastEditor == Editor.CONFIG ? this.configEditor.activeShapeControllers() : null;
+    }
+
+    ModelSlotTarget shownTarget()
     {
         return lastEditor == Editor.CONFIG ? this.configEditor.shownTarget() : this.modelEditor.shownTarget();
     }
@@ -697,7 +703,19 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     {
         if (this.undoHandler != null)
         {
+            this.undoHandler.submitUndo(true);
             this.undoHandler.getUndoManager().markLastUndoNoMerging();
+        }
+    }
+
+    void editPreviewShapeKeys(java.util.function.Consumer<mchorse.bbs_mod.obj.shapes.ShapeKeys> edit)
+    {
+        var before = this.form.shapeKeys.get().copy();
+        edit.accept(this.form.shapeKeys.get());
+        if (this.undoHandler != null && !before.equals(this.form.shapeKeys.get()))
+        {
+            this.undoHandler.submitUndo(true);
+            this.undoHandler.getUndoManager().pushUndo(new ModelShapePreviewUndo(this.form, before, this.form.shapeKeys.get()));
         }
     }
 
@@ -785,6 +803,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
     public void undo()
     {
+        if (this.undoHandler != null) this.undoHandler.submitUndo(true);
         if (this.data != null && this.undoHandler != null && this.undoHandler.getUndoManager().undo(this.data))
         {
             this.afterUndo();
@@ -794,6 +813,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
     public void redo()
     {
+        if (this.undoHandler != null) this.undoHandler.submitUndo(true);
         if (this.data != null && this.undoHandler != null && this.undoHandler.getUndoManager().redo(this.data))
         {
             this.afterUndo();
