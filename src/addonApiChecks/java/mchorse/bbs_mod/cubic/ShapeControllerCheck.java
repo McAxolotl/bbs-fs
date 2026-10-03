@@ -69,6 +69,7 @@ public final class ShapeControllerCheck
         undo.undo(config); check(config.shapeControllers.getAllTyped().size() == 1, "Delete undo restores controller");
         undo.redo(config); check(config.shapeControllers.getAllTyped().isEmpty(), "Delete redo removes controller");
         previewUndo(c);
+        modelDiscovery();
 
         if (Boolean.getBoolean("bbs.check.shapeUI")) withUi(c);
         asset();
@@ -236,6 +237,51 @@ public final class ShapeControllerCheck
                 }
             }
         }
-        check(manager.isRelodable(new mchorse.bbs_mod.resources.Link("check", "models/eyes/1px_polygon/shapes/upper_l_inner.obj")), "Shape OBJ changes invalidate model");
+        check(!manager.isRelodable(new mchorse.bbs_mod.resources.Link("check", "models/eyes/1px_polygon/shapes/upper_l_inner.obj")), "Shape OBJ is not a standalone model");
+    }
+
+    private static void modelDiscovery() throws Exception
+    {
+        var root = java.nio.file.Files.createTempDirectory("bbs-shape-discovery");
+        var rig = root.resolve("models/eyes/1px_polygon");
+        var shape = rig.resolve("shapes/upper_l_inner.obj");
+        java.nio.file.Files.createDirectories(shape.getParent());
+        java.nio.file.Files.writeString(rig.resolve("model.obj"), "");
+        java.nio.file.Files.writeString(shape, "");
+        var provider = new mchorse.bbs_mod.resources.AssetProvider();
+        provider.register(new mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack("assets", root.toFile()).providesFiles());
+        var field = mchorse.bbs_mod.BBSMod.class.getDeclaredField("provider");
+        field.setAccessible(true);
+        var original = field.get(null);
+
+        try
+        {
+            field.set(null, provider);
+            var manager = new mchorse.bbs_mod.cubic.model.ModelManager(provider);
+            check(manager.getAvailableKeys().equals(List.of("eyes/1px_polygon")), "Shape folder does not become a second model");
+            var requestedField = manager.getClass().getDeclaredField("requested");
+            requestedField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            var requested = (java.util.Set<String>) requestedField.get(manager);
+
+            for (var event : mchorse.bbs_mod.utils.watchdog.WatchDogEvent.values())
+            {
+                requested.add("eyes/1px_polygon");
+                manager.accept(shape, event);
+                check(!requested.contains("eyes/1px_polygon"), "Shape event invalidates parent: " + event);
+            }
+
+            requested.add("eyes/1px_polygon");
+            manager.accept(shape.getParent(), mchorse.bbs_mod.utils.watchdog.WatchDogEvent.DELETED);
+            check(!requested.contains("eyes/1px_polygon"), "Whole shape folder invalidates parent");
+        }
+        finally
+        {
+            field.set(null, original);
+            try (var files = java.nio.file.Files.walk(root))
+            {
+                for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.delete(file);
+            }
+        }
     }
 }
