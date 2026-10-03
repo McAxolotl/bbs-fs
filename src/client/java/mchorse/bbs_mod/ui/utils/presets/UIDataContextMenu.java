@@ -37,6 +37,7 @@ public class UIDataContextMenu extends UIContextMenu
     private final MenuIcon paste;
     private final MenuIcon reset;
     private final MenuIcon save;
+    private final MenuIcon remove;
 
     private DataManager manager;
     private String group;
@@ -68,7 +69,9 @@ public class UIDataContextMenu extends UIContextMenu
         }).keepOpen();
         this.reset = new MenuIcon(MenuVerb.RESET, () -> this.send(new MapType())).keepOpen();
         this.save = new MenuIcon(MenuVerb.SAVE, this::saveCurrent).keepOpen();
+        this.remove = new MenuIcon(MenuVerb.REMOVE, this::removeCurrent).enabled(false).keepOpen();
 
+        this.bar.register(this.remove);
         this.bar.register(this.copy);
         this.bar.register(this.paste);
         this.bar.register(this.reset);
@@ -110,6 +113,26 @@ public class UIDataContextMenu extends UIContextMenu
 
             this.fillPoses();
             this.entries.search.setText("");
+        }
+    }
+
+    private void removeCurrent()
+    {
+        String name = this.entries.list.getVisibleSelection();
+
+        if (name == null)
+        {
+            return;
+        }
+
+        if (this.manager.removeData(this.group, name))
+        {
+            this.fillPoses();
+            this.entries.filter(this.entries.search.getText(), false);
+        }
+        else
+        {
+            this.getContext().notifyError(UIKeys.GENERAL_ERROR);
         }
     }
 
@@ -167,6 +190,15 @@ public class UIDataContextMenu extends UIContextMenu
         {
             this.scrolledToCurrent = true;
             this.scrollToCurrent();
+        }
+
+        boolean canRemove = this.entries.list.getVisibleSelection() != null;
+
+        if (this.remove.enabled != canRemove)
+        {
+            this.remove.enabled(canRemove);
+            this.bar.sync(true);
+            this.bar.resize();
         }
 
         super.render(context);
