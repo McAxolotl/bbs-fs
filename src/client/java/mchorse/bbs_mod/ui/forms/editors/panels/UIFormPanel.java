@@ -20,7 +20,7 @@ import java.util.function.Consumer;
 
 public abstract class UIFormPanel <T extends Form> extends UIElement
 {
-    private static final float DEFAULT_OPTIONS_WIDTH = 0.2F;
+    private static final int DEFAULT_OPTIONS_WIDTH = 100;
 
     /**
      * Fold state per section id, for the session. Panels are rebuilt from
@@ -40,31 +40,22 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
     {
         this.editor = editor;
 
-        /* The share is of the editor around this panel (it sits 20px short of it), keyed per panel class. */
-        this.draggable = UISplitter.fraction("form_panel." + this.getClass().getSimpleName(), this.getDefaultOptionsWidth(), 0F, 0.5F);
+        /* A separate key keeps old fractional sizes from being read as pixels. */
+        this.draggable = new UISplitter("form_panel_pixels." + this.getClass().getSimpleName(), false, DEFAULT_OPTIONS_WIDTH);
+        this.draggable.range(DEFAULT_OPTIONS_WIDTH, () -> Math.max((float) DEFAULT_OPTIONS_WIDTH, this.getParent().area.w * 0.5F));
         this.draggable.measure(this, this::getParent).fromEnd().onChange(() ->
         {
-            this.options.w(this.draggable.getValue()).resize();
+            this.options.w(this.draggable.getPixels()).resize();
             this.draggable.resize();
         });
 
         this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
         this.options.scroll.cancelScrolling();
-        this.options.relative(this).x(1F).w(this.draggable.getValue()).minW(120).h(1F).anchorX(1F);
+        this.options.relative(this).x(1F).w(this.draggable.getPixels()).minW(DEFAULT_OPTIONS_WIDTH).h(1F).anchorX(1F);
 
         this.draggable.relative(this.options).x(0F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
         this.add(this.options, this.draggable);
-    }
-
-    /**
-     * The options column's default share of the panel width, used until the
-     * user drags the divider (their choice is then remembered per panel class).
-     * Panels with denser controls (the IK panel's per-axis rows) override this.
-     */
-    protected float getDefaultOptionsWidth()
-    {
-        return DEFAULT_OPTIONS_WIDTH;
     }
 
     /**

@@ -106,10 +106,21 @@ public class FormCategories implements IWatchDogListener
 
     public List<FormCategory> getAllCategories()
     {
+        return this.getAllCategories(true, true);
+    }
+
+    public List<FormCategory> getAllCategories(boolean includeModels, boolean includeParticles)
+    {
         List<FormCategory> formCategories = new ArrayList<>();
 
         for (FormSection section : this.sections)
         {
+            if ((!includeModels && section instanceof ModelFormSection)
+                || (!includeParticles && section instanceof ParticleFormSection))
+            {
+                continue;
+            }
+
             formCategories.addAll(section.getCategories());
         }
 

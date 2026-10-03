@@ -407,14 +407,6 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
     }
 
     @Override
-    protected float getDefaultOptionsWidth()
-    {
-        /* The per-axis joint rows and the chain preview want more air than the
-         * generic 20% column; the divider drag still overrides per session. */
-        return 0.3F;
-    }
-
-    @Override
     public void startEdit(ModelForm form)
     {
         this.debug.setValue(BBSSettings.ikDebug.enabled.get());
