@@ -184,9 +184,6 @@ public class UIModelSplineFormPanel extends UIBoneListFormPanel implements Splin
     }
 
     @Override
-    protected float getDefaultOptionsWidth() { return 0.3F; }
-
-    @Override
     public void startEdit(ModelForm form)
     {
         this.endPointEdit();
