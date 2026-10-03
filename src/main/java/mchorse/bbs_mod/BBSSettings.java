@@ -58,6 +58,8 @@ public class BBSSettings {
 	public static ValueBoolean freezeModels;
 	public static ValueBoolean listModelPreview;
 	public static ValueBoolean morphingFocusSearch;
+	public static ValueBoolean hideMorphModels;
+	public static ValueBoolean hideMorphParticles;
 	public static ValueInt formCellSize;
 	public static ValueInt textureCellSize;
 	public static ValueString textureSort;
@@ -685,6 +687,10 @@ public class BBSSettings {
 		colorPickerHsvTab = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
+		hideMorphModels = builder.getBoolean("hide_morph_models", false);
+		hideMorphParticles = builder.getBoolean("hide_morph_particles", false);
+		hideMorphModels.invisible();
+		hideMorphParticles.invisible();
 		formCellSize = builder.getInt("form_cell_size", 60, 40, 140).slider();
 		textureCellSize = builder.getInt("texture_cell_size", 80, 40, 200).slider();
 		textureSort = builder.getString("texture_sort", "name");

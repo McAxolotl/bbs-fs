@@ -1243,6 +1243,10 @@ public class UIKeys
     public static final IKey MORPHING_FROM_MOB = L10n.lang("bbs.ui.morphing.from_mob");
     public static final IKey MORPHING_FILTER_CATEGORIES = L10n.lang("bbs.ui.morphing.filter_categories");
     public static final IKey MORPHING_FILTER_CATEGORIES_TITLE = L10n.lang("bbs.ui.morphing.filter_categories-title");
+    public static final IKey MORPHING_HIDE_MODELS = L10n.lang("bbs.ui.morphing.hide_models");
+    public static final IKey MORPHING_SHOW_MODELS = L10n.lang("bbs.ui.morphing.show_models");
+    public static final IKey MORPHING_HIDE_PARTICLES = L10n.lang("bbs.ui.morphing.hide_particles");
+    public static final IKey MORPHING_SHOW_PARTICLES = L10n.lang("bbs.ui.morphing.show_particles");
     public static final IKey MORPHING_TITLE = L10n.lang("bbs.ui.morphing.title");
     public static final IKey OVERLAYS_SOUNDS_ADD_MODE = L10n.lang("bbs.ui.overlays.sounds.add_mode");
     public static final IKey OVERLAYS_SOUNDS_FOLDER_MODE = L10n.lang("bbs.ui.overlays.sounds.folder_mode");
