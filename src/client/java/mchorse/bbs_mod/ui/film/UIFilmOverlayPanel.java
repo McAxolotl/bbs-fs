@@ -41,7 +41,7 @@ public class UIFilmOverlayPanel extends UIDataOverlayPanel<Film>
     @Override
     public int getPreferredWidth()
     {
-        return 400;
+        return 340;
     }
 
     private void openBackups()
