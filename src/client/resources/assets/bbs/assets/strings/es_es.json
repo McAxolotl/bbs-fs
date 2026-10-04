@@ -556,7 +556,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Shader del sombreador",
     "bbs.ui.forms.editors.general.step_height": "Altura de escalón",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Nombre de pistas y partes en vez de rutas como «0/1/2».",
-    "bbs.ui.forms.editors.general.ui_scale": "Escala de la IU",
     "bbs.ui.forms.editors.item.transforms": "Transformaciones de item",
     "bbs.ui.forms.editors.label.anchor": "Anclaje del texto",
     "bbs.ui.forms.editors.label.anchor_lines": "Líneas de anclaje",

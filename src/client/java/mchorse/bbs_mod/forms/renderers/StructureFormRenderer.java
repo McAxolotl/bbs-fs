@@ -144,6 +144,16 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
         );
     }
 
+    @Override
+    public mchorse.bbs_mod.utils.AABB getPreviewBounds()
+    {
+        this.ensureData();
+        if (this.data == null) return null;
+        Vector3f offset = this.getOffset();
+        Vec3i size = this.data.size;
+        return new mchorse.bbs_mod.utils.AABB(offset.x, offset.y, offset.z, size.getX(), size.getY(), size.getZ());
+    }
+
     /**
      * Bind the color overlay for the layer that is about to draw. The hook fires right after the
      * layer applied its own phases — which is where it bound vanilla's hurt-flash texture over
@@ -312,7 +322,8 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
 
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         MatrixStack matrices = context.batcher.getContext().getMatrices();
-        Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        Matrix4f uiMatrix = this.getPreviewMatrix(context, x1, y1, x2, y2);
+        this.applyTransforms(uiMatrix, context.getTransition());
 
         Color overlay = this.form.overlayColor.get();
         boolean overlayActive = OverlayBlend.isActive(overlay);
@@ -331,12 +342,8 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
         {
             MatrixStackUtils.multiply(matrices, uiMatrix);
 
-            Vec3i size = this.data.size;
-            float max = Math.max(size.getX(), Math.max(size.getY(), size.getZ()));
-            float scale = (max > 0 ? 1F / max : 1F) * this.form.uiScale.get();
             Vector3f offset = this.getOffset();
 
-            matrices.scale(scale, scale, scale);
             matrices.translate(offset.x, offset.y, offset.z);
 
             matrices.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
@@ -359,6 +366,16 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
             this.renderBlockEntities(matrices, consumers, LightmapTextureManager.MAX_LIGHT_COORDINATE, OverlayTexture.DEFAULT_UV);
 
             consumers.draw();
+            consumers.setSubstitute(null);
+            consumers.setUI(false);
+            CustomVertexConsumerProvider.clearRunnables();
+            if (overlayActive)
+            {
+                FormOverlay.unbind(previousOverlayTexture);
+                overlayActive = false;
+            }
+            matrices.translate(-offset.x, -offset.y, -offset.z);
+            this.renderPreviewBodyParts(context, matrices);
         }
         finally
         {
@@ -388,7 +405,6 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
         try
         {
             MatrixStackUtils.multiply(matrices, uiMatrix);
-            matrices.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
             matrices.translate(-0.5F, 0F, -0.5F);
 
             matrices.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);

@@ -573,7 +573,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Árnyékoló árnyék",
     "bbs.ui.forms.editors.general.step_height": "Lépésmagasság",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Sáv- és csatolási előtag a csontútvonal helyett.",
-    "bbs.ui.forms.editors.general.ui_scale": "UI skála",
     "bbs.ui.forms.editors.general.visible": "Látható",
     "bbs.ui.forms.editors.item.title": "Tárgy",
     "bbs.ui.forms.editors.item.transforms": "Tárgy átalakítása",

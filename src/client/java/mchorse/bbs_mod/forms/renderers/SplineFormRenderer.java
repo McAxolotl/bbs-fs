@@ -85,7 +85,6 @@ public class SplineFormRenderer extends FormRenderer<SplineForm>
     {
         Matrix4f matrix = new Matrix4f(ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2));
         this.applyTransforms(matrix, context.getTransition());
-        matrix.scale(this.form.uiScale.get());
         SplineOverlay.drawPreview(context, this.form, matrix);
     }
 }

@@ -36,7 +36,6 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UIToggle boneTracks;
     
     public UITextbox trackName;
-    public UITrackpad uiScale;
     public UITextbox name;
     public UIPropTransform transform;
 
@@ -76,8 +75,6 @@ public class UIGeneralFormPanel extends UIFormPanel
         });
         this.trackName = UIValues.textbox(120, () -> this.form.trackName);
         this.trackName.tooltip(UIKeys.FORMS_EDITORS_GENERAL_TRACK_NAME_TOOLTIP);
-        this.uiScale = UIValues.trackpad(() -> this.form.uiScale);
-        this.uiScale.limit(0.01D, 100D);
         this.name = UIValues.textbox(120, () -> this.form.name);
 
         this.transform = new UIPropTransform().callbacks(() -> this.form.transform).barBackground();
@@ -105,8 +102,7 @@ public class UIGeneralFormPanel extends UIFormPanel
 
         display.fields.add(
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_DISPLAY, this.name),
-            this.hotkey, this.visible, this.pickable,
-            UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE, this.uiScale)
+            this.hotkey, this.visible, this.pickable
         );
 
         UISection tracks = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRACKS);

@@ -522,7 +522,6 @@
     "bbs.ui.forms.editors.general.movement_speed": "속도",
     "bbs.ui.forms.editors.general.movement_speed-tooltip": "리플레이엔 영향 없고 변형된 플레이어에만 적용됩니다.",
     "bbs.ui.forms.editors.general.step_height": "계단 높이",
-    "bbs.ui.forms.editors.general.ui_scale": "UI 배율",
     "bbs.ui.forms.editors.general.visible": "가시성",
     "bbs.ui.forms.editors.item.title": "아이템",
     "bbs.ui.forms.editors.item.transforms": "아이템 변형",

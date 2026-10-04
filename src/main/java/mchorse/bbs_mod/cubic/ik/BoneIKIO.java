@@ -43,6 +43,8 @@ public final class BoneIKIO
                     continue;
                 }
 
+                bone.boneController.set(false);
+
                 if (bone.hasChain() || !bone.ik.get().isDefault())
                 {
                     clearChain(bone);
@@ -116,7 +118,13 @@ public final class BoneIKIO
 
                 JointDoF joint = new JointDoF();
 
-                joint.fromData(bonesMap.getMap(name));
+                MapType entry = bonesMap.getMap(name);
+                joint.fromData(entry);
+
+                if (entry.getBool("controller", false))
+                {
+                    bones.getOrCreate(name).boneController.set(true);
+                }
 
                 if (!joint.isFree())
                 {
@@ -203,11 +211,16 @@ public final class BoneIKIO
 
             JointDoF joint = bone.joint.get();
 
-            if (!joint.isFree())
+            if (!joint.isFree() || bone.boneController.get())
             {
                 MapType map = new MapType();
 
                 joint.toData(map);
+
+                if (bone.boneController.get())
+                {
+                    map.putBool("controller", true);
+                }
                 joints.put(bone.getId(), map);
             }
         }

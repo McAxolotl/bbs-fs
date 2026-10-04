@@ -396,7 +396,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             stack.push();
 
-            Matrix4f uiMatrix = getUIMatrix(context, x1, y1, x2, y2);
+            Matrix4f uiMatrix = this.getPreviewMatrix(context, x1, y1, x2, y2);
 
             this.applyTransforms(uiMatrix, context.getTransition());
 
@@ -404,12 +404,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             Link texture = link == null ? model.getTexture() : link;
             Color contextColor = Color.white();
             Color formColor = this.form.color.get();
-            float scale = this.form.uiScale.get() * model.getUiScale();
 
             this.evaluateChannels(null, model, context.getTransition());
 
             MatrixStackUtils.multiply(stack, uiMatrix);
-            stack.scale(scale, scale, scale);
 
             BBSModClient.getTextures().bindTexture(FormPbr.resolveAlbedo(this.form, "", texture, BBSModClient.getTextures().getTexture(texture)));
             RenderSystem.depthFunc(GL11.GL_LEQUAL);

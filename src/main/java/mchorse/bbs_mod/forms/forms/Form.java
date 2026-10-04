@@ -72,7 +72,6 @@ public abstract class Form extends ValueGroup
     public final ValueString name = new ValueString("name", "");
     public final ValueTransform transform = new ValueTransform("transform", new Transform());
     public final ValueTransform transformOverlay = new ValueTransform("transform_overlay", new Transform());
-    public final ValueFloat uiScale = new ValueFloat("uiScale", 1F);
     public final ValueBoolean shaderShadow = new ValueBoolean("shaderShadow", true);
     public final ValueBoolean additiveColor = new ValueBoolean("additive_color", false);
 
@@ -136,7 +135,6 @@ public abstract class Form extends ValueGroup
         this.disabledTracks.invisible();
         this.trackName.animatable(false).invisible();
         this.name.animatable(false).invisible();
-        this.uiScale.animatable(false).invisible();
         this.shaderShadow.animatable(false).invisible();
         this.additiveColor.animatable(false).invisible();
 
@@ -159,7 +157,6 @@ public abstract class Form extends ValueGroup
 
         this.syncOverlayTracks();
 
-        this.add(this.uiScale);
         this.add(this.shaderShadow);
         this.add(this.additiveColor);
 

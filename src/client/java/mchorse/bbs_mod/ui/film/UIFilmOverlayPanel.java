@@ -38,6 +38,12 @@ public class UIFilmOverlayPanel extends UIDataOverlayPanel<Film>
         this.icons.add(backups);
     }
 
+    @Override
+    public int getPreferredWidth()
+    {
+        return 340;
+    }
+
     private void openBackups()
     {
         DataPath selected = this.namesList.getCurrentFirst();

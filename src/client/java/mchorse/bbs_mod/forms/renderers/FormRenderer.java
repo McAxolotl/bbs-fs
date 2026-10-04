@@ -126,6 +126,36 @@ public abstract class FormRenderer <T extends Form>
 
     protected abstract void renderInUI(UIContext context, int x1, int y1, int x2, int y2);
 
+    /** Geometry in this form's local render3D coordinates, before the form transform. */
+    public mchorse.bbs_mod.utils.AABB getPreviewBounds()
+    {
+        return null;
+    }
+
+    public boolean isPreviewCameraFacing()
+    {
+        return false;
+    }
+
+    protected Matrix4f getPreviewMatrix(UIContext context, int x1, int y1, int x2, int y2)
+    {
+        Matrix4f stock = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        Matrix4f fitted = mchorse.bbs_mod.forms.renderers.utils.FormPreviewFit.frame(
+            this, stock, x1, y1, x2, y2, context.getTransition());
+        return fitted == null ? stock : fitted;
+    }
+
+    private IEntity previewEntity;
+
+    protected void renderPreviewBodyParts(UIContext context, MatrixStack stack)
+    {
+        if (this.form.parts.getAllTyped().isEmpty()) return;
+        if (this.previewEntity == null) this.previewEntity = new mchorse.bbs_mod.forms.entities.StubEntity();
+        this.renderBodyParts(new FormRenderingContext().set(FormRenderType.ENTITY, this.previewEntity, stack,
+            LightmapTextureManager.MAX_LIGHT_COORDINATE, net.minecraft.client.render.OverlayTexture.DEFAULT_UV,
+            context.getTransition()).inUI());
+    }
+
     public boolean renderArm(MatrixStack matrices, int light, AbstractClientPlayerEntity player, Hand hand)
     {
         return false;

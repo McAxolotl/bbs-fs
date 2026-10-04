@@ -17,9 +17,6 @@ import mchorse.bbs_mod.utils.colors.Colors;
  */
 public class TextureCellRenderer
 {
-    /** Cell width from which a texture cell carries its name. Folders always do. */
-    public static final int NAME_THRESHOLD = 80;
-
     /**
      * How solidly the NAME of what lives inside the mod is drawn. It can be copied out but not
      * changed in place, and that is said by its name going faint rather than by a badge beside
@@ -34,7 +31,7 @@ public class TextureCellRenderer
     /** Whether a cell this wide carries a name strip at all: a folder always does. */
     public static boolean hasName(TextureEntry entry, int w)
     {
-        return entry.folder() || w >= NAME_THRESHOLD;
+        return entry.folder() || CellPainter.hasCaption(w);
     }
 
     /**

@@ -560,7 +560,6 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_GENERAL_SHADER_SHADOW = L10n.lang("bbs.ui.forms.editors.general.shader_shadow");
     public static final IKey FORMS_EDITORS_GENERAL_STEP_HEIGHT = L10n.lang("bbs.ui.forms.editors.general.step_height");
     public static final IKey FORMS_EDITORS_GENERAL_TRACK_NAME_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.track_name-tooltip");
-    public static final IKey FORMS_EDITORS_GENERAL_UI_SCALE = L10n.lang("bbs.ui.forms.editors.general.ui_scale");
     public static final IKey FORMS_EDITORS_GENERAL_VISIBLE = L10n.lang("bbs.ui.forms.editors.general.visible");
     public static final IKey FORMS_EDITORS_GENERAL_SECTION_DISPLAY = L10n.lang("bbs.ui.forms.editors.general.section_display");
     public static final IKey FORMS_EDITORS_GENERAL_SECTION_TRACKS = L10n.lang("bbs.ui.forms.editors.general.section_tracks");
@@ -589,6 +588,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_BONES_TOOLTIP = L10n.lang("bbs.ui.forms.editors.model.ik.bones_tooltip");
     public static final IKey FORMS_EDITORS_MODEL_IK_DEBUG = L10n.lang("bbs.ui.forms.editors.model.ik.debug");
     public static final IKey FORMS_EDITORS_MODEL_IK_SETTINGS = L10n.lang("bbs.ui.forms.editors.model.ik.settings");
+    public static final IKey FORMS_EDITORS_MODEL_IK_BONE_CONTROLLER = L10n.lang("bbs.ui.forms.editors.model.ik.bone_controller");
+    public static final IKey FORMS_EDITORS_MODEL_IK_BONE_CONTROLLER_TOOLTIP = L10n.lang("bbs.ui.forms.editors.model.ik.bone_controller_tooltip");
     public static final IKey FORMS_EDITORS_MODEL_IK_ENABLED = L10n.lang("bbs.ui.forms.editors.model.ik.enabled");
     public static final IKey FORMS_EDITORS_MODEL_IK_TARGET = L10n.lang("bbs.ui.forms.editors.model.ik.target");
     public static final IKey FORMS_EDITORS_MODEL_IK_TARGET_LABEL = L10n.lang("bbs.ui.forms.editors.model.ik.target_label");
@@ -1161,7 +1162,6 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_POSE_GROUP = L10n.lang("bbs.ui.model_editor.pose_group");
     public static final IKey MODEL_EDITOR_ANCHOR = L10n.lang("bbs.ui.model_editor.anchor");
     public static final IKey MODEL_EDITOR_TEXTURE = L10n.lang("bbs.ui.model_editor.texture");
-    public static final IKey MODEL_EDITOR_UI_SCALE = L10n.lang("bbs.ui.model_editor.ui_scale");
     public static final IKey MODEL_EDITOR_SCALE = L10n.lang("bbs.ui.model_editor.scale");
     public static final IKey MODEL_EDITOR_RENDER = L10n.lang("bbs.ui.model_editor.render");
     public static final IKey MODEL_EDITOR_SIZE = L10n.lang("bbs.ui.model_editor.size");

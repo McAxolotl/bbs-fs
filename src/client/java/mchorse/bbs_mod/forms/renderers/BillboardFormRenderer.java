@@ -53,19 +53,52 @@ public class BillboardFormRenderer <T extends BillboardForm> extends FormRendere
     }
 
     @Override
+    public boolean isPreviewCameraFacing()
+    {
+        return this.form.billboard.get();
+    }
+
+    @Override
+    public mchorse.bbs_mod.utils.AABB getPreviewBounds()
+    {
+        Texture texture = this.getTexture();
+        return texture == null ? null : this.getGeometryBounds(texture);
+    }
+
+    private mchorse.bbs_mod.utils.AABB getGeometryBounds(Texture texture)
+    {
+        float w = texture.width;
+        float h = texture.height;
+        Vector4f crop = this.form.crop.get();
+        float left = crop.x / w;
+        float top = crop.y / h;
+        float right = 1F - crop.z / w;
+        float bottom = 1F - crop.w / h;
+        if (this.form.resizeCrop.get())
+        {
+            w -= crop.x + crop.z;
+            h -= crop.y + crop.w;
+            left = top = 0F;
+            right = bottom = 1F;
+        }
+        float ratioX = w > h ? h / w : 1F;
+        float ratioY = h > w ? w / h : 1F;
+        return mchorse.bbs_mod.utils.AABB.fromTwoPoints(
+            (left - 0.5F) * ratioY, -(bottom - 0.5F) * ratioX, 0,
+            (right - 0.5F) * ratioY, -(top - 0.5F) * ratioX, 0);
+    }
+
+    @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         MatrixStack stack = context.batcher.getContext().getMatrices();
 
         stack.push();
 
-        Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        Matrix4f uiMatrix = this.getPreviewMatrix(context, x1, y1, x2, y2);
 
         this.applyTransforms(uiMatrix, context.getTransition());
         MatrixStackUtils.multiply(stack, uiMatrix);
-        stack.translate(0F, 1F, 0F);
-        stack.scale(1.5F, 1.5F, 1.5F);
-        stack.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
 
         VertexFormat format = VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL;
 
@@ -75,6 +108,7 @@ public class BillboardFormRenderer <T extends BillboardForm> extends FormRendere
             context.getTransition(), false
         );
 
+        this.renderPreviewBodyParts(context, stack);
         stack.pop();
     }
 

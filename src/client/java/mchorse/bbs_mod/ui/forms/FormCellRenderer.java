@@ -16,21 +16,13 @@ import mchorse.bbs_mod.utils.colors.Colors;
  */
 public class FormCellRenderer
 {
-    /** Cell width from which a name strip is drawn along the bottom edge. */
-    public static final int NAME_THRESHOLD = 80;
-
-    public static boolean hasName(int cellWidth)
-    {
-        return cellWidth >= NAME_THRESHOLD;
-    }
-
     /**
      * Whether the cell says the form's whole name — it has a strip and the name fits in it.
      * What the cell can't say, the grid says by the cursor instead.
      */
     public static boolean showsWholeName(UIContext context, Form form, int w)
     {
-        return hasName(w) && CellPainter.captionFits(context, form.getDisplayName(), w);
+        return CellPainter.hasCaption(w) && CellPainter.captionFits(context, form.getDisplayName(), w);
     }
 
     public static void render(UIContext context, Form form, int x, int y, int w, int h, CellState state)
@@ -38,10 +30,10 @@ public class FormCellRenderer
         context.batcher.clip(x, y, w, h, context);
 
         CellPainter.marks(context, x, y, w, h, state);
-        FormUtilsClient.renderPreview(form, context, x, y, x + w, y + h - (hasName(w) ? CellPainter.CAPTION_HEIGHT : 0));
+        FormUtilsClient.renderPreview(form, context, x, y, x + w, y + h - (CellPainter.hasCaption(w) ? CellPainter.CAPTION_HEIGHT : 0));
         CellPainter.dim(context, x, y, w, h, state);
 
-        if (hasName(w))
+        if (CellPainter.hasCaption(w))
         {
             CellPainter.caption(context, form.getDisplayName(), x, y, w, h, state.hover || state.selected);
         }

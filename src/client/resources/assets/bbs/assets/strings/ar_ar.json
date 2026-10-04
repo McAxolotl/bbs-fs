@@ -527,7 +527,6 @@
     "bbs.ui.forms.editors.general.movement_speed-tooltip": "هذا الخيار لا يغير سرعة حركة ممثل إعادة التشغيل. فقط للاعب المتحول!",
     "bbs.ui.forms.editors.general.shader_shadow": "الظل",
     "bbs.ui.forms.editors.general.step_height": "ارتفاع الخطوة",
-    "bbs.ui.forms.editors.general.ui_scale": "مقياس واجهة المستخدم",
     "bbs.ui.forms.editors.general.visible": "مرئي",
     "bbs.ui.forms.editors.item.title": "عنصر",
     "bbs.ui.forms.editors.item.transforms": "تحولات العنصر",
