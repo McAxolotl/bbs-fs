@@ -568,7 +568,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Cień shaderów",
     "bbs.ui.forms.editors.general.step_height": "Wysokość kroków",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Prefiks ścieżek zamiast ścieżki kości.",
-    "bbs.ui.forms.editors.general.ui_scale": "Rozmiar UI",
     "bbs.ui.forms.editors.general.visible": "Widoczny",
     "bbs.ui.forms.editors.item.title": "Element",
     "bbs.ui.forms.editors.item.transforms": "Przekształcenia elementów",

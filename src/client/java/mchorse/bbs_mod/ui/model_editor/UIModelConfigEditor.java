@@ -763,13 +763,8 @@ public class UIModelConfigEditor extends UIElement
 
         this.fillWarnings(instance == null ? List.of() : instance.warnings);
 
-        UITrackpad uiScale = this.trackpad(() -> this.data.uiScale, null);
-
-        uiScale.limit(config.uiScale).delayedInput();
-
         this.sizeBody.removeAll();
         this.sizeBody.add(
-            UI.labelRow(UIKeys.MODEL_EDITOR_UI_SCALE, uiScale),
             UI.label(UIKeys.MODEL_EDITOR_SCALE), UI.row(this.component(config.scale, 0), this.component(config.scale, 1), this.component(config.scale, 2))
         );
 

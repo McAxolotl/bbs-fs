@@ -598,7 +598,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Sombras da shader's",
     "bbs.ui.forms.editors.general.step_height": "Altura do passo",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Nome das faixas e partes em vez de caminhos como «0/1/2».",
-    "bbs.ui.forms.editors.general.ui_scale": "Escala da UI",
     "bbs.ui.forms.editors.general.visible": "Visível",
     "bbs.ui.forms.editors.item.title": "Item",
     "bbs.ui.forms.editors.item.transforms": "Transformações do itens",

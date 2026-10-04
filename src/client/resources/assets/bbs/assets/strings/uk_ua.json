@@ -581,7 +581,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Тінь шейдерів",
     "bbs.ui.forms.editors.general.step_height": "Висота кроку",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Префікс доріжок замість шляху кістки.",
-    "bbs.ui.forms.editors.general.ui_scale": "Розмір інтерфейсу",
     "bbs.ui.forms.editors.general.visible": "Видимий",
     "bbs.ui.forms.editors.item.title": "Властивості предмета",
     "bbs.ui.forms.editors.item.transforms": "Параметри предмету",

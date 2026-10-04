@@ -599,7 +599,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "著色器陰影",
     "bbs.ui.forms.editors.general.step_height": "上樓高度",
     "bbs.ui.forms.editors.general.track_name-tooltip": "指定後以此前綴取代軌道路徑（如 0/1/2）。",
-    "bbs.ui.forms.editors.general.ui_scale": "UI 縮放",
     "bbs.ui.forms.editors.general.visible": "可見性",
     "bbs.ui.forms.editors.item.title": "物品",
     "bbs.ui.forms.editors.item.transforms": "物品變換",

@@ -277,11 +277,10 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-            float scale = this.form.uiScale.get();
             float width = this.entity.getWidth();
             float height = this.entity.getHeight();
 
-            scale = scale * Math.min(1.8F / Math.max(width, height), 1F);
+            float scale = Math.min(1.8F / Math.max(width, height), 1F);
 
             this.applyTransforms(uiMatrix, context.getTransition());
             MatrixStackUtils.multiply(stack, uiMatrix);

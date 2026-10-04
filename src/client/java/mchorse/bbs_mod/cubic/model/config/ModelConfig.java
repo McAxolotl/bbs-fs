@@ -45,7 +45,6 @@ public class ModelConfig extends ValueGroup
     public final ValueString poseGroup = new ValueString("pose_group", "");
     public final ValueString anchor = new ValueString("anchor", "");
     public final ValueLink texture = new ValueLink("texture", null);
-    public final ValueFloat uiScale = new ValueFloat("ui_scale", 1F);
     public final ValueVector3f scale = new ValueVector3f("scale", new Vector3f(1F));
     public final ShapeController.Controllers shapeControllers = new ShapeController.Controllers("shape_controllers");
     public final WeldList welds = new WeldList("welds");
@@ -89,7 +88,6 @@ public class ModelConfig extends ValueGroup
         this.add(this.poseGroup);
         this.add(this.anchor);
         this.add(this.texture);
-        this.add(this.uiScale);
         this.add(this.scale);
         this.add(this.welds);
         this.add(this.shapeControllers);

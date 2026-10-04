@@ -39,19 +39,31 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
     }
 
     @Override
+    public boolean isPreviewCameraFacing()
+    {
+        return this.form.billboard.get();
+    }
+
+    @Override
+    public mchorse.bbs_mod.utils.AABB getPreviewBounds()
+    {
+        Link link = this.form.texture.get();
+        if (link == null) return null;
+        Texture texture = BBSModClient.getTextures().getTexture(link);
+        return texture == null ? null : mchorse.bbs_mod.graphics.texture.TextureExtruder.getBounds(texture.width, texture.height);
+    }
+
+    @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         MatrixStack stack = context.batcher.getContext().getMatrices();
 
         stack.push();
 
-        Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        Matrix4f uiMatrix = this.getPreviewMatrix(context, x1, y1, x2, y2);
 
         this.applyTransforms(uiMatrix, context.getTransition());
         MatrixStackUtils.multiply(stack, uiMatrix);
-        stack.translate(0F, 1F, 0F);
-        stack.scale(1.5F, 1.5F, 4F);
-        stack.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
 
         /* Shading fix */
         stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
@@ -63,6 +75,7 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             OverlayTexture.DEFAULT_UV, LightmapTextureManager.MAX_LIGHT_COORDINATE, Colors.WHITE,
             context.getTransition(), false
         );
+        this.renderPreviewBodyParts(context, stack);
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
         stack.pop();

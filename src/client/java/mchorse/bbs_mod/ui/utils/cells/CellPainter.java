@@ -21,6 +21,12 @@ public class CellPainter
     /** Space kept between the words of a caption and either edge of the cell. */
     public static final int CAPTION_PADDING = 3;
 
+    /** Small thumbnails leave the whole cell for the picture and show the name on hover. */
+    public static boolean hasCaption(int cellWidth)
+    {
+        return cellWidth >= 80;
+    }
+
     /**
      * What state the cell is in, said the way a row says it — only turned a quarter, so the wash
      * climbs from the bottom edge instead of running in from the side.

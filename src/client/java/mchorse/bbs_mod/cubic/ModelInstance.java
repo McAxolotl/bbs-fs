@@ -334,11 +334,6 @@ public class ModelInstance implements IModelInstance
         return this.config.scale.get();
     }
 
-    public float getUiScale()
-    {
-        return this.config.uiScale.get();
-    }
-
     public boolean isProcedural()
     {
         return this.config.procedural.get();

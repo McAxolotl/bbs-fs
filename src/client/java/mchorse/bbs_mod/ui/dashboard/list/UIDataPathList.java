@@ -106,7 +106,7 @@ public class UIDataPathList extends UIList<DataPath>
 
         for (DataPath dataPath : this.hierarchy)
         {
-            if (!dataPath.folder && (this.path.strings.isEmpty() || this.isFiltering() || dataPath.startsWith(this.path, 1)))
+            if (!dataPath.folder && (this.isFiltering() || dataPath.startsWith(this.path, 1)))
             {
                 this.list.add(dataPath);
             }

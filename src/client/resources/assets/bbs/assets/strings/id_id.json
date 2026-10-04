@@ -414,7 +414,6 @@
     "bbs.ui.forms.editors.general.lighting": "Pencahayaan",
     "bbs.ui.forms.editors.general.lighting-tooltip": "Terapkan pencahayaan lingkungan dan waktu pada form.",
     "bbs.ui.forms.editors.general.visible": "Terlihat",
-    "bbs.ui.forms.editors.general.ui_scale": "Skala UI",
     "bbs.ui.forms.editors.item.title": "Item",
     "bbs.ui.forms.editors.item.transforms": "Transformasi item",
     "bbs.ui.forms.editors.label.anchor": "Jangkar label",

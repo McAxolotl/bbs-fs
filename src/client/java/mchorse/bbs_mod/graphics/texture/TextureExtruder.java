@@ -18,6 +18,14 @@ public class TextureExtruder
 {
     private Map<Link, ModelVAO> extruded = new HashMap<>();
 
+    /** Front/back quads enclose all generated pixel edges. */
+    public static mchorse.bbs_mod.utils.AABB getBounds(int width, int height)
+    {
+        float x = 0.5F * Math.min(1F, width / (float) Math.max(1, height));
+        float y = 0.5F * Math.min(1F, height / (float) Math.max(1, width));
+        return new mchorse.bbs_mod.utils.AABB(-x, -y, -0.5F / 16F, x * 2, y * 2, 1F / 16F);
+    }
+
     /**
      * Fill a quad for {@link net.minecraft.client.render.VertexFormats#POSITION_TEXTURE_COLOR_NORMAL}. Points should
      * be supplied in this order:
@@ -148,22 +156,14 @@ public class TextureExtruder
         List<Float> normals = new ArrayList<>();
         List<Float> uvs = new ArrayList<>();
 
-        float px = 0.5F;
-        float py = 0.5F;
+        var bounds = getBounds(pixels.width, pixels.height);
+        float px = (float) bounds.maxX();
+        float py = (float) bounds.maxY();
         float u1 = 0F;
         float v1 = 0F;
         float u2 = 1F;
         float v2 = 1F;
-        float d = 0.5F / 16F;
-
-        if (pixels.width > pixels.height)
-        {
-            py = pixels.height / (float) pixels.width * 0.5F;
-        }
-        else if (pixels.height > pixels.width)
-        {
-            px = pixels.width / (float) pixels.height * 0.5F;
-        }
+        float d = (float) bounds.maxZ();
 
         float nx = -px;
         float ny = -py;

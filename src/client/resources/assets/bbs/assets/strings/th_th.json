@@ -585,7 +585,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "เงาของเชดเดอร์",
     "bbs.ui.forms.editors.general.step_height": "ความสูงของการก้าว",
     "bbs.ui.forms.editors.general.track_name-tooltip": "ใช้ชื่อนี้แทนพาธ “0/1/2” ในแทร็กและตัวเลือกจุดยึด",
-    "bbs.ui.forms.editors.general.ui_scale": "มาตราส่วน UI",
     "bbs.ui.forms.editors.general.visible": "มองเห็นได้",
     "bbs.ui.forms.editors.item.title": "ไอเท็ม",
     "bbs.ui.forms.editors.item.transforms": "ไอเทมเปลื่ยนร่าง",

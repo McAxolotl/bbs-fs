@@ -541,7 +541,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Ombre du shader",
     "bbs.ui.forms.editors.general.step_height": "Hauteur de marche",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Préfixe des pistes au lieu du chemin de l’os.",
-    "bbs.ui.forms.editors.general.ui_scale": "Taille de l'UI",
     "bbs.ui.forms.editors.item.title": "Objet",
     "bbs.ui.forms.editors.item.transforms": "Transformation de l'objet",
     "bbs.ui.forms.editors.label.anchor": "Ancre du texte",

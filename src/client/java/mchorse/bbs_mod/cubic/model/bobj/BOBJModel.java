@@ -49,6 +49,12 @@ public class BOBJModel implements IModel
         return this.armature;
     }
 
+    /** Rest-pose mesh geometry, also used to frame UI previews. */
+    public List<BOBJLoader.CompiledData> getMeshes()
+    {
+        return Collections.unmodifiableList(this.meshes);
+    }
+
     /**
      * Whether any mesh vertex is weighted to this bone. A bone with no skin is a bare reach marker
      * (an end bone), so IK stretch ends the chain at the last deforming bone instead — the marker

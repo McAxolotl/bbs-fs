@@ -17,7 +17,7 @@ public class UIModelPicker
 {
     public static void open(UIContext context, String current, Consumer<String> callback)
     {
-        UIListOverlayPanel list = new UIListOverlayPanel(UIKeys.FORMS_EDITOR_MODEL_MODELS, callback);
+        UIListOverlayPanel list = new ModelListOverlayPanel(callback);
         list.list.list.preview = mchorse.bbs_mod.ui.framework.elements.input.list.ResourcePreviews.models();
         list.list.views();
 
@@ -26,5 +26,19 @@ public class UIModelPicker
         list.setValue(current == null ? "" : current);
 
         UIOverlay.addOverlay(context, list);
+    }
+
+    private static class ModelListOverlayPanel extends UIListOverlayPanel
+    {
+        public ModelListOverlayPanel(Consumer<String> callback)
+        {
+            super(UIKeys.FORMS_EDITOR_MODEL_MODELS, callback);
+        }
+
+        @Override
+        public int getPreferredWidth()
+        {
+            return 440;
+        }
     }
 }

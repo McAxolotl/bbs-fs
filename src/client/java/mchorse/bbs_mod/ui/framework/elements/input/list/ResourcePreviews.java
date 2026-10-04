@@ -9,6 +9,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
+import net.minecraft.client.render.DiffuseLighting;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,7 +44,17 @@ public class ResourcePreviews
                 model.model.set(key);
                 return model;
             });
-            FormUtilsClient.renderPreview(form, context, x, y, x + size, y + size);
+            context.batcher.flush();
+            DiffuseLighting.enableGuiDepthLighting();
+            try
+            {
+                FormUtilsClient.renderPreview(form, context, x, y, x + size, y + size);
+            }
+            finally
+            {
+                context.batcher.flush();
+                DiffuseLighting.disableGuiDepthLighting();
+            }
         };
     }
 

@@ -552,7 +552,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Schatten des Shaders",
     "bbs.ui.forms.editors.general.step_height": "Schritthöhe",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Anzeigename für Keyframe-Spuren und Körperteile statt Pfaden wie „0/1/2“.",
-    "bbs.ui.forms.editors.general.ui_scale": "UI Größe",
     "bbs.ui.forms.editors.general.visible": "Sichtbar",
     "bbs.ui.forms.editors.item.title": "Gegenstand",
     "bbs.ui.forms.editors.item.transforms": "Gegenstand Transformationen",

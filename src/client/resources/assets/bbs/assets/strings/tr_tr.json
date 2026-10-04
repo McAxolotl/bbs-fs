@@ -541,7 +541,6 @@
     "bbs.ui.forms.editors.general.shader_shadow": "Shader gölgesi",
     "bbs.ui.forms.editors.general.step_height": "Adım yüksekliği",
     "bbs.ui.forms.editors.general.track_name-tooltip": "Keyframe izleri ve eklerde “0/1/2” yerine bu adı gösterir.",
-    "bbs.ui.forms.editors.general.ui_scale": "Arayüz boyutu",
     "bbs.ui.forms.editors.general.visible": "Etkin",
     "bbs.ui.forms.editors.item.title": "Eşya",
     "bbs.ui.forms.editors.item.transforms": "Eşya dönüşümleri",
