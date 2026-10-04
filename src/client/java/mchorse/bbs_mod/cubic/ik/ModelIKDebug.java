@@ -9,6 +9,7 @@ import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.FormBone;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.ValueDebugElement;
 import mchorse.bbs_mod.settings.values.ui.ValueIKDebug;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -64,13 +65,15 @@ public final class ModelIKDebug
         }
 
         ModelIKCache.Compiled compiled = ModelIKCache.compile(model, form);
+        List<ModelIKCache.CompiledChain> chains = compiled == null ? List.of() : compiled.chains();
+        Set<String> controllers = collectControllers(model, form, chains, config);
 
-        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
+        if (chains.isEmpty() && controllers.isEmpty())
         {
             return;
         }
 
-        Map<String, PivotFrame> frames = collectFrames(model, compiled);
+        Map<String, PivotFrame> frames = collectFrames(model, chains, controllers);
 
         if (config.xray.get())
         {
@@ -90,7 +93,7 @@ public final class ModelIKDebug
 
         float unit = DebugOverlay.modelUnit(model);
 
-        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        for (ModelIKCache.CompiledChain chain : chains)
         {
             FormBone bone = form.bones.getBone(chain.tip());
 
@@ -102,17 +105,72 @@ public final class ModelIKDebug
             drawChain(stack, frames, chain, selectedTip, config, unit);
         }
 
+        if (!controllers.isEmpty())
+        {
+            BufferBuilder builder = Tessellator.getInstance().getBuffer();
+            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+            for (String controller : controllers)
+            {
+                Vector3f point = position(frames, controller);
+
+                if (point != null)
+                {
+                    DebugOverlay.marker(builder, stack, config.target.shape.get(), point,
+                        unit * config.target.size.get(), DebugOverlay.rgb(config.target.color.get()), config.opacity.get());
+                }
+            }
+
+            BufferRenderer.drawWithGlobalProgram(builder.end());
+        }
+
         stack.pop();
 
         RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
     }
 
-    private static Map<String, PivotFrame> collectFrames(IModel model, ModelIKCache.Compiled compiled)
+    /** Reuse the target style; an existing visible IK marker already selects the same bone. */
+    private static Set<String> collectControllers(IModel model, ModelForm form,
+        List<ModelIKCache.CompiledChain> chains, ValueIKDebug config)
     {
-        Set<String> wanted = new HashSet<>();
+        Set<String> controllers = new HashSet<>();
 
-        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        if (!config.target.visible.get())
+        {
+            return controllers;
+        }
+
+        for (BaseValue value : form.bones.getAll())
+        {
+            if (value instanceof FormBone bone && bone.boneController.get()
+                && model.getAllGroupKeys().contains(bone.getId()))
+            {
+                controllers.add(bone.getId());
+            }
+        }
+
+        for (ModelIKCache.CompiledChain chain : chains)
+        {
+            if (form.ik.get().get(chain.tip()).enabled)
+            {
+                controllers.remove(chain.target());
+
+                if (config.pole.visible.get())
+                {
+                    controllers.remove(chain.poleTarget());
+                }
+            }
+        }
+
+        return controllers;
+    }
+
+    private static Map<String, PivotFrame> collectFrames(IModel model, List<ModelIKCache.CompiledChain> chains, Set<String> controllers)
+    {
+        Set<String> wanted = new HashSet<>(controllers);
+
+        for (ModelIKCache.CompiledChain chain : chains)
         {
             wanted.add(chain.target());
             wanted.addAll(chain.chainRootToEffector());
@@ -149,13 +207,15 @@ public final class ModelIKDebug
         }
 
         ModelIKCache.Compiled compiled = ModelIKCache.compile(model, modelForm);
+        List<ModelIKCache.CompiledChain> chains = compiled == null ? List.of() : compiled.chains();
+        Set<String> controllers = collectControllers(model, modelForm, chains, config);
 
-        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
+        if (chains.isEmpty() && controllers.isEmpty())
         {
             return;
         }
 
-        Map<String, PivotFrame> frames = collectFrames(model, compiled);
+        Map<String, PivotFrame> frames = collectFrames(model, chains, controllers);
 
         if (config.xray.get())
         {
@@ -177,7 +237,7 @@ public final class ModelIKDebug
 
         float unit = DebugOverlay.modelUnit(model);
 
-        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        for (ModelIKCache.CompiledChain chain : chains)
         {
             FormBone bone = modelForm.bones.getBone(chain.tip());
 
@@ -204,6 +264,16 @@ public final class ModelIKDebug
                 {
                     pickMarker(builder, stack, stencilMap, form, config.pole, pole, unit, chain.poleTarget());
                 }
+            }
+        }
+
+        for (String controller : controllers)
+        {
+            Vector3f point = position(frames, controller);
+
+            if (point != null)
+            {
+                pickMarker(builder, stack, stencilMap, form, config.target, point, unit, controller);
             }
         }
 

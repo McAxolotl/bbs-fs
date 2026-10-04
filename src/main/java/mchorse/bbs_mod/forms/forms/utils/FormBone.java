@@ -49,6 +49,8 @@ public class FormBone extends ValueGroup
 
     /* The IK chain this bone is the tip of. The addresses and modes are the chain's structure;
      * the animatable scalars (weight, softness, pole angle, enabled) live in {@link #ik}. */
+    /** A selectable viewport marker at this bone, independent of IK chains. */
+    public final ValueBoolean boneController = new ValueBoolean("bone_controller", false);
     public final ValueString ikTarget = new ValueString("ik_target", "");
     public final ValueString ikPoleTarget = new ValueString("ik_pole_target", "");
     public final ValueInt ikChainLength = new ValueInt("ik_chain_length", 0);
@@ -80,6 +82,7 @@ public class FormBone extends ValueGroup
         super(id);
 
         this.constraints.invisible();
+        this.boneController.invisible();
         this.ikTarget.invisible();
         this.ikPoleTarget.invisible();
         this.ikChainLength.invisible();
@@ -101,6 +104,7 @@ public class FormBone extends ValueGroup
         this.physics.invisible();
 
         this.add(this.constraints);
+        this.add(this.boneController);
         this.add(this.ikTarget);
         this.add(this.ikPoleTarget);
         this.add(this.ikChainLength);
@@ -139,6 +143,7 @@ public class FormBone extends ValueGroup
     public boolean isDefault()
     {
         return this.constraints.get().isDefault()
+            && !this.boneController.get()
             && !this.hasChain()
             && this.ikPoleTarget.get().isEmpty()
             && this.ikChainLength.get() == 0

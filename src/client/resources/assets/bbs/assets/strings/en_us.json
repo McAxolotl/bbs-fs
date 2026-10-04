@@ -1260,6 +1260,8 @@
 	"bbs.ui.forms.editors.model.ik.bones": "Bones",
 	"bbs.ui.forms.editors.model.ik.bones_tooltip": "Dots: yellow chain, cyan target, magenta pole, orange limits, gray off.",
 	"bbs.ui.forms.editors.model.ik.settings": "Chain",
+	"bbs.ui.forms.editors.model.ik.bone_controller": "Bone Controller",
+	"bbs.ui.forms.editors.model.ik.bone_controller_tooltip": "Clickable marker on the selected bone",
 	"bbs.ui.forms.editors.model.ik.enabled": "Enable IK",
 	"bbs.ui.forms.editors.model.ik.target": "Target — the controller bone the chain reaches for",
 	"bbs.ui.forms.editors.model.ik.target_label": "Target",

@@ -1256,6 +1256,8 @@
 	"bbs.ui.forms.editors.model.ik.bones": "Кости",
 	"bbs.ui.forms.editors.model.ik.bones_tooltip": "Метки: жёлтый — цепь, голубой — цель, розовый — полюс, серый — выкл.",
 	"bbs.ui.forms.editors.model.ik.settings": "Цепочка",
+	"bbs.ui.forms.editors.model.ik.bone_controller": "Кость-контроллер",
+	"bbs.ui.forms.editors.model.ik.bone_controller_tooltip": "Кликаемый маркер на выбранной кости",
 	"bbs.ui.forms.editors.model.ik.enabled": "Включить IK",
 	"bbs.ui.forms.editors.model.ik.target": "Цель — кость-контроллер, к которой тянется цепочка",
 	"bbs.ui.forms.editors.model.ik.target_label": "Цель",

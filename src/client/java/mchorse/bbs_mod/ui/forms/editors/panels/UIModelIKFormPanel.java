@@ -54,6 +54,7 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
 
     public UIToggle debug;
     public UIToggle enabled;
+    public UIToggle boneController;
     public UIBonePicker target;
     public UITrackpad chainLength;
     public UILabel chainPreview;
@@ -117,6 +118,12 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
         this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_DEBUG, (b) -> BBSSettings.ikDebug.enabled.set(b.getValue()));
         this.debug.setValue(BBSSettings.ikDebug.enabled.get());
         this.debug.context(() -> new UIDebugOverlayContextMenu(BBSSettings.ikDebug));
+
+        this.boneController = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_BONE_CONTROLLER,
+            (b) -> this.editBone((bone) -> bone.boneController.set(b.getValue())));
+        this.boneController.h(UIConstants.CONTROL_HEIGHT);
+        this.boneController.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_BONE_CONTROLLER_TOOLTIP);
+        this.resetBone(this.boneController, (bone) -> bone.boneController);
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_ENABLED, (b) ->
         {
@@ -319,7 +326,8 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
             this.bonesSearch,
             settings,
             this.advancedSection,
-            joint
+            joint,
+            this.boneController
         );
     }
 
@@ -420,6 +428,7 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
         this.bonesSearch.setEnabled(enabled);
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
+        this.boneController.setEnabled(enabled);
         this.target.setEnabled(enabled);
         this.chainLength.setEnabled(enabled);
         this.pole.setEnabled(enabled);
@@ -543,6 +552,11 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
             }
 
             String tip = bone.getId();
+
+            if (bone.boneController.get())
+            {
+                targets.add(tip);
+            }
 
             if (bone.hasChain())
             {
@@ -672,6 +686,8 @@ public class UIModelIKFormPanel extends UIBoneListFormPanel
         this.classic.label = classicFallsBack ? UIKeys.FORMS_EDITORS_MODEL_IK_CLASSIC_FALLBACK : UIKeys.FORMS_EDITORS_MODEL_IK_CLASSIC;
         this.enabled.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
         this.enabled.setValue(active);
+        this.boneController.setEnabled(this.bones.isEnabled() && !this.selectedBone.isEmpty());
+        this.boneController.setValue(formBone != null && formBone.boneController.get());
 
         this.limitX.setValue(joint.limitX);
         this.limitY.setValue(joint.limitY);
