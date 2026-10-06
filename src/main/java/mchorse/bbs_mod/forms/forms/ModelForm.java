@@ -35,6 +35,8 @@ import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.jem.CemStatus;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
+import mchorse.bbs_mod.cubic.shake.ShakeControl;
+import mchorse.bbs_mod.cubic.shake.ShakeControls;
 import mchorse.bbs_mod.cubic.spline.SplineControl;
 import mchorse.bbs_mod.cubic.spline.SplineControls;
 import mchorse.bbs_mod.settings.values.core.ValueChainControls;
@@ -70,6 +72,10 @@ public class ModelForm extends Form implements IPosedForm
 
     /** The global wind of the form's physics — one compound animatable property, not bound to a bone. */
     public final ValueWindControl wind = new ValueWindControl("wind", new WindControl());
+
+    /** How strongly each shaking bone shakes; what makes it shake is configured on the bone. */
+    public final ValueChainControls<ShakeControl, ShakeControls> shake =
+        new ValueChainControls<>("shake", KeyframeFactories.SHAKE);
 
     /**
      * The entity states an OptiFine CEM model asks about and a form cannot know — see
@@ -148,6 +154,7 @@ public class ModelForm extends Form implements IPosedForm
         this.wind.invisible();
         this.wind.animatable(true);
         this.add(this.wind);
+        this.add(this.shake);
 
         /* Visible, so each is a track of its own: a cat that sits down mid-take is a keyframe like
          * any other. */
@@ -186,6 +193,7 @@ public class ModelForm extends Form implements IPosedForm
         this.ik.fromData(new MapType());
         this.physics.fromData(new MapType());
         this.splineIK.fromData(new MapType());
+        this.shake.fromData(new MapType());
         super.fromData(data);
 
         /* Forms saved before the bones group kept the constraints and the IK setup as opaque

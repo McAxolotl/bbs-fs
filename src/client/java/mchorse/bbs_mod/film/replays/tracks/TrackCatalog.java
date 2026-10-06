@@ -199,6 +199,7 @@ public class TrackCatalog
     {
         boolean hasIK = false;
         boolean hasPhysics = false;
+        boolean hasShake = false;
 
         if (form instanceof ModelForm modelForm)
         {
@@ -208,6 +209,7 @@ public class TrackCatalog
                 {
                     hasIK |= bone.hasChain();
                     hasPhysics |= bone.hasPhysicsChain();
+                    hasShake |= bone.hasShake();
                 }
             }
         }
@@ -222,6 +224,7 @@ public class TrackCatalog
             if (form instanceof ModelForm modelForm
                 && ((value == modelForm.ik && !hasIK)
                     || ((value == modelForm.physics || value == modelForm.wind) && !hasPhysics)
+                    || (value == modelForm.shake && !hasShake)
                     || (value == modelForm.splineIK && modelForm.splines.getAll().isEmpty())))
             {
                 continue;

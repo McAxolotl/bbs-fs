@@ -65,6 +65,8 @@ public class TrackStyle
         register("ik", Icons.IK, Colors.WHITE);
         register("physics", Icons.PHYSICS, 0x9d6cff);
         register("wind", Icons.PARTICLE, Colors.ORANGE);
+        /* The camera shake clip's icon and colour: the same thing, done to bones. */
+        register("shake", Icons.EXCHANGE, 0x159e64);
         register("spline_ik", Icons.GRAPH, Colors.BLUE);
         register("curve", Icons.GRAPH, Colors.BLUE);
     }

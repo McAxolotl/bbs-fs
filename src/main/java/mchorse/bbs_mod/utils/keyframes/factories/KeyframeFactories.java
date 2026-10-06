@@ -13,6 +13,7 @@ public class KeyframeFactories
     public static final PoseKeyframeFactory POSE = new PoseKeyframeFactory();
     public static final IKKeyframeFactory IK = new IKKeyframeFactory();
     public static final PhysicsKeyframeFactory PHYSICS = new PhysicsKeyframeFactory();
+    public static final ShakeKeyframeFactory SHAKE = new ShakeKeyframeFactory();
     public static final WindKeyframeFactory WIND = new WindKeyframeFactory();
     public static final SplinePointsKeyframeFactory SPLINE_POINTS = new SplinePointsKeyframeFactory();
     public static final SplineKeyframeFactory SPLINE = new SplineKeyframeFactory();
@@ -55,6 +56,7 @@ public class KeyframeFactories
         FACTORIES.put("pose", POSE);
         FACTORIES.put("ik", IK);
         FACTORIES.put("physics", PHYSICS);
+        FACTORIES.put("shake", SHAKE);
         FACTORIES.put("wind", WIND);
         FACTORIES.put("spline_ik", SPLINE);
         FACTORIES.put("spline_points", SPLINE_POINTS);
