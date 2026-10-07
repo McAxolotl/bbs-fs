@@ -40,8 +40,10 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 {
@@ -76,7 +78,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     public void revealSheet(UIKeyframeSheet sheet)
     {
         if (!this.sheets.contains(sheet)) return;
-        if (sheet.section != null) this.folds.set(sheet.section.id(), true);
+        for (UIKeyframeSheet.Section section = sheet.section; section != null; section = section.parent())
+        {
+            this.folds.set(section.id(), true);
+        }
         for (UIKeyframeSheet parent = sheet.parent; parent != null; parent = parent.parent)
         {
             this.folds.set(parent.id, true);
@@ -88,7 +93,11 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int y = this.sheetYCache.getOrDefault(sheet, 0) + TOP_MARGIN;
         this.dopeSheet.setScroll(y - (this.dopeSheet.area.h - this.getTrackHeight(sheet)) / 2);
     }
+    /** Headings drawn right now, by row. One folded inside a folded heading has no row. */
     private final Map<UIKeyframeSheet.Section, Integer> sectionYCache = new LinkedHashMap<>();
+
+    /** Every heading of the rows, drawn or not — what "fold/unfold all" reaches. */
+    private final Set<UIKeyframeSheet.Section> sections = new LinkedHashSet<>();
 
     /**
      * Which rows the user has unfolded, by address. Owned by whoever built this timeline (so it
@@ -175,16 +184,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         this.sheetYCache.clear();
         this.sectionYCache.clear();
+        this.sections.clear();
 
         int y = 0;
 
         for (UIKeyframeSheet sheet : this.sheets)
         {
-            if (sheet.section != null && !this.sectionYCache.containsKey(sheet.section))
-            {
-                this.sectionYCache.put(sheet.section, y);
-                y += (int) this.trackHeight;
-            }
+            y = this.placeSection(sheet.section, y);
 
             if (this.isVisible(sheet))
             {
@@ -203,6 +209,39 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.dopeSheet.clamp();
     }
 
+    /** Gives a heading its row where its first track comes up, the headings it sits in first. */
+    private int placeSection(UIKeyframeSheet.Section section, int y)
+    {
+        if (section == null || !this.sections.add(section))
+        {
+            return y;
+        }
+
+        y = this.placeSection(section.parent(), y);
+
+        if (this.isSectionOpen(section.parent()))
+        {
+            this.sectionYCache.put(section, y);
+            y += (int) this.trackHeight;
+        }
+
+        return y;
+    }
+
+    /** Whether this heading and every heading it sits in are unfolded. */
+    private boolean isSectionOpen(UIKeyframeSheet.Section section)
+    {
+        for (; section != null; section = section.parent())
+        {
+            if (!this.folds.isExpanded(section.id()))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** All rows use the same configured track height. */
     public int getTrackHeight(UIKeyframeSheet sheet)
     {
@@ -212,7 +251,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     /** A row is drawn while every row it folds under is unfolded. */
     private boolean isVisible(UIKeyframeSheet sheet)
     {
-        if (sheet.section != null && !this.folds.isExpanded(sheet.section.id()))
+        if (!this.isSectionOpen(sheet.section))
         {
             return false;
         }
@@ -236,8 +275,11 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private int getSheetIndent(UIKeyframeSheet sheet)
     {
-        int depth = sheet.getDepth() + (sheet.section == null ? 0 : 1);
+        return this.getIndent(sheet.getDepth() + (sheet.section == null ? 0 : sheet.section.depth() + 1));
+    }
 
+    private int getIndent(int depth)
+    {
         if (depth == 0)
         {
             return 0;
@@ -367,7 +409,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     public void setAllSectionsExpanded(boolean expanded)
     {
-        for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
+        for (UIKeyframeSheet.Section section : this.sections)
         {
             this.folds.set(section.id(), expanded);
         }
@@ -662,7 +704,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
                 for (UIKeyframeSheet sheet : this.sheets)
                 {
-                    if (section.equals(sheet.section) && !expanded)
+                    if (!expanded && sheet.section != null && sheet.section.isIn(section))
                     {
                         sheet.selection.clear();
                     }
@@ -965,7 +1007,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 this.renderPreviewKeyframe(context, sheet, tick, Colors.WHITE);
             }
         }
-        else if (Window.isAltPressed() && this.keyframes.isDuplicatingKeyframes(context))
+        else if (Window.isAltPressed() && !Window.isShiftPressed())
         {
             List<UIKeyframeSheet> sheets = new ArrayList<>();
             boolean atPlayhead = this.keyframes.isDuplicatingAtPlayhead();
@@ -1129,8 +1171,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             {
                 FontRenderer font = context.batcher.getFont();
                 int right = (hasIcon ? iconX - LABEL_TEXT_ICON_GAP : area.x + w - LABEL_RIGHT_PAD) - LABEL_ARROW_SIZE;
-                String title = font.limitToWidth(section.title().get(), Math.max(0, right - area.x - LABEL_TEXT_LEFT));
-                context.batcher.textShadow(title, area.x + LABEL_TEXT_LEFT, sy + (height - font.getHeight()) / 2,
+                int textX = area.x + LABEL_TEXT_LEFT + this.getIndent(section.depth());
+                String title = font.limitToWidth(section.title().get(), Math.max(0, right - textX));
+                context.batcher.textShadow(title, textX, sy + (height - font.getHeight()) / 2,
                     hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F));
             }
         }
@@ -1524,30 +1567,34 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         for (UIKeyframeSheet sheet : this.sheets)
         {
-            Integer offset = this.sectionYCache.get(sheet.section);
-
-            if (offset == null)
+            /* Every drawn heading the track sits in sums it up, the part's as well as its Pose. */
+            for (UIKeyframeSheet.Section section = sheet.section; section != null; section = section.parent())
             {
-                continue;
-            }
+                Integer offset = this.sectionYCache.get(section);
 
-            int y = this.getDopeSheetY() + offset + (int) this.trackHeight / 2;
+                if (offset == null)
+                {
+                    continue;
+                }
 
-            if (y + 3 < area.y || y - 3 > area.ey())
-            {
-                continue;
-            }
+                int y = this.getDopeSheetY() + offset + (int) this.trackHeight / 2;
 
-            for (int i = 0; i < sheet.channel.getKeyframes().size(); i++)
-            {
-                Keyframe frame = (Keyframe) sheet.channel.getKeyframes().get(i);
-                int x = this.keyframes.toGraphX(frame.getTick());
+                if (y + 3 < area.y || y - 3 > area.ey())
+                {
+                    continue;
+                }
 
-                if (x < area.x - CULL_MARGIN) continue;
-                if (x > area.ex() + CULL_MARGIN) break;
+                for (int i = 0; i < sheet.channel.getKeyframes().size(); i++)
+                {
+                    Keyframe frame = (Keyframe) sheet.channel.getKeyframes().get(i);
+                    int x = this.keyframes.toGraphX(frame.getTick());
 
-                int color = sheet.section.color() | Colors.A100;
-                context.batcher.fillRect(builder, matrix, x - 3, y - 3, 6, 6, color, color, color, color);
+                    if (x < area.x - CULL_MARGIN) continue;
+                    if (x > area.ex() + CULL_MARGIN) break;
+
+                    int color = section.color() | Colors.A100;
+                    context.batcher.fillRect(builder, matrix, x - 3, y - 3, 6, 6, color, color, color, color);
+                }
             }
         }
     }

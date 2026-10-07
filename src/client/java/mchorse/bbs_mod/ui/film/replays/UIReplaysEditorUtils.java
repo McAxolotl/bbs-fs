@@ -175,7 +175,7 @@ public class UIReplaysEditorUtils
             if (count.get() >= count.getMax()) return;
             count.set(count.get() + 1);
             owner.syncOverlayTracks();
-            refresh.accept(TrackId.property(track.formPath(), pose ? "pose" : "transform"));
+            refresh.accept(TrackId.property(track.formPath(), pose ? "pose_overlay" : "transform_overlay"));
         });
     }
 

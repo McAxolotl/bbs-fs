@@ -528,7 +528,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             if (sheet != null) this.renderPreviewKeyframe(context, sheet, this.keyframes.getCreationTick(context), context.mouseY, Colors.WHITE);
             return;
         }
-        if (!this.keyframes.isStacking() && !(Window.isAltPressed() && this.keyframes.isDuplicatingKeyframes(context))) return;
+        if (!this.keyframes.isStacking() && !Window.isAltPressed()) return;
         float first = Float.POSITIVE_INFINITY;
         for (UIKeyframeSheet sheet : this.getSheets())
             for (Keyframe key : sheet.selection.getSelected()) first = Math.min(first, key.getTick());

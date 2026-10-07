@@ -258,13 +258,15 @@ public class TrackCatalog
             TrackDescriptor track = new TrackDescriptor(id, channel, form, TrackStyle.label(id),
                 TrackStyle.icon(name), TrackStyle.color(name), property);
 
-            if (name.startsWith("pose_overlay"))
+            /* The pose folds only its limbs, the transform nothing: the first overlay of each is a
+             * row of its own and folds the additional ones (pose_overlay0, 1…) the settings add. */
+            if (name.startsWith("pose_overlay") && !name.equals("pose_overlay"))
             {
-                track = track.under(TrackId.property(path, FormProperties.POSE_PROPERTY));
+                track = track.under(TrackId.property(path, "pose_overlay"));
             }
-            else if (name.startsWith("transform_overlay"))
+            else if (name.startsWith("transform_overlay") && !name.equals("transform_overlay"))
             {
-                track = track.under(TrackId.property(path, "transform"));
+                track = track.under(TrackId.property(path, "transform_overlay"));
             }
 
             if (TrackId.MATERIAL_PROP_OVERLAY.equals(name))
