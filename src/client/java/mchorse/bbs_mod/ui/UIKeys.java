@@ -223,7 +223,6 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT = L10n.lang("bbs.ui.camera.timeline.context.shift");
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION = L10n.lang("bbs.ui.camera.timeline.context.shift_duration");
     public static final IKey CAMERA_TIMELINE_INCOMPATIBLE_PASTE = L10n.lang("bbs.ui.camera.timeline.incompatible_paste");
-    public static final IKey CAMERA_TIMELINE_KEYS_CLIPS = L10n.lang("bbs.ui.camera.timeline.keys.clips");
     public static final IKey CAMERA_TIMELINE_KEYS_ENABLED = L10n.lang("bbs.ui.camera.timeline.keys.enabled");
     public static final IKey CAMERA_TOOLTIPS_OPEN_VIDEOS = L10n.lang("bbs.ui.camera.tooltips.open_videos");
     public static final IKey CAMERA_TOOLTIPS_OPEN_VIDEO_SETTINGS = L10n.lang("bbs.ui.camera.tooltips.open_video_settings");
@@ -1882,6 +1881,8 @@ public class UIKeys
     public static final KeyCollection C_CLIP = new KeyCollection("bbs.ui.camera.clips.^")
         .load(BBSMod.getFactoryCameraClips().getStringKeys())
         .load(BBSMod.getFactoryActionClips().getStringKeys());
+
+    public static final KeyCollection C_CLIP_CATEGORY = new KeyCollection("bbs.ui.camera.clip_categories.^");
 
     public static final KeyCollection C_BILLBOARD_DIRECTION = new KeyCollection("bbs.ui.snowstorm.general.direction.^")
         .load(EnumUtils.getKeys(BillboardDirection.class, (c) -> c.id));
