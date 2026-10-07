@@ -356,7 +356,8 @@ public class UIColumnsContextMenu extends UIContextMenu
             super(action.icon, callback);
 
             this.color = action instanceof ColorfulContextAction ? ((ColorfulContextAction) action).color : 0;
-            this.tooltip(action.label);
+            /* The tooltip is the only name the icon has, so it comes up at once */
+            this.tooltip(action.label).tooltipImmediate();
         }
 
         @Override
