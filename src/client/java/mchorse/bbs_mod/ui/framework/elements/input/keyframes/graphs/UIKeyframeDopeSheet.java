@@ -6,6 +6,7 @@ import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.items.FoldState;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
@@ -38,6 +39,8 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -414,19 +417,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             this.folds.set(section.id(), expanded);
         }
 
-        if (!expanded)
-        {
-            for (UIKeyframeSheet sheet : this.sheets)
-            {
-                if (sheet.section != null)
-                {
-                    sheet.selection.clear();
-                }
-            }
-        }
-
         this.updateScrollSize();
-        this.pickSelected();
     }
 
     public void removeAllSheets()
@@ -554,6 +545,21 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             }
         }
 
+        for (Map.Entry<UIKeyframeSheet.Section, Integer> entry : this.sectionYCache.entrySet())
+        {
+            int y = this.getDopeSheetY() + entry.getValue() + (int) this.trackHeight / 2;
+
+            for (SummaryMark mark : this.getSummary(entry.getKey(), area.x, area.ex()))
+            {
+                if (!area.isInside(mark.x, y)) continue;
+
+                for (Keyframe keyframe : mark.keyframes)
+                {
+                    this.getSheet(keyframe).selection.add(keyframe);
+                }
+            }
+        }
+
         this.pickSelected();
     }
 
@@ -589,6 +595,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public boolean addKeyframeAt(float tick, int mouseY)
     {
+        UIKeyframeSheet.Section section = this.getSection(mouseY);
+
+        if (section != null)
+        {
+            return this.addSummaryKeyframes(section, tick);
+        }
+
         UIKeyframeSheet sheet = this.getSheet(mouseY);
 
         if (sheet != null)
@@ -599,9 +612,142 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return sheet != null;
     }
 
+    /**
+     * Key a heading's whole column as one edit: every animated track inside it, or every track when
+     * none is animated yet. Each keyframe takes what its track already reads there, so nothing moves.
+     */
+    private boolean addSummaryKeyframes(UIKeyframeSheet.Section section, float tick)
+    {
+        List<UIKeyframeSheet> tracks = new ArrayList<>();
+        List<UIKeyframeSheet> animated = new ArrayList<>();
+
+        for (UIKeyframeSheet sheet : this.sheets)
+        {
+            if (sheet.section == null || !sheet.section.isIn(section)) continue;
+
+            tracks.add(sheet);
+            if (!sheet.channel.isEmpty()) animated.add(sheet);
+        }
+
+        if (!animated.isEmpty()) tracks = animated;
+        if (tracks.isEmpty()) return false;
+
+        Keyframe first = null;
+
+        this.clearSelection();
+        for (UIKeyframeSheet sheet : tracks) sheet.channel.preNotify(IValueListener.FLAG_UNMERGEABLE);
+        for (UIKeyframeSheet sheet : tracks)
+        {
+            /* Like a hand-made keyframe: a neighbour's interpolation is inherited, an empty track takes the default. */
+            boolean empty = sheet.channel.isEmpty();
+            Keyframe keyframe = sheet.ensureKeyframe(tick);
+
+            if (empty) keyframe.getInterpolation().setInterp(BBSSettings.getDefaultKeyframeInterpolation());
+            sheet.selection.add(keyframe);
+            if (first == null) first = keyframe;
+        }
+        for (UIKeyframeSheet sheet : tracks) sheet.channel.postNotify(IValueListener.FLAG_UNMERGEABLE);
+
+        this.pickKeyframe(first);
+
+        return true;
+    }
+
+    /** The heading drawn on the row at this height, if any. */
+    private UIKeyframeSheet.Section getSection(int mouseY)
+    {
+        int relY = mouseY - this.getDopeSheetY();
+
+        for (Map.Entry<UIKeyframeSheet.Section, Integer> entry : this.sectionYCache.entrySet())
+        {
+            if (relY >= entry.getValue() && relY < entry.getValue() + (int) this.trackHeight)
+            {
+                return entry.getKey();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * What a heading sums up between two screen edges: one mark per tick, standing for the keyframes
+     * at that tick on every track inside the heading, rows folded away included.
+     */
+    private Collection<SummaryMark> getSummary(UIKeyframeSheet.Section section, int minX, int maxX)
+    {
+        Map<Float, SummaryMark> marks = new LinkedHashMap<>();
+
+        for (UIKeyframeSheet sheet : this.sheets)
+        {
+            if (sheet.section == null || !sheet.section.isIn(section))
+            {
+                continue;
+            }
+
+            List keyframes = sheet.channel.getKeyframes();
+
+            for (int i = 0; i < keyframes.size(); i++)
+            {
+                Keyframe frame = (Keyframe) keyframes.get(i);
+                int x = this.keyframes.toGraphX(frame.getTick());
+
+                if (x < minX) continue;
+                if (x > maxX) break;
+
+                SummaryMark mark = marks.computeIfAbsent(frame.getTick(), (tick) -> new SummaryMark(x));
+
+                mark.keyframes.add(frame);
+                mark.selected |= sheet.selection.has(i);
+            }
+        }
+
+        return marks.values();
+    }
+
+    /** The summary mark under the cursor on a heading's row, the nearest one if several overlap. */
+    private SummaryMark findSummaryMark(UIKeyframeSheet.Section section, int mouseX, int mouseY)
+    {
+        int y = this.getDopeSheetY() + this.sectionYCache.get(section) + (int) this.trackHeight / 2;
+        SummaryMark nearest = null;
+
+        for (SummaryMark mark : this.getSummary(section, mouseX - CULL_MARGIN, mouseX + CULL_MARGIN))
+        {
+            if (this.isNear(mark.x, y, mouseX, mouseY, false) && (nearest == null || Math.abs(mark.x - mouseX) < Math.abs(nearest.x - mouseX)))
+            {
+                nearest = mark;
+            }
+        }
+
+        return nearest;
+    }
+
+    @Override
+    public List<Keyframe> findKeyframes(int mouseX, int mouseY)
+    {
+        UIKeyframeSheet.Section section = this.getSection(mouseY);
+
+        if (section == null)
+        {
+            return IUIKeyframeGraph.super.findKeyframes(mouseX, mouseY);
+        }
+
+        SummaryMark mark = this.findSummaryMark(section, mouseX, mouseY);
+
+        return mark == null ? Collections.emptyList() : mark.keyframes;
+    }
+
     @Override
     public Pair<Keyframe, KeyframeType> findKeyframe(int mouseX, int mouseY)
     {
+        UIKeyframeSheet.Section section = this.getSection(mouseY);
+
+        if (section != null)
+        {
+            SummaryMark mark = this.findSummaryMark(section, mouseX, mouseY);
+
+            return mark == null ? null : new Pair<>(mark.keyframes.get(0), KeyframeType.SUMMARY);
+        }
+
         UIKeyframeSheet sheet = this.getSheet(mouseY);
 
         if (sheet == null)
@@ -698,20 +844,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             if (context.mouseY >= sectionY && context.mouseY < sectionY + (int) this.trackHeight)
             {
+                /* A folded heading keeps its tracks' selection: its summary still shows it. */
                 UIKeyframeSheet.Section section = entry.getKey();
-                boolean expanded = !this.folds.isExpanded(section.id());
-                this.folds.set(section.id(), expanded);
-
-                for (UIKeyframeSheet sheet : this.sheets)
-                {
-                    if (!expanded && sheet.section != null && sheet.section.isIn(section))
-                    {
-                        sheet.selection.clear();
-                    }
-                }
-
+                this.folds.set(section.id(), !this.folds.isExpanded(section.id()));
                 this.updateScrollSize();
-                this.pickSelected();
                 return true;
             }
         }
@@ -999,12 +1135,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         else if (Window.isCtrlPressed() && !this.keyframes.isDuplicatingAtPlayhead())
         {
             UIKeyframeSheet sheet = this.getSheet(context.mouseY);
+            UIKeyframeSheet.Section section = this.getSection(context.mouseY);
+            float tick = this.keyframes.getCreationTick(context);
 
             if (sheet != null)
             {
-                float tick = this.keyframes.getCreationTick(context);
-
                 this.renderPreviewKeyframe(context, sheet, tick, Colors.WHITE);
+            }
+            else if (section != null)
+            {
+                int y = this.getDopeSheetY() + this.sectionYCache.get(section) + (int) this.trackHeight / 2;
+
+                this.renderPreviewKeyframe(context, y, tick, Colors.WHITE);
             }
         }
         else if (Window.isAltPressed() && !Window.isShiftPressed())
@@ -1073,8 +1215,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private void renderPreviewKeyframe(UIContext context, UIKeyframeSheet sheet, double tick, int color)
     {
+        this.renderPreviewKeyframe(context, this.getDopeSheetY(sheet) + this.getTrackHeight(sheet) / 2, tick, color);
+    }
+
+    private void renderPreviewKeyframe(UIContext context, int y, double tick, int color)
+    {
         int x = this.keyframes.toGraphX(tick);
-        int y = this.getDopeSheetY(sheet) + this.getTrackHeight(sheet) / 2;
         float a = (float) Math.sin(context.getTickTransition() / 2D) * 0.1F + 0.5F;
         int r = 4;
 
@@ -1563,39 +1709,55 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
     }
 
+    /**
+     * Every drawn heading sums up the tracks inside it, the part's as well as its Pose, as marks that
+     * are picked, dragged and removed like keyframes — each one acts on its whole column.
+     */
     private void renderSectionKeyframes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area)
     {
-        for (UIKeyframeSheet sheet : this.sheets)
+        IKeyframeShapeRenderer shape = KeyframeShapeRenderers.SHAPES.get(KeyframeShape.SQUARE);
+        Area grabbing = this.keyframes.isSelecting() ? this.keyframes.getGrabbingArea(context) : null;
+        boolean column = Window.isAltPressed() && Window.isShiftPressed();
+
+        for (Map.Entry<UIKeyframeSheet.Section, Integer> entry : this.sectionYCache.entrySet())
         {
-            /* Every drawn heading the track sits in sums it up, the part's as well as its Pose. */
-            for (UIKeyframeSheet.Section section = sheet.section; section != null; section = section.parent())
+            UIKeyframeSheet.Section section = entry.getKey();
+            int y = this.getDopeSheetY() + entry.getValue() + (int) this.trackHeight / 2;
+
+            if (y + 4 < area.y || y - 4 > area.ey())
             {
-                Integer offset = this.sectionYCache.get(section);
-
-                if (offset == null)
-                {
-                    continue;
-                }
-
-                int y = this.getDopeSheetY() + offset + (int) this.trackHeight / 2;
-
-                if (y + 3 < area.y || y - 3 > area.ey())
-                {
-                    continue;
-                }
-
-                for (int i = 0; i < sheet.channel.getKeyframes().size(); i++)
-                {
-                    Keyframe frame = (Keyframe) sheet.channel.getKeyframes().get(i);
-                    int x = this.keyframes.toGraphX(frame.getTick());
-
-                    if (x < area.x - CULL_MARGIN) continue;
-                    if (x > area.ex() + CULL_MARGIN) break;
-
-                    int color = section.color() | Colors.A100;
-                    context.batcher.fillRect(builder, matrix, x - 3, y - 3, 6, 6, color, color, color, color);
-                }
+                continue;
             }
+
+            int color = section.color() | Colors.A100;
+
+            for (SummaryMark mark : this.getSummary(section, area.x - CULL_MARGIN, area.ex() + CULL_MARGIN))
+            {
+                boolean hover = this.isNear(mark.x, y, context.mouseX, context.mouseY, column);
+                boolean toRemove = hover && this.keyframes.isRemovingKeyframe();
+
+                hover = hover || (grabbing != null && grabbing.isInside(mark.x, y));
+
+                int outer = toRemove ? Colors.RED | Colors.A100 : (mark.selected || hover ? Colors.WHITE | Colors.A100 : color);
+                int core = mark.selected ? Colors.ACTIVE | Colors.A100 : color;
+
+                shape.renderKeyframe(context, builder, matrix, mark.x, y, toRemove ? 4 : 3, outer);
+                shape.renderKeyframe(context, builder, matrix, mark.x, y, 2, core);
+                shape.renderKeyframeBackground(context, builder, matrix, mark.x, y, 2, core);
+            }
+        }
+    }
+
+    /** One tick of a heading's summary: where it is drawn and the keyframes it stands for. */
+    private static class SummaryMark
+    {
+        public final int x;
+        public final List<Keyframe> keyframes = new ArrayList<>();
+        public boolean selected;
+
+        public SummaryMark(int x)
+        {
+            this.x = x;
         }
     }
 

@@ -1492,11 +1492,11 @@ public class UIKeyframes extends UITimelineCanvas
             return;
         }
 
-        Pair<Keyframe, KeyframeType> keyframe = this.currentGraph.findKeyframe(context.mouseX, context.mouseY);
+        List<Keyframe> keyframes = this.currentGraph.findKeyframes(context.mouseX, context.mouseY);
 
-        if (keyframe != null)
+        if (!keyframes.isEmpty())
         {
-            this.currentGraph.removeKeyframe(keyframe.a);
+            this.currentGraph.removeKeyframes(keyframes);
         }
         else
         {
@@ -1571,14 +1571,17 @@ public class UIKeyframes extends UITimelineCanvas
 
         if (found != null)
         {
-            UIKeyframeSheet sheet = this.currentGraph.getSheet(found);
+            List<Keyframe> clicked = this.currentGraph.findKeyframes(context.mouseX, context.mouseY);
 
-            if (!shift && !sheet.selection.has(found))
+            if (!shift && !this.isAllSelected(clicked))
             {
                 this.currentGraph.clearSelection();
             }
 
-            sheet.selection.add(found);
+            for (Keyframe keyframe : clicked)
+            {
+                this.currentGraph.getSheet(keyframe).selection.add(keyframe);
+            }
 
             this.pickKeyframe(found);
         }
@@ -1607,6 +1610,16 @@ public class UIKeyframes extends UITimelineCanvas
                 this.originalV = found.getFactory().copy(found.getValue());
             }
         }
+    }
+
+    private boolean isAllSelected(List<Keyframe> keyframes)
+    {
+        for (Keyframe keyframe : keyframes)
+        {
+            if (!this.currentGraph.getSheet(keyframe).selection.has(keyframe)) return false;
+        }
+
+        return true;
     }
 
     @Override

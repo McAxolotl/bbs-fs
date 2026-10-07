@@ -322,6 +322,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 Keyframe key = (Keyframe) entry;
                 for (KeyframeType type : KeyframeType.values())
                 {
+                    if (type == KeyframeType.SUMMARY) continue;
                     if (type == KeyframeType.LEFT_HANDLE && !this.leftHandle(sheet, key)) continue;
                     if (type == KeyframeType.RIGHT_HANDLE && !this.rightHandle(sheet, key)) continue;
                     double time = key.getTick() + (type == KeyframeType.LEFT_HANDLE ? -key.lx : type == KeyframeType.RIGHT_HANDLE ? key.rx : 0);
