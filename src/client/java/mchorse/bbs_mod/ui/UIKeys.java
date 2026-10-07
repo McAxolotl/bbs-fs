@@ -1010,7 +1010,6 @@ public class UIKeys
     public static final IKey KEYFRAMES_CONTEXT_KEYFRAME_STYLE = L10n.lang("bbs.ui.keyframes.context.keyframe_style");
     public static final IKey KEYFRAMES_ENABLED = L10n.lang("bbs.ui.keyframes.enabled");
     public static final IKey KEYFRAMES_KEYS_ENABLED = L10n.lang("bbs.ui.keyframes.keys.enabled");
-    public static final IKey KEYFRAMES_KEYS_INSERT = L10n.lang("bbs.ui.keyframes.keys.insert");
     public static final IKey KEYFRAMES_CONTEXT_REMOVE = L10n.lang("bbs.ui.keyframes.context.remove");
     public static final IKey KEYFRAMES_CONTEXT_ROUND = L10n.lang("bbs.ui.keyframes.context.round");
     public static final IKey KEYFRAMES_CONTEXT_SELECT_ALL = L10n.lang("bbs.ui.keyframes.context.select_all");

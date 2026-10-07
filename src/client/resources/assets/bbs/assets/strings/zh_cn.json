@@ -1283,7 +1283,7 @@
     "bbs.ui.keyframes.empty_add": "Ctrl 单击轨道以添加关键帧",
     "bbs.ui.keyframes.empty_filtered": "所有轨道均被过滤器隐藏",
     "bbs.ui.keyframes.empty_filtered-hint": "在此处右键点击 → 过滤轨道...",
-    "bbs.ui.keyframes.empty_pick": "选择轨道以编辑其值",
+    "bbs.ui.keyframes.empty_pick": "单击时间轴上的关键帧即可在此处编辑",
     "bbs.ui.keyframes.forced_duration": "强制持续时间",
     "bbs.ui.keyframes.left_handle": "左手柄",
     "bbs.ui.keyframes.motion_shift": "运动偏移",

@@ -116,7 +116,6 @@ public class Keys
     public static final KeyCombo PIXEL_FLIP_V = new KeyCombo("flip_v", UIKeys.TEXTURES_KEYS_FLIP_V, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("pixels");
 
     /* Keyframes */
-    public static final KeyCombo KEYFRAMES_INSERT = new KeyCombo("insert", UIKeys.KEYFRAMES_KEYS_INSERT, GLFW.GLFW_KEY_I).categoryKey("keyframes");
     public static final KeyCombo KEYFRAMES_ENABLE = new KeyCombo("keyframes_enable", UIKeys.KEYFRAMES_KEYS_ENABLED, GLFW.GLFW_KEY_J).categoryKey("keyframes");
     public static final KeyCombo KEYFRAMES_FIT_SELECTED = new KeyCombo("fit_selected", UIKeys.KEYFRAMES_GRAPH_FIT_SELECTED, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("keyframes");
     public static final KeyCombo KEYFRAMES_MAXIMIZE = new KeyCombo("maximize", UIKeys.KEYFRAMES_CONTEXT_MAXIMIZE, GLFW.GLFW_KEY_HOME).categoryKey("keyframes");

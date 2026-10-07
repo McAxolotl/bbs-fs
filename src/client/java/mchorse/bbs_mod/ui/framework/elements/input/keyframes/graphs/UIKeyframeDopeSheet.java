@@ -256,7 +256,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return !sheet.children.isEmpty();
     }
 
-    private List<UIKeyframeSheet> getInteractiveSheets()
+    public List<UIKeyframeSheet> getInteractiveSheets()
     {
         List<UIKeyframeSheet> sheets = new ArrayList<>();
 
@@ -693,7 +693,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                     return true;
                 }
 
-                this.keyframes.pickTrack(sheet, Window.isCtrlPressed(), Window.isShiftPressed(), this.getInteractiveSheets());
+                if (this.keyframes.isEditing()) this.keyframes.pickGraphTrack(sheet, Window.isCtrlPressed());
+                else this.addKeyframeManually(sheet, this.keyframes.getTick(), null);
 
                 return true;
             }
@@ -1170,7 +1171,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             RowStyle.live(context.batcher, lx, y, w, height, sheet.color);
         }
 
-        RowStyle.row(context.batcher, lx, y, w, height, sheet.color, false, hover, this.keyframes.isTrackSelected(sheet));
+        RowStyle.row(context.batcher, lx, y, w, height, sheet.color, false, hover, this.keyframes.isEditing() && this.keyframes.isGraphTrack(sheet));
 
         if (sheet == this.revealedSheet && System.currentTimeMillis() < this.revealUntil)
         {
@@ -1278,12 +1279,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         this.renderRowBackground(context, area.x, y, area.w, bh, false);
 
-        boolean active = this.keyframes.isTrackSelected(sheet);
-
-        if (hover || active)
+        if (hover)
         {
-            context.batcher.box(area.x, y, area.ex(), y + bh,
-                Colors.setA(active ? BBSSettings.primaryColor.get() : sheet.color, 0.12F));
+            context.batcher.box(area.x, y, area.ex(), y + bh, Colors.setA(sheet.color, 0.12F));
         }
         else if (sheet.isLive())
         {
