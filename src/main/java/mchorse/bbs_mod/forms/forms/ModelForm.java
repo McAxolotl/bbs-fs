@@ -91,7 +91,7 @@ public class ModelForm extends Form implements IPosedForm
     public final ValueBoolean cemInLava = new ValueBoolean("cem_in_lava", false);
     public final ValueBoolean cemClimbing = new ValueBoolean("cem_climbing", false);
     public final ValueBoolean cemCrawling = new ValueBoolean("cem_crawling", false);
-    public final ValueFloat cemHealth = new ValueFloat("cem_health", 1F);
+    public final ValueFloat cemHealth = new ValueFloat("cem_health", 1F, 0F, 1F).slider();
 
     /**
      * Runtime per-material texture overrides driven by the per-material animation tracks

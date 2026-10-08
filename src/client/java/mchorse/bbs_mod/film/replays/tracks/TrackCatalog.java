@@ -468,7 +468,7 @@ public class TrackCatalog
         TrackId lighting = TrackId.materialProp(path, material, TrackId.MATERIAL_PROP_LIGHTING);
 
         out.add(prop(modelForm, lighting, parent, prefix + TrackId.MATERIAL_PROP_LIGHTING, Icons.LIGHT,
-            new ValueFloat(lighting.toKey(), staticMaterial == null ? 1F : staticMaterial.lighting.get()), properties));
+            new ValueFloat(lighting.toKey(), staticMaterial == null ? 1F : staticMaterial.lighting.get(), 0F, 1F).slider(), properties));
 
         TrackId culling = TrackId.materialProp(path, material, TrackId.MATERIAL_PROP_CULLING);
 
@@ -496,7 +496,7 @@ public class TrackCatalog
             float value = staticMaterial == null ? 0F : pbrSlider(staticMaterial, slider);
 
             out.add(prop(modelForm, id, parent, prefix + slider, Icons.MATERIAL,
-                new ValueFloat(id.toKey(), value), properties));
+                new ValueFloat(id.toKey(), value, 0F, 1F).slider(), properties));
         }
     }
 
