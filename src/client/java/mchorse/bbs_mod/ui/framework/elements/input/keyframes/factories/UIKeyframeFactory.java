@@ -76,6 +76,7 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.VECTOR4F, UIVector4fKeyframeFactory::new);
         register(KeyframeFactories.BLOCK_STATE, UIBlockStateKeyframeFactory::new);
         register(KeyframeFactories.ITEM_STACK, UIItemStackKeyframeFactory::new);
+        register(KeyframeFactories.HOTBAR, UIHotbarKeyframeFactory::new);
         register(KeyframeFactories.ACTIONS_CONFIG, UIActionsConfigKeyframeFactory::new);
         register(KeyframeFactories.SHAPE_KEYS, UIShapeKeysKeyframeFactory::new);
         register(KeyframeFactories.PARTICLE_SETTINGS, UIParticleSettingsKeyframeFactory::new);

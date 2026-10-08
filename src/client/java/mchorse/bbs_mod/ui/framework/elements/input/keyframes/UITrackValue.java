@@ -35,6 +35,14 @@ public class UITrackValue<T>
         return key != null ? this.getFactory().copy(key.getValue()) : (T) this.sheet.sample(this.editor.getTick());
     }
 
+    /** The tick {@link #getValue} reads at: the selected key's, or the playhead's. */
+    public float getValueTick()
+    {
+        Keyframe<T> key = this.editor.getAutoKeyframeTick() == null ? this.getKeyframe() : null;
+
+        return key != null ? key.getTick() : this.editor.getTick();
+    }
+
     /** The picked key when it is on this track, otherwise the track's first selected key. */
     private Keyframe<T> getKeyframe()
     {

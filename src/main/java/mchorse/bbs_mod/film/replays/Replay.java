@@ -129,6 +129,7 @@ public class Replay extends ValueGroup
 
         super.fromData(data);
         FilmLegacy.migrateAnchor(this, data);
+        FilmLegacy.migrateHotbarSlots(this, data);
     }
 
     /** Tick is already in this replay's local time, like the other replay channels. */
